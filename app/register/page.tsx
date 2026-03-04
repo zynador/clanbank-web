@@ -38,13 +38,14 @@ export default function RegisterPage() {
   }, [session, loading, router]);
 
   // Step 1: Validate invite code
+  // FIXED: was "validate_invite_code", DB function is "validate_clan_code"
   async function handleValidateCode(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
 
     const { data, error: rpcError } = await supabase.rpc(
-      "validate_invite_code",
+      "validate_clan_code",
       { input_code: inviteCode.trim().toUpperCase() }
     );
 
@@ -56,7 +57,7 @@ export default function RegisterPage() {
     }
 
     if (!data.valid) {
-      setError(data.message || "Ungültiger oder bereits verwendeter Code.");
+      setError(data.error || "Ungültiger oder bereits verwendeter Code.");
       return;
     }
 
