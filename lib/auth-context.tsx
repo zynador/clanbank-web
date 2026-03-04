@@ -135,8 +135,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     // Step 2: Create auth user in Supabase Auth
+    const fakeEmail = username.toLowerCase().replace(/[^a-z0-9]/g, "") + "@clanbank.local";
     const { data: authData, error: authError } = await supabase.auth.signUp({
-      email,
+      email: fakeEmail,
       password,
       options: {
         data: {
