@@ -113,7 +113,7 @@ function DepositsContent() {
     try {
       const { data, error } = await supabase
         .from("deposits")
-        .select("id, user_id, resource_type, amount, note, screenshot_url, created_at, updated_at, updated_by, profiles(display_name, ingame_name)")
+        .select("id, user_id, resource_type, amount, note, screenshot_url, created_at, updated_at, updated_by, profiles!deposits_user_id_fkey(display_name, ingame_name)")
         .is("deleted_at", null)
         .order("created_at", { ascending: false });
 
