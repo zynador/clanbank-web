@@ -22,11 +22,11 @@ interface Deposit {
 
 // ── Ressource-Icons ────────────────────────────────────────
 const RESOURCE_CONFIG: Record<ResourceType, { label: string; icon: string; color: string }> = {
-  Cash: { label: "Cash", icon: "💵", color: "#22c55e" },
-  Arms: { label: "Arms", icon: "⚔️", color: "#ef4444" },
-  Cargo: { label: "Cargo", icon: "📦", color: "#3b82f6" },
-  Metal: { label: "Metal", icon: "🔩", color: "#a855f7" },
-  Diamond: { label: "Diamond", icon: "💎", color: "#06b6d4" },
+  Cash: { label: "Cash", icon: "/cash.png", color: "#22c55e" },
+  Arms: { label: "Arms", icon: "/arms.png", color: "#ef4444" },
+  Cargo: { label: "Cargo", icon: "/cargo.png", color: "#3b82f6" },
+  Metal: { label: "Metal", icon: "/metal.png", color: "#a855f7" },
+  Diamond: { label: "Diamond", icon: "/diamond.png", color: "#06b6d4" },
 };
 // ── Zahlen formatieren ─────────────────────────────────────
 function formatNumber(n: number): string {
@@ -317,7 +317,7 @@ function DepositsContent() {
                       }`}
                       style={isSelected ? { borderColor: cfg.color, color: cfg.color } : {}}
                     >
-                      <span className="text-2xl">{cfg.icon}</span>
+                      <img src={cfg.icon} alt={cfg.label} className="w-8 h-8 object-contain" />
                       <span className={`text-sm font-medium ${isSelected ? "" : "text-gray-300"}`}>
                         {cfg.label}
                       </span>
@@ -423,7 +423,7 @@ function DepositsContent() {
                                   }`}
                                   style={sel ? { borderColor: c.color, color: c.color } : {}}
                                 >
-                                  <span>{c.icon}</span>
+                                  <img src={c.icon} alt={c.label} className="w-5 h-5 object-contain inline" />
                                   <span>{c.label}</span>
                                 </button>
                               );
@@ -469,7 +469,7 @@ function DepositsContent() {
                             className="text-2xl flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center"
                             style={{ backgroundColor: cfg.color + "20" }}
                           >
-                            {cfg.icon}
+                            <img src={cfg.icon} alt={cfg.label} className="w-8 h-8 object-contain" />
                           </span>
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
