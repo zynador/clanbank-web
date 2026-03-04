@@ -114,14 +114,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null };
   }
 
-  // Sign up: validate code → create auth user → redeem code (creates profile)
+  // Sign up: validate code → create auth user → register with code (creates profile)
   async function signUp(params: SignUpParams): Promise<{ error: string | null }> {
     const { email, password, inviteCode, username, displayName, ingameName } =
       params;
 
     // Step 1: Validate the invite code
+    // FIXED: was "validate_invite_code", DB function is "validate_clan_code"
     const { data: validation, error: valError } = await supabase.rpc(
-      "validate_invite_code",
+      "validate_clan_code",
       { input_code: inviteCode }
     );
 
@@ -130,7 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     if (!validation.valid) {
-      return { error: validation.message || "Ungültiger Einladungscode" };
+      return { error: validation.error || "Ungültiger Einladungscode" };
     }
 
     // Step 2: Create auth user in Supabase Auth
@@ -162,29 +163,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: "Benutzer konnte nicht erstellt werden." };
     }
 
-    // Step 3: Redeem invite code → creates profile + marks code as used
-    const { data: redemption, error: redeemError } = await supabase.rpc(
-      "redeem_invite_code",
+    // Step 3: Register with clan code → creates profile via auth.uid()
+    // FIXED: was "redeem_invite_code" with 5 params
+    // DB function is "register_with_clan_code" with 3 params (uses auth.uid() internally)
+    const { data: registration, error: regError } = await supabase.rpc(
+      "register_with_clan_code",
       {
         input_code: inviteCode,
-        input_user_id: authData.user.id,
         input_username: username,
-        input_display_name: displayName,
-        input_ingame_name: ingameName,
+        input_ingame_name: ingameName || "",
       }
     );
 
-    if (redeemError) {
+    if (regError) {
       return {
-        error: "Code-Einlösung fehlgeschlagen: " + redeemError.message,
+        error: "Profil-Erstellung fehlgeschlagen: " + regError.message,
       };
     }
 
-    if (!redemption.success) {
+    if (!registration.success) {
       return {
         error:
-          redemption.message ||
-          "Code konnte nicht eingelöst werden. Bitte kontaktiere einen Admin.",
+          registration.error ||
+          "Profil konnte nicht erstellt werden. Bitte kontaktiere einen Admin.",
       };
     }
 
