@@ -1,0 +1,568 @@
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+import { useAuth } from "@/lib/auth-context";
+import ProtectedRoute from "@/components/ProtectedRoute";
+import { supabase } from "@/lib/supabaseClient";
+
+// ── Typen ──────────────────────────────────────────────────
+type ResourceType = "Cash" | "Cargo" | "Arms" | "Metal";
+
+interface Deposit {
+  id: string;
+  user_id: string;
+  resource_type: ResourceType;
+  amount: number;
+  note: string | null;
+  created_at: string;
+  updated_at: string | null;
+  updated_by: string | null;
+  profiles?: { display_name: string; ingame_name: string };
+}
+
+// ── Ressource-Icons ────────────────────────────────────────
+const RESOURCE_CONFIG: Record<
+  ResourceType,
+  { label: string; icon: string; color: string }
+> = {
+  Cash: { label: "Cash", icon: "💵", color: "#22c55e" },
+  Cargo: { label: "Cargo", icon: "📦", color: "#3b82f6" },
+  Arms: { label: "Arms", icon: "⚔️", color: "#ef4444" },
+  Metal: { label: "Metal", icon: "🔩", color: "#a855f7" },
+};
+
+// ── Zahlen formatieren ─────────────────────────────────────
+function formatNumber(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
+  if (n >= 1_000) return (n / 1_000).toFixed(1).replace(/\.0$/, "") + "K";
+  return n.toLocaleString("de-DE");
+}
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+// ── Hauptkomponente ────────────────────────────────────────
+export default function DepositsPage() {
+  return (
+    <ProtectedRoute>
+      <DepositsContent />
+    </ProtectedRoute>
+  );
+}
+
+function DepositsContent() {
+  const { profile } = useAuth();
+
+  // Formular-State
+  const [resourceType, setResourceType] = useState<ResourceType | "">("");
+  const [amount, setAmount] = useState("");
+  const [note, setNote] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+
+  // Liste-State
+  const [deposits, setDeposits] = useState<Deposit[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Bearbeiten-State
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editResource, setEditResource] = useState<ResourceType | "">("");
+  const [editAmount, setEditAmount] = useState("");
+  const [editNote, setEditNote] = useState("");
+
+  // Löschen-Bestätigung
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // ── Einzahlungen laden ─────────────────────────────────
+  const loadDeposits = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("deposits")
+        .select("id, user_id, resource_type, amount, note, created_at, updated_at, updated_by, profiles(display_name, ingame_name)")
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      setDeposits((data as unknown as Deposit[]) || []);
+    } catch (err) {
+      console.error("Fehler beim Laden:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadDeposits();
+  }, [loadDeposits]);
+
+  // ── Einzahlung erstellen ───────────────────────────────
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    if (!resourceType) {
+      setErrorMessage("Bitte wähle eine Ressource aus.");
+      return;
+    }
+
+    const parsedAmount = parseFloat(amount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      setErrorMessage("Bitte gib eine gültige Menge ein (größer als 0).");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const { data, error } = await supabase.rpc("create_deposit", {
+        input_resource_type: resourceType,
+        input_amount: parsedAmount,
+        input_note: note.trim() || null,
+      });
+
+      if (error) throw error;
+
+      const result = data as { success: boolean; message: string };
+      if (!result.success) {
+        setErrorMessage(result.message);
+        return;
+      }
+
+      setSuccessMessage(
+        `${RESOURCE_CONFIG[resourceType].icon} ${formatNumber(parsedAmount)} ${resourceType} erfolgreich eingezahlt!`
+      );
+      setResourceType("");
+      setAmount("");
+      setNote("");
+      loadDeposits();
+
+      setTimeout(() => setSuccessMessage(""), 4000);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Unbekannter Fehler";
+      setErrorMessage("Fehler: " + message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  // ── Einzahlung bearbeiten ──────────────────────────────
+  function startEdit(deposit: Deposit) {
+    setEditingId(deposit.id);
+    setEditResource(deposit.resource_type);
+    setEditAmount(deposit.amount.toString());
+    setEditNote(deposit.note || "");
+    setDeletingId(null);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditResource("");
+    setEditAmount("");
+    setEditNote("");
+  }
+
+  async function saveEdit() {
+    if (!editingId || !editResource) return;
+
+    const parsedAmount = parseFloat(editAmount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      setErrorMessage("Menge muss größer als 0 sein.");
+      return;
+    }
+
+    setErrorMessage("");
+
+    try {
+      const { data, error } = await supabase.rpc("update_deposit", {
+        input_deposit_id: editingId,
+        input_resource_type: editResource,
+        input_amount: parsedAmount,
+        input_note: editNote.trim() || null,
+      });
+
+      if (error) throw error;
+
+      const result = data as { success: boolean; message: string };
+      if (!result.success) {
+        setErrorMessage(result.message);
+        return;
+      }
+
+      setSuccessMessage("Einzahlung aktualisiert ✓");
+      cancelEdit();
+      loadDeposits();
+      setTimeout(() => setSuccessMessage(""), 3000);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Unbekannter Fehler";
+      setErrorMessage("Fehler: " + message);
+    }
+  }
+
+  // ── Einzahlung löschen (Soft-Delete) ──────────────────
+  async function handleDelete(depositId: string) {
+    setErrorMessage("");
+
+    try {
+      const { data, error } = await supabase.rpc("soft_delete_deposit", {
+        input_deposit_id: depositId,
+      });
+
+      if (error) throw error;
+
+      const result = data as { success: boolean; message: string };
+      if (!result.success) {
+        setErrorMessage(result.message);
+        return;
+      }
+
+      setSuccessMessage("Einzahlung gelöscht ✓");
+      setDeletingId(null);
+      loadDeposits();
+      setTimeout(() => setSuccessMessage(""), 3000);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Unbekannter Fehler";
+      setErrorMessage("Fehler: " + message);
+    }
+  }
+
+  // ── Berechtigung prüfen ────────────────────────────────
+  function canEdit(deposit: Deposit): boolean {
+    if (!profile) return false;
+    if (deposit.user_id === profile.id) return true;
+    if (profile.role === "admin" || profile.role === "offizier") return true;
+    return false;
+  }
+
+  function canDelete(deposit: Deposit): boolean {
+    if (!profile) return false;
+    if (deposit.user_id === profile.id) return true;
+    if (profile.role === "admin") return true;
+    return false;
+  }
+
+  // ── Render ─────────────────────────────────────────────
+  return (
+    <div className="min-h-screen bg-gray-950 text-gray-100">
+      {/* Header */}
+      <header className="border-b border-gray-800 bg-gray-900/80 backdrop-blur-sm sticky top-0 z-10">
+        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <a href="/dashboard" className="text-gray-400 hover:text-gray-200 transition-colors">
+              ← Dashboard
+            </a>
+            <span className="text-gray-600">|</span>
+            <h1 className="text-xl font-bold text-gray-100">Einzahlungen</h1>
+          </div>
+          {profile && (
+            <span className="text-sm text-gray-400">
+              {profile.ingame_name || profile.display_name}
+            </span>
+          )}
+        </div>
+      </header>
+
+      <main className="max-w-4xl mx-auto px-4 py-8 space-y-8">
+        {/* ── Erfolgsmeldung ──────────────────────────── */}
+        {successMessage && (
+          <div className="bg-green-900/40 border border-green-700 rounded-xl px-5 py-4 text-green-300 text-center animate-fade-in">
+            {successMessage}
+          </div>
+        )}
+
+        {/* ── Fehlermeldung ───────────────────────────── */}
+        {errorMessage && (
+          <div className="bg-red-900/40 border border-red-700 rounded-xl px-5 py-4 text-red-300 text-center">
+            {errorMessage}
+            <button
+              onClick={() => setErrorMessage("")}
+              className="ml-3 text-red-400 hover:text-red-200"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        {/* ── Einzahlungsformular ─────────────────────── */}
+        <section className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
+          <h2 className="text-lg font-semibold mb-5 text-gray-200">
+            Neue Einzahlung
+          </h2>
+
+          <div className="space-y-5">
+            {/* Ressource auswählen */}
+            <div>
+              <label className="block text-sm text-gray-400 mb-2">
+                Ressource
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {(Object.keys(RESOURCE_CONFIG) as ResourceType[]).map((res) => {
+                  const cfg = RESOURCE_CONFIG[res];
+                  const isSelected = resourceType === res;
+                  return (
+                    <button
+                      key={res}
+                      type="button"
+                      onClick={() => setResourceType(res)}
+                      className={`flex flex-col items-center gap-1.5 p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer ${
+                        isSelected
+                          ? "border-current bg-gray-800 scale-[1.03] shadow-lg"
+                          : "border-gray-700 bg-gray-800/50 hover:border-gray-600 hover:bg-gray-800"
+                      }`}
+                      style={isSelected ? { borderColor: cfg.color, color: cfg.color } : {}}
+                    >
+                      <span className="text-2xl">{cfg.icon}</span>
+                      <span className={`text-sm font-medium ${isSelected ? "" : "text-gray-300"}`}>
+                        {cfg.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Menge */}
+            <div>
+              <label htmlFor="amount" className="block text-sm text-gray-400 mb-2">
+                Menge
+              </label>
+              <input
+                id="amount"
+                type="number"
+                min="1"
+                step="any"
+                placeholder="z.B. 500000"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+              />
+            </div>
+
+            {/* Notiz */}
+            <div>
+              <label htmlFor="note" className="block text-sm text-gray-400 mb-2">
+                Notiz{" "}
+                <span className="text-gray-600">(optional)</span>
+              </label>
+              <input
+                id="note"
+                type="text"
+                placeholder="z.B. Kriegswoche 12"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                maxLength={200}
+                className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+              />
+            </div>
+
+            {/* Submit-Button */}
+            <button
+              onClick={handleSubmit}
+              disabled={isSubmitting || !resourceType || !amount}
+              className="w-full py-3.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-semibold rounded-xl transition-colors duration-200 cursor-pointer disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? "Wird gespeichert..." : "Einzahlung speichern"}
+            </button>
+          </div>
+        </section>
+
+        {/* ── Einzahlungsliste ────────────────────────── */}
+        <section className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
+          <h2 className="text-lg font-semibold mb-5 text-gray-200">
+            Letzte Einzahlungen
+          </h2>
+
+          {isLoading ? (
+            <div className="text-center py-10 text-gray-500">
+              Wird geladen...
+            </div>
+          ) : deposits.length === 0 ? (
+            <div className="text-center py-10 text-gray-500">
+              Noch keine Einzahlungen vorhanden.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {deposits.map((deposit) => {
+                const cfg = RESOURCE_CONFIG[deposit.resource_type];
+                const isOwn = deposit.user_id === profile?.id;
+                const isEditing = editingId === deposit.id;
+                const isDeleting = deletingId === deposit.id;
+
+                return (
+                  <div
+                    key={deposit.id}
+                    className={`border rounded-xl p-4 transition-colors ${
+                      isOwn
+                        ? "border-blue-900/50 bg-blue-950/20"
+                        : "border-gray-800 bg-gray-800/30"
+                    }`}
+                  >
+                    {isEditing ? (
+                      /* ── Bearbeitungsmodus ──────────── */
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          {(Object.keys(RESOURCE_CONFIG) as ResourceType[]).map(
+                            (res) => {
+                              const c = RESOURCE_CONFIG[res];
+                              const sel = editResource === res;
+                              return (
+                                <button
+                                  key={res}
+                                  type="button"
+                                  onClick={() => setEditResource(res)}
+                                  className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg border text-sm transition-all cursor-pointer ${
+                                    sel
+                                      ? "border-current bg-gray-800"
+                                      : "border-gray-700 bg-gray-800/50 hover:border-gray-600"
+                                  }`}
+                                  style={sel ? { borderColor: c.color, color: c.color } : {}}
+                                >
+                                  <span>{c.icon}</span>
+                                  <span>{c.label}</span>
+                                </button>
+                              );
+                            }
+                          )}
+                        </div>
+                        <input
+                          type="number"
+                          min="1"
+                          value={editAmount}
+                          onChange={(e) => setEditAmount(e.target.value)}
+                          className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-100 focus:outline-none focus:border-blue-500"
+                          placeholder="Menge"
+                        />
+                        <input
+                          type="text"
+                          value={editNote}
+                          onChange={(e) => setEditNote(e.target.value)}
+                          className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-100 focus:outline-none focus:border-blue-500"
+                          placeholder="Notiz (optional)"
+                          maxLength={200}
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            onClick={saveEdit}
+                            className="flex-1 py-2 bg-green-700 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-colors cursor-pointer"
+                          >
+                            Speichern
+                          </button>
+                          <button
+                            onClick={cancelEdit}
+                            className="flex-1 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg text-sm font-medium transition-colors cursor-pointer"
+                          >
+                            Abbrechen
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      /* ── Anzeigemodus ──────────────── */
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span
+                            className="text-2xl flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center"
+                            style={{ backgroundColor: cfg.color + "20" }}
+                          >
+                            {cfg.icon}
+                          </span>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-semibold text-gray-100">
+                                {formatNumber(deposit.amount)}
+                              </span>
+                              <span
+                                className="text-sm font-medium px-2 py-0.5 rounded-full"
+                                style={{
+                                  backgroundColor: cfg.color + "20",
+                                  color: cfg.color,
+                                }}
+                              >
+                                {cfg.label}
+                              </span>
+                              {isOwn && (
+                                <span className="text-xs text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded-full">
+                                  Eigene
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-sm text-gray-500 mt-0.5">
+                              {deposit.profiles?.ingame_name ||
+                                deposit.profiles?.display_name ||
+                                "Unbekannt"}{" "}
+                              · {formatDate(deposit.created_at)}
+                            </div>
+                            {deposit.note && (
+                              <div className="text-sm text-gray-400 mt-1 truncate">
+                                📝 {deposit.note}
+                              </div>
+                            )}
+                            {deposit.updated_at && deposit.updated_at !== deposit.created_at && (
+                              <div className="text-xs text-gray-600 mt-0.5">
+                                ✏️ Bearbeitet am {formatDate(deposit.updated_at)}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Aktionen */}
+                        {(canEdit(deposit) || canDelete(deposit)) && !isDeleting && (
+                          <div className="flex gap-1 flex-shrink-0">
+                            {canEdit(deposit) && (
+                              <button
+                                onClick={() => startEdit(deposit)}
+                                className="p-2 text-gray-500 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors cursor-pointer"
+                                title="Bearbeiten"
+                              >
+                                ✏️
+                              </button>
+                            )}
+                            {canDelete(deposit) && (
+                              <button
+                                onClick={() => setDeletingId(deposit.id)}
+                                className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors cursor-pointer"
+                                title="Löschen"
+                              >
+                                🗑️
+                              </button>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Löschen-Bestätigung */}
+                        {isDeleting && (
+                          <div className="flex gap-1 flex-shrink-0">
+                            <button
+                              onClick={() => handleDelete(deposit.id)}
+                              className="px-3 py-1.5 bg-red-700 hover:bg-red-600 text-white text-sm rounded-lg transition-colors cursor-pointer"
+                            >
+                              Ja, löschen
+                            </button>
+                            <button
+                              onClick={() => setDeletingId(null)}
+                              className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm rounded-lg transition-colors cursor-pointer"
+                            >
+                              Nein
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      </main>
+    </div>
+  );
+}
