@@ -169,7 +169,7 @@ export default function RegisterPage() {
                 htmlFor="inviteCode"
                 className="block text-sm text-gray-400 mb-1"
               >
-                Code (10 Zeichen)
+                Code
               </label>
               <input
                 id="inviteCode"
