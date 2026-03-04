@@ -1,320 +1,322 @@
 "use client";
 
-import { useAuth, Profile } from "@/lib/auth-context";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth-context";
 import ProtectedRoute from "@/components/ProtectedRoute";
-import { useEffect, useState } from "react";
+import Dashboard from "@/components/Dashboard";
 import { supabase } from "@/lib/supabaseClient";
 
-function DashboardContent() {
-  const { profile, signOut } = useAuth();
+// ─── Types ───────────────────────────────────────────────────────────────────
 
-  const roleLabels: Record<string, string> = {
-    admin: "Admin",
-    offizier: "Offizier",
-    mitglied: "Mitglied",
-  };
+type UserRole = "admin" | "offizier" | "mitglied";
 
-  const isAdmin = profile?.role === "admin";
-  const isOfficer = profile?.role === "offizier";
-
-  return (
-    <div className="min-h-screen bg-gray-950">
-      {/* Navigation */}
-      <nav className="border-b border-gray-800 bg-gray-900/50">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-          <h1 className="text-lg font-bold text-amber-500">Clanbank</h1>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-400">
-              {profile?.display_name || profile?.username}
-              <span className="ml-2 text-xs bg-gray-800 text-gray-300 px-2 py-0.5 rounded">
-                {roleLabels[profile?.role || "mitglied"]}
-              </span>
-            </span>
-            <button
-              onClick={signOut}
-              className="text-sm text-gray-500 hover:text-gray-300 transition-colors"
-            >
-              Abmelden
-            </button>
-          </div>
-        </div>
-      </nav>
-
-      {/* Main content */}
-      <main className="max-w-5xl mx-auto px-4 py-8">
-        <div className="grid gap-6">
-          {/* Welcome */}
-          <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
-            <h2 className="text-xl font-semibold text-gray-100 mb-2">
-              Willkommen, {profile?.display_name || profile?.username}!
-            </h2>
-            <p className="text-gray-400 text-sm">
-              Ingame:{" "}
-              <span className="text-gray-200">{profile?.ingame_name}</span>
-              {" · "}
-              Rolle:{" "}
-              <span className="text-gray-200">
-                {roleLabels[profile?.role || "mitglied"]}
-              </span>
-            </p>
-          </div>
-
-          {/* Placeholder cards for future features */}
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
-              <h3 className="text-sm font-medium text-gray-400 mb-1">
-                Einzahlungen
-              </h3>
-              <p className="text-2xl font-bold text-gray-100">—</p>
-              <p className="text-xs text-gray-600 mt-2">
-                Schritt 4 · Kommt als Nächstes
-              </p>
-            </div>
-            <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
-              <h3 className="text-sm font-medium text-gray-400 mb-1">
-                Auswertungen
-              </h3>
-              <p className="text-2xl font-bold text-gray-100">—</p>
-              <p className="text-xs text-gray-600 mt-2">
-                Schritt 5 · Dashboard
-              </p>
-            </div>
-          </div>
-
-          {/* Admin Section - only visible for Admin */}
-          {isAdmin && <AdminPanel />}
-
-          {/* Officer info - visible for Officer */}
-          {isOfficer && (
-            <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
-              <h3 className="text-lg font-semibold text-gray-100 mb-2">
-                Offizier-Bereich
-              </h3>
-              <p className="text-sm text-gray-400">
-                Du kannst Einzahlungen aller Mitglieder einsehen und bearbeiten.
-              </p>
-            </div>
-          )}
-        </div>
-      </main>
-    </div>
-  );
+interface MemberRow {
+  id: string;
+  username: string;
+  display_name: string;
+  ingame_name: string;
+  role: UserRole;
+  created_at: string;
 }
 
-// Admin Panel Component
+// ─── Admin Panel ─────────────────────────────────────────────────────────────
+
 function AdminPanel() {
-  const [members, setMembers] = useState<Profile[]>([]);
+  const [members, setMembers] = useState<MemberRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editRole, setEditRole] = useState<string>("");
-  const [editIngame, setEditIngame] = useState<string>("");
-  const [saving, setSaving] = useState(false);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [editRole, setEditRole] = useState<UserRole>("mitglied");
+  const [editIngame, setEditIngame] = useState("");
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
+  const [generatingCode, setGeneratingCode] = useState(false);
 
-  const roleLabels: Record<string, string> = {
-    admin: "Admin",
-    offizier: "Offizier",
-    mitglied: "Mitglied",
-  };
-
-  // Load all members in same clan
   useEffect(() => {
-    loadMembers();
+    fetchMembers();
   }, []);
 
-  async function loadMembers() {
+  async function fetchMembers() {
     setLoading(true);
-    setError(null);
     const { data, error } = await supabase
       .from("profiles")
-      .select("*")
-      .order("role", { ascending: true })
-      .order("username", { ascending: true });
+      .select("id, username, display_name, ingame_name, role, created_at")
+      .order("created_at", { ascending: true });
 
     if (error) {
-      setError("Fehler beim Laden: " + error.message);
+      console.error("Error fetching members:", error);
     } else {
-      setMembers(data as Profile[]);
+      setMembers((data as MemberRow[]) || []);
     }
     setLoading(false);
   }
 
-  function startEdit(member: Profile) {
-    setEditingId(member.id);
-    setEditRole(member.role);
-    setEditIngame(member.ingame_name || "");
-    setSuccessMsg(null);
-  }
-
-  function cancelEdit() {
-    setEditingId(null);
-    setEditRole("");
-    setEditIngame("");
-  }
-
-  async function saveEdit(memberId: string) {
-    setSaving(true);
-    setError(null);
-    setSuccessMsg(null);
-
+  async function handleUpdateMember(memberId: string) {
     const { error } = await supabase
       .from("profiles")
-      .update({
-        role: editRole,
-        ingame_name: editIngame,
-      })
+      .update({ role: editRole, ingame_name: editIngame })
       .eq("id", memberId);
 
     if (error) {
-      setError("Fehler beim Speichern: " + error.message);
+      alert("Fehler beim Aktualisieren: " + error.message);
     } else {
-      setSuccessMsg("Änderungen gespeichert!");
       setEditingId(null);
-      loadMembers();
+      fetchMembers();
     }
-    setSaving(false);
   }
 
+  async function handleGenerateCode() {
+    setGeneratingCode(true);
+    const { data, error } = await supabase.rpc("generate_invite_code");
+    if (error) {
+      alert("Fehler beim Erstellen des Codes: " + error.message);
+    } else {
+      setInviteCode(data as string);
+    }
+    setGeneratingCode(false);
+  }
+
+  function startEdit(member: MemberRow) {
+    setEditingId(member.id);
+    setEditRole(member.role);
+    setEditIngame(member.ingame_name || "");
+  }
+
+  const roleLabels: Record<UserRole, string> = {
+    admin: "Admin",
+    offizier: "Offizier",
+    mitglied: "Mitglied",
+  };
+
+  const roleBadgeStyles: Record<UserRole, string> = {
+    admin: "bg-red-500/15 text-red-400 border-red-500/20",
+    offizier: "bg-amber-500/15 text-amber-400 border-amber-500/20",
+    mitglied: "bg-zinc-700/30 text-zinc-400 border-zinc-600/20",
+  };
+
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-100">
-          Admin · Mitgliederverwaltung
-        </h3>
-        <span className="text-xs text-gray-500">
-          {members.length} Mitglieder
-        </span>
+    <div className="space-y-6">
+      {/* Generate invite code */}
+      <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-5">
+        <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider mb-3">Einladungscode erstellen</h3>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={handleGenerateCode}
+            disabled={generatingCode}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            {generatingCode ? "Erstelle..." : "Code generieren"}
+          </button>
+          {inviteCode && (
+            <div className="flex items-center gap-2">
+              <code className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-emerald-400 font-mono text-lg tracking-widest">
+                {inviteCode}
+              </code>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(inviteCode);
+                }}
+                className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm rounded-lg transition-colors"
+              >
+                Kopieren
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
-      {error && (
-        <div className="bg-red-900/30 border border-red-800 text-red-300 text-sm rounded px-3 py-2 mb-4">
-          {error}
+      {/* Members list */}
+      <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-zinc-800">
+          <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">
+            Mitglieder ({members.length})
+          </h3>
         </div>
-      )}
 
-      {successMsg && (
-        <div className="bg-green-900/30 border border-green-800 text-green-300 text-sm rounded px-3 py-2 mb-4">
-          {successMsg}
-        </div>
-      )}
-
-      {loading ? (
-        <div className="flex justify-center py-8">
-          <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
-        </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-800">
-                <th className="text-left py-2 px-2 text-gray-400 font-medium">
-                  Benutzername
-                </th>
-                <th className="text-left py-2 px-2 text-gray-400 font-medium">
-                  Ingame-Name
-                </th>
-                <th className="text-left py-2 px-2 text-gray-400 font-medium">
-                  Rolle
-                </th>
-                <th className="text-right py-2 px-2 text-gray-400 font-medium">
-                  Aktionen
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {members.map((member) => (
-                <tr
-                  key={member.id}
-                  className="border-b border-gray-800/50 hover:bg-gray-800/30"
-                >
-                  {editingId === member.id ? (
-                    <>
-                      <td className="py-2 px-2 text-gray-200">
-                        {member.username}
-                      </td>
-                      <td className="py-2 px-2">
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : (
+          <div className="divide-y divide-zinc-800/50">
+            {members.map((member) => (
+              <div key={member.id} className="px-5 py-3 hover:bg-zinc-800/20 transition-colors">
+                {editingId === member.id ? (
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap gap-3">
+                      <label className="text-sm text-zinc-400">
+                        Ingame-Name:
                         <input
                           type="text"
                           value={editIngame}
                           onChange={(e) => setEditIngame(e.target.value)}
-                          className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-gray-100 text-sm w-full focus:outline-none focus:border-amber-500"
+                          className="ml-2 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-blue-500"
                         />
-                      </td>
-                      <td className="py-2 px-2">
+                      </label>
+                      <label className="text-sm text-zinc-400">
+                        Rolle:
                         <select
                           value={editRole}
-                          onChange={(e) => setEditRole(e.target.value)}
-                          className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-gray-100 text-sm focus:outline-none focus:border-amber-500"
+                          onChange={(e) => setEditRole(e.target.value as UserRole)}
+                          className="ml-2 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-blue-500"
                         >
                           <option value="mitglied">Mitglied</option>
                           <option value="offizier">Offizier</option>
                           <option value="admin">Admin</option>
                         </select>
-                      </td>
-                      <td className="py-2 px-2 text-right">
-                        <div className="flex gap-2 justify-end">
-                          <button
-                            onClick={() => saveEdit(member.id)}
-                            disabled={saving}
-                            className="text-xs bg-amber-600 hover:bg-amber-500 disabled:bg-amber-800 text-white px-3 py-1 rounded transition-colors"
-                          >
-                            {saving ? "..." : "Speichern"}
-                          </button>
-                          <button
-                            onClick={cancelEdit}
-                            className="text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-3 py-1 rounded transition-colors"
-                          >
-                            Abbrechen
-                          </button>
-                        </div>
-                      </td>
-                    </>
-                  ) : (
-                    <>
-                      <td className="py-2 px-2 text-gray-200">
-                        {member.username}
-                      </td>
-                      <td className="py-2 px-2 text-gray-300">
-                        {member.ingame_name || "—"}
-                      </td>
-                      <td className="py-2 px-2">
-                        <span
-                          className={`text-xs px-2 py-0.5 rounded ${
-                            member.role === "admin"
-                              ? "bg-amber-900/50 text-amber-300"
-                              : member.role === "offizier"
-                              ? "bg-blue-900/50 text-blue-300"
-                              : "bg-gray-800 text-gray-400"
-                          }`}
-                        >
-                          {roleLabels[member.role]}
-                        </span>
-                      </td>
-                      <td className="py-2 px-2 text-right">
-                        <button
-                          onClick={() => startEdit(member)}
-                          className="text-xs text-amber-500 hover:text-amber-400 transition-colors"
-                        >
-                          Bearbeiten
-                        </button>
-                      </td>
-                    </>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+                      </label>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleUpdateMember(member.id)}
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm rounded-lg transition-colors"
+                      >
+                        Speichern
+                      </button>
+                      <button
+                        onClick={() => setEditingId(null)}
+                        className="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 text-sm rounded-lg transition-colors"
+                      >
+                        Abbrechen
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div>
+                        <span className="text-sm font-medium text-zinc-200">{member.ingame_name || member.display_name}</span>
+                        <span className="text-xs text-zinc-500 ml-2">@{member.username}</span>
+                      </div>
+                      <span className={`text-xs px-2 py-0.5 rounded-full border ${roleBadgeStyles[member.role]}`}>
+                        {roleLabels[member.role]}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => startEdit(member)}
+                      className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+                    >
+                      Bearbeiten
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-export default function DashboardPage() {
+// ─── Main Page ───────────────────────────────────────────────────────────────
+
+type PageTab = "dashboard" | "admin";
+
+function DashboardPage() {
+  const { profile, signOut } = useAuth();
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState<PageTab>("dashboard");
+  const isAdmin = profile?.role === "admin";
+
+  return (
+    <div className="min-h-screen bg-zinc-950">
+      {/* ── Top nav ──────────────────────────────────────────────────────── */}
+      <header className="sticky top-0 z-30 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="flex items-center justify-between h-14">
+            <div className="flex items-center gap-4">
+              <h1 className="text-lg font-bold text-zinc-100 tracking-tight">Clanbank</h1>
+              <nav className="hidden sm:flex items-center gap-1 ml-4">
+                <button
+                  onClick={() => setActiveTab("dashboard")}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                    activeTab === "dashboard"
+                      ? "bg-zinc-800 text-zinc-100"
+                      : "text-zinc-400 hover:text-zinc-200"
+                  }`}
+                >
+                  Dashboard
+                </button>
+                <button
+                  onClick={() => router.push("/deposits")}
+                  className="px-3 py-1.5 rounded-lg text-sm font-medium text-zinc-400 hover:text-zinc-200 transition-all"
+                >
+                  Einzahlungen
+                </button>
+                {isAdmin && (
+                  <button
+                    onClick={() => setActiveTab("admin")}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                      activeTab === "admin"
+                        ? "bg-zinc-800 text-zinc-100"
+                        : "text-zinc-400 hover:text-zinc-200"
+                    }`}
+                  >
+                    Verwaltung
+                  </button>
+                )}
+              </nav>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-zinc-400 hidden sm:inline">
+                {profile?.ingame_name || profile?.display_name}
+              </span>
+              <button
+                onClick={signOut}
+                className="px-3 py-1.5 text-sm text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 rounded-lg transition-all"
+              >
+                Abmelden
+              </button>
+            </div>
+          </div>
+
+          {/* Mobile nav */}
+          <div className="sm:hidden flex gap-1 pb-2 -mt-1 overflow-x-auto">
+            <button
+              onClick={() => setActiveTab("dashboard")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
+                activeTab === "dashboard"
+                  ? "bg-zinc-800 text-zinc-100"
+                  : "text-zinc-400"
+              }`}
+            >
+              Dashboard
+            </button>
+            <button
+              onClick={() => router.push("/deposits")}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-400 whitespace-nowrap"
+            >
+              Einzahlungen
+            </button>
+            {isAdmin && (
+              <button
+                onClick={() => setActiveTab("admin")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
+                  activeTab === "admin"
+                    ? "bg-zinc-800 text-zinc-100"
+                    : "text-zinc-400"
+                }`}
+              >
+                Verwaltung
+              </button>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* ── Content ──────────────────────────────────────────────────────── */}
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
+        {activeTab === "dashboard" && <Dashboard />}
+        {activeTab === "admin" && isAdmin && <AdminPanel />}
+      </main>
+    </div>
+  );
+}
+
+export default function DashboardPageWrapper() {
   return (
     <ProtectedRoute>
-      <DashboardContent />
+      <DashboardPage />
     </ProtectedRoute>
   );
 }
