@@ -9,7 +9,7 @@ export default function LoginPage() {
   const { signIn, session, loading } = useAuth();
   const router = useRouter();
 
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -26,15 +26,10 @@ export default function LoginPage() {
     setError(null);
     setSubmitting(true);
 
-    const { error } = await signIn(email, password);
+    const { error } = await signIn(username, password);
 
     if (error) {
-      // Map common errors to German
-      if (error.includes("Invalid login")) {
-        setError("E-Mail oder Passwort ist falsch.");
-      } else {
-        setError(error);
-      }
+      setError(error);
       setSubmitting(false);
     } else {
       router.replace("/dashboard");
@@ -77,20 +72,20 @@ export default function LoginPage() {
 
           <div>
             <label
-              htmlFor="email"
+              htmlFor="username"
               className="block text-sm text-gray-400 mb-1"
             >
-              E-Mail
+              Benutzername
             </label>
             <input
-              id="email"
-              type="email"
+              id="username"
+              type="text"
               required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-gray-100 placeholder-gray-600 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors"
-              placeholder="name@beispiel.de"
-              autoComplete="email"
+              placeholder="mein_name"
+              autoComplete="username"
             />
           </div>
 
