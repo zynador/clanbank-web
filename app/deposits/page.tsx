@@ -6,7 +6,7 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import { supabase } from "@/lib/supabaseClient";
 
 // ── Typen ──────────────────────────────────────────────────
-type ResourceType = "Cash" | "Cargo" | "Arms" | "Metal" | "Diamonds";
+type ResourceType = "Cash" | "Cargo" | "Arms" | "Metal" | "Diamond";
 
 interface Deposit {
   id: string;
@@ -29,7 +29,7 @@ const RESOURCE_CONFIG: Record
   Cargo: { label: "Cargo", icon: "📦", color: "#3b82f6" },
   Arms: { label: "Arms", icon: "⚔️", color: "#ef4444" },
   Metal: { label: "Metal", icon: "🔩", color: "#a855f7" },
-  Diamonds: { label: "Diamonds", icon: "💎", color: "#06b6d4" },
+  Diamond: { label: "Diamond", icon: "💎", color: "#06b6d4" },
 };
 
 // ── Zahlen formatieren ─────────────────────────────────────
