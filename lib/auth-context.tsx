@@ -26,14 +26,13 @@ interface AuthContextType {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  signIn: (username: string, password: string) => Promise<{ error: string | null }>;
   signUp: (params: SignUpParams) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
 
 interface SignUpParams {
-  email: string;
   password: string;
   inviteCode: string;
   username: string;
@@ -42,6 +41,11 @@ interface SignUpParams {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// Generate a fake email from username (Supabase Auth requires an email)
+function usernameToEmail(username: string): string {
+  return username.toLowerCase().replace(/[^a-z0-9]/g, "") + "@clanbank.local";
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -98,17 +102,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Sign in with email + password
+  // Sign in with username + password
   async function signIn(
-    email: string,
+    username: string,
     password: string
   ): Promise<{ error: string | null }> {
+    const fakeEmail = usernameToEmail(username);
     const { error } = await supabase.auth.signInWithPassword({
-      email,
+      email: fakeEmail,
       password,
     });
 
     if (error) {
+      if (error.message.includes("Invalid login credentials")) {
+        return { error: "Benutzername oder Passwort ist falsch." };
+      }
       return { error: error.message };
     }
     return { error: null };
@@ -116,11 +124,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Sign up: validate code → create auth user → register with code (creates profile)
   async function signUp(params: SignUpParams): Promise<{ error: string | null }> {
-    const { email, password, inviteCode, username, displayName, ingameName } =
-      params;
+    const { password, inviteCode, username, displayName, ingameName } = params;
 
     // Step 1: Validate the invite code
-    // FIXED: was "validate_invite_code", DB function is "validate_clan_code"
     const { data: validation, error: valError } = await supabase.rpc(
       "validate_clan_code",
       { input_code: inviteCode }
@@ -134,8 +140,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: validation.error || "Ungültiger Einladungscode" };
     }
 
-    // Step 2: Create auth user in Supabase Auth
-    const fakeEmail = username.toLowerCase().replace(/[^a-z0-9]/g, "") + "@clanbank.local";
+    // Step 2: Create auth user in Supabase Auth (with fake email)
+    const fakeEmail = usernameToEmail(username);
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: fakeEmail,
       password,
@@ -148,14 +154,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     if (authError) {
-      // Map common Supabase Auth errors to German
       if (authError.message.includes("already registered")) {
-        return { error: "Diese E-Mail-Adresse ist bereits registriert." };
+        return { error: "Dieser Benutzername ist bereits vergeben." };
       }
       if (authError.message.includes("password")) {
-        return {
-          error: "Passwort muss mindestens 6 Zeichen lang sein.",
-        };
+        return { error: "Passwort muss mindestens 6 Zeichen lang sein." };
       }
       return { error: "Registrierung fehlgeschlagen: " + authError.message };
     }
@@ -165,8 +168,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     // Step 3: Register with clan code → creates profile via auth.uid()
-    // FIXED: was "redeem_invite_code" with 5 params
-    // DB function is "register_with_clan_code" with 3 params (uses auth.uid() internally)
     const { data: registration, error: regError } = await supabase.rpc(
       "register_with_clan_code",
       {
@@ -177,9 +178,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
 
     if (regError) {
-      return {
-        error: "Profil-Erstellung fehlgeschlagen: " + regError.message,
-      };
+      return { error: "Profil-Erstellung fehlgeschlagen: " + regError.message };
     }
 
     if (!registration.success) {
