@@ -6,7 +6,7 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import { supabase } from "@/lib/supabaseClient";
 
 // ── Typen ──────────────────────────────────────────────────
-type ResourceType = "Cash" | "Cargo" | "Arms" | "Metal";
+type ResourceType = "Cash" | "Cargo" | "Arms" | "Metal" | "Diamonds";
 
 interface Deposit {
   id: string;
