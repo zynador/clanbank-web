@@ -19,8 +19,7 @@ export default function RegisterPage() {
   const [clanName, setClanName] = useState("");
   const [clanId, setClanId] = useState("");
 
-  // Step 2: User details
-  const [email, setEmail] = useState("");
+  // Step 2: User details (no email)
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [ingameName, setIngameName] = useState("");
@@ -38,7 +37,6 @@ export default function RegisterPage() {
   }, [session, loading, router]);
 
   // Step 1: Validate invite code
-  // FIXED: was "validate_invite_code", DB function is "validate_clan_code"
   async function handleValidateCode(e: FormEvent) {
     e.preventDefault();
     setError(null);
@@ -90,7 +88,6 @@ export default function RegisterPage() {
     setSubmitting(true);
 
     const { error } = await signUp({
-      email,
       password,
       inviteCode: inviteCode.trim().toUpperCase(),
       username,
@@ -181,7 +178,7 @@ export default function RegisterPage() {
                   setInviteCode(e.target.value.toUpperCase().replace(/\s/g, ""))
                 }
                 className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-gray-100 text-center text-xl font-mono tracking-[0.3em] placeholder-gray-600 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors uppercase"
-                placeholder="ABC123"
+                placeholder="CODE"
                 autoComplete="off"
               />
             </div>
@@ -227,25 +224,6 @@ export default function RegisterPage() {
                 {error}
               </div>
             )}
-
-            <div>
-              <label
-                htmlFor="email"
-                className="block text-sm text-gray-400 mb-1"
-              >
-                E-Mail
-              </label>
-              <input
-                id="email"
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-gray-100 placeholder-gray-600 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors"
-                placeholder="name@beispiel.de"
-                autoComplete="email"
-              />
-            </div>
 
             <div>
               <label
