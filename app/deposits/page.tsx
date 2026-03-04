@@ -21,10 +21,7 @@ interface Deposit {
 }
 
 // ── Ressource-Icons ────────────────────────────────────────
-const RESOURCE_CONFIG: Record
-  ResourceType,
-  { label: string; icon: string; color: string }
-> = {
+const RESOURCE_CONFIG: Record<ResourceType, { label: string; icon: string; color: string }> = {
   Cash: { label: "Cash", icon: "💵", color: "#22c55e" },
   Cargo: { label: "Cargo", icon: "📦", color: "#3b82f6" },
   Arms: { label: "Arms", icon: "⚔️", color: "#ef4444" },
