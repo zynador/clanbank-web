@@ -1,6 +1,4 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
 /* Prevent autofill background color override in dark theme */
 input:-webkit-autofill,
@@ -10,10 +8,12 @@ input:-webkit-autofill:focus {
   -webkit-text-fill-color: #f3f4f6;
   transition: background-color 5000s ease-in-out 0s;
 }
+
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(-8px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
 .animate-fade-in {
   animation: fade-in 0.3s ease-out;
 }
