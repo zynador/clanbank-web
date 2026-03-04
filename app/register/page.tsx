@@ -169,13 +169,13 @@ export default function RegisterPage() {
                 htmlFor="inviteCode"
                 className="block text-sm text-gray-400 mb-1"
               >
-                Code (6 Zeichen)
+                Code (10 Zeichen)
               </label>
               <input
                 id="inviteCode"
                 type="text"
                 required
-                maxLength={6}
+                maxLength={10}
                 value={inviteCode}
                 onChange={(e) =>
                   setInviteCode(e.target.value.toUpperCase().replace(/\s/g, ""))
@@ -188,7 +188,7 @@ export default function RegisterPage() {
 
             <button
               type="submit"
-              disabled={submitting || inviteCode.length < 6}
+              disabled={submitting || inviteCode.length < 4}
               className="w-full bg-amber-600 hover:bg-amber-500 disabled:bg-amber-800 disabled:cursor-not-allowed text-white font-medium py-2 rounded transition-colors"
             >
               {submitting ? "Prüfe..." : "Code prüfen"}
