@@ -4,6 +4,9 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { supabase } from "@/lib/supabaseClient";
+import ScreenshotUpload from "@/components/ScreenshotUpload";
+import ScreenshotLightbox from "@/components/ScreenshotLightbox";
+import { getScreenshotUrl, isScreenshotPdf } from "@/lib/screenshotHelpers";
 
 // ── Typen ──────────────────────────────────────────────────
 type ResourceType = "Cash" | "Cargo" | "Arms" | "Metal" | "Diamond";
@@ -14,6 +17,7 @@ interface Deposit {
   resource_type: ResourceType;
   amount: number;
   note: string | null;
+  screenshot_url: string | null;
   created_at: string;
   updated_at: string | null;
   updated_by: string | null;
@@ -28,6 +32,7 @@ const RESOURCE_CONFIG: Record<ResourceType, { label: string; icon: string; color
   Metal: { label: "Metal", icon: "/metal.png", color: "#a855f7" },
   Diamond: { label: "Diamond", icon: "/diamond.png", color: "#06b6d4" },
 };
+
 // ── Zahlen formatieren ─────────────────────────────────────
 function formatNumber(n: number): string {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
@@ -61,6 +66,7 @@ function DepositsContent() {
   const [resourceType, setResourceType] = useState<ResourceType | "">("");
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
+  const [screenshotPath, setScreenshotPath] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -74,9 +80,32 @@ function DepositsContent() {
   const [editResource, setEditResource] = useState<ResourceType | "">("");
   const [editAmount, setEditAmount] = useState("");
   const [editNote, setEditNote] = useState("");
+  const [editScreenshotPath, setEditScreenshotPath] = useState<string | null>(null);
 
   // Löschen-Bestätigung
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Lightbox-State
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [lightboxIsPdf, setLightboxIsPdf] = useState(false);
+
+  // Screenshot-URLs Cache (signierte URLs für die Thumbnail-Anzeige)
+  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
+
+  // ── Signed URLs für Screenshots generieren ─────────────
+  const loadSignedUrls = useCallback(async (depositsList: Deposit[]) => {
+    const withScreenshots = depositsList.filter((d) => d.screenshot_url);
+    if (withScreenshots.length === 0) return;
+
+    const urls: Record<string, string> = {};
+    await Promise.all(
+      withScreenshots.map(async (d) => {
+        const url = await getScreenshotUrl(d.screenshot_url);
+        if (url) urls[d.id] = url;
+      })
+    );
+    setSignedUrls(urls);
+  }, []);
 
   // ── Einzahlungen laden ─────────────────────────────────
   const loadDeposits = useCallback(async () => {
@@ -84,22 +113,33 @@ function DepositsContent() {
     try {
       const { data, error } = await supabase
         .from("deposits")
-        .select("id, user_id, resource_type, amount, note, created_at, updated_at, updated_by, profiles(display_name, ingame_name)")
+        .select("id, user_id, resource_type, amount, note, screenshot_url, created_at, updated_at, updated_by, profiles(display_name, ingame_name)")
         .is("deleted_at", null)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      setDeposits((data as unknown as Deposit[]) || []);
+      const depositsList = (data as unknown as Deposit[]) || [];
+      setDeposits(depositsList);
+      loadSignedUrls(depositsList);
     } catch (err) {
       console.error("Fehler beim Laden:", err);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [loadSignedUrls]);
 
   useEffect(() => {
     loadDeposits();
   }, [loadDeposits]);
+
+  // ── Lightbox öffnen ────────────────────────────────────
+  async function openLightbox(screenshotUrlPath: string) {
+    const url = await getScreenshotUrl(screenshotUrlPath);
+    if (url) {
+      setLightboxUrl(url);
+      setLightboxIsPdf(isScreenshotPdf(screenshotUrlPath));
+    }
+  }
 
   // ── Einzahlung erstellen ───────────────────────────────
   async function handleSubmit(e: React.FormEvent) {
@@ -125,6 +165,7 @@ function DepositsContent() {
         input_resource_type: resourceType,
         input_amount: parsedAmount,
         input_note: note.trim() || null,
+        input_screenshot_url: screenshotPath,
       });
 
       if (error) throw error;
@@ -136,11 +177,12 @@ function DepositsContent() {
       }
 
       setSuccessMessage(
-        `${RESOURCE_CONFIG[resourceType].icon} ${formatNumber(parsedAmount)} ${resourceType} erfolgreich eingezahlt!`
+        `${formatNumber(parsedAmount)} ${resourceType} erfolgreich eingezahlt!`
       );
       setResourceType("");
       setAmount("");
       setNote("");
+      setScreenshotPath(null);
       loadDeposits();
 
       setTimeout(() => setSuccessMessage(""), 4000);
@@ -158,6 +200,7 @@ function DepositsContent() {
     setEditResource(deposit.resource_type);
     setEditAmount(deposit.amount.toString());
     setEditNote(deposit.note || "");
+    setEditScreenshotPath(deposit.screenshot_url || null);
     setDeletingId(null);
   }
 
@@ -166,6 +209,7 @@ function DepositsContent() {
     setEditResource("");
     setEditAmount("");
     setEditNote("");
+    setEditScreenshotPath(null);
   }
 
   async function saveEdit() {
@@ -185,6 +229,7 @@ function DepositsContent() {
         input_resource_type: editResource,
         input_amount: parsedAmount,
         input_note: editNote.trim() || null,
+        input_screenshot_url: editScreenshotPath,
       });
 
       if (error) throw error;
@@ -250,6 +295,15 @@ function DepositsContent() {
   // ── Render ─────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
+      {/* Lightbox */}
+      {lightboxUrl && (
+        <ScreenshotLightbox
+          url={lightboxUrl}
+          isPdf={lightboxIsPdf}
+          onClose={() => setLightboxUrl(null)}
+        />
+      )}
+
       {/* Header */}
       <header className="border-b border-gray-800 bg-gray-900/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
@@ -361,6 +415,14 @@ function DepositsContent() {
               />
             </div>
 
+            {/* Screenshot-Upload */}
+            {profile && (
+              <ScreenshotUpload
+                clanId={profile.clan_id}
+                onUploadComplete={(path) => setScreenshotPath(path)}
+              />
+            )}
+
             {/* Submit-Button */}
             <button
               onClick={handleSubmit}
@@ -393,6 +455,8 @@ function DepositsContent() {
                 const isOwn = deposit.user_id === profile?.id;
                 const isEditing = editingId === deposit.id;
                 const isDeleting = deletingId === deposit.id;
+                const thumbnailUrl = signedUrls[deposit.id];
+                const hasPdf = isScreenshotPdf(deposit.screenshot_url);
 
                 return (
                   <div
@@ -446,6 +510,15 @@ function DepositsContent() {
                           placeholder="Notiz (optional)"
                           maxLength={200}
                         />
+                        {/* Screenshot im Bearbeitungsmodus */}
+                        {profile && (
+                          <ScreenshotUpload
+                            clanId={profile.clan_id}
+                            depositId={editingId || undefined}
+                            existingUrl={thumbnailUrl || null}
+                            onUploadComplete={(path) => setEditScreenshotPath(path)}
+                          />
+                        )}
                         <div className="flex gap-2">
                           <button
                             onClick={saveEdit}
@@ -510,47 +583,85 @@ function DepositsContent() {
                           </div>
                         </div>
 
-                        {/* Aktionen */}
-                        {(canEdit(deposit) || canDelete(deposit)) && !isDeleting && (
-                          <div className="flex gap-1 flex-shrink-0">
-                            {canEdit(deposit) && (
-                              <button
-                                onClick={() => startEdit(deposit)}
-                                className="p-2 text-gray-500 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors cursor-pointer"
-                                title="Bearbeiten"
-                              >
-                                ✏️
-                              </button>
-                            )}
-                            {canDelete(deposit) && (
-                              <button
-                                onClick={() => setDeletingId(deposit.id)}
-                                className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors cursor-pointer"
-                                title="Löschen"
-                              >
-                                🗑️
-                              </button>
-                            )}
-                          </div>
-                        )}
+                        {/* Rechte Seite: Thumbnail + Aktionen */}
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {/* Screenshot-Thumbnail */}
+                          {deposit.screenshot_url && (
+                            <button
+                              onClick={() => openLightbox(deposit.screenshot_url!)}
+                              className="flex-shrink-0 group relative"
+                              title="Screenshot anzeigen"
+                            >
+                              {hasPdf ? (
+                                <div className="w-10 h-10 rounded-lg border border-gray-600 bg-gray-800 flex items-center justify-center group-hover:border-amber-500 transition-colors cursor-pointer">
+                                  <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                  </svg>
+                                </div>
+                              ) : thumbnailUrl ? (
+                                <img
+                                  src={thumbnailUrl}
+                                  alt="Screenshot"
+                                  className="w-10 h-10 object-cover rounded-lg border border-gray-600 group-hover:border-amber-500 transition-colors cursor-pointer"
+                                />
+                              ) : (
+                                <div className="w-10 h-10 rounded-lg border border-gray-600 bg-gray-800 flex items-center justify-center animate-pulse">
+                                  <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                  </svg>
+                                </div>
+                              )}
+                              {/* Hover-Overlay */}
+                              <div className="absolute inset-0 bg-black/40 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                                </svg>
+                              </div>
+                            </button>
+                          )}
 
-                        {/* Löschen-Bestätigung */}
-                        {isDeleting && (
-                          <div className="flex gap-1 flex-shrink-0">
-                            <button
-                              onClick={() => handleDelete(deposit.id)}
-                              className="px-3 py-1.5 bg-red-700 hover:bg-red-600 text-white text-sm rounded-lg transition-colors cursor-pointer"
-                            >
-                              Ja, löschen
-                            </button>
-                            <button
-                              onClick={() => setDeletingId(null)}
-                              className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm rounded-lg transition-colors cursor-pointer"
-                            >
-                              Nein
-                            </button>
-                          </div>
-                        )}
+                          {/* Aktionen */}
+                          {(canEdit(deposit) || canDelete(deposit)) && !isDeleting && (
+                            <div className="flex gap-1">
+                              {canEdit(deposit) && (
+                                <button
+                                  onClick={() => startEdit(deposit)}
+                                  className="p-2 text-gray-500 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors cursor-pointer"
+                                  title="Bearbeiten"
+                                >
+                                  ✏️
+                                </button>
+                              )}
+                              {canDelete(deposit) && (
+                                <button
+                                  onClick={() => setDeletingId(deposit.id)}
+                                  className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors cursor-pointer"
+                                  title="Löschen"
+                                >
+                                  🗑️
+                                </button>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Löschen-Bestätigung */}
+                          {isDeleting && (
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => handleDelete(deposit.id)}
+                                className="px-3 py-1.5 bg-red-700 hover:bg-red-600 text-white text-sm rounded-lg transition-colors cursor-pointer"
+                              >
+                                Ja, löschen
+                              </button>
+                              <button
+                                onClick={() => setDeletingId(null)}
+                                className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm rounded-lg transition-colors cursor-pointer"
+                              >
+                                Nein
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
