@@ -23,12 +23,11 @@ interface Deposit {
 // ── Ressource-Icons ────────────────────────────────────────
 const RESOURCE_CONFIG: Record<ResourceType, { label: string; icon: string; color: string }> = {
   Cash: { label: "Cash", icon: "💵", color: "#22c55e" },
-  Cargo: { label: "Cargo", icon: "📦", color: "#3b82f6" },
   Arms: { label: "Arms", icon: "⚔️", color: "#ef4444" },
+  Cargo: { label: "Cargo", icon: "📦", color: "#3b82f6" },
   Metal: { label: "Metal", icon: "🔩", color: "#a855f7" },
   Diamond: { label: "Diamond", icon: "💎", color: "#06b6d4" },
 };
-
 // ── Zahlen formatieren ─────────────────────────────────────
 function formatNumber(n: number): string {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
