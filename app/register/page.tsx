@@ -37,26 +37,26 @@ export default function RegisterPage() {
     }
   }, [session, loading, router]);
 
-  // Step 1: Validate invite 
-  async function handleValidate(e: FormEvent) {
+  // Step 1: Validate invite code
+  async function handleValidateCode(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
 
     const { data, error: rpcError } = await supabase.rpc(
-      "validate_invite_",
-      { input_: invite.trim().toUpperCase() }
+      "validate_clan_code",
+      { input_code: inviteCode.trim().toUpperCase() }
     );
 
     setSubmitting(false);
 
     if (rpcError) {
-      setError("Fehler bei der -Prüfung: " + rpcError.message);
+      setError("Fehler bei der Code-Prüfung: " + rpcError.message);
       return;
     }
 
     if (!data || !data.valid) {
-      setError(data?.error || "Ungültiger oder bereits verwendeter .");
+      setError(data?.error || "Ungültiger oder bereits verwendeter Code.");
       return;
     }
 
@@ -92,7 +92,7 @@ export default function RegisterPage() {
       password,
       displayName: displayName || username,
       ingameName: ingameName || username,
-      invite: invite.trim().toUpperCase(),
+      inviteCode: inviteCode.trim().toUpperCase(),
     });
 
     setSubmitting(false);
@@ -127,14 +127,14 @@ export default function RegisterPage() {
           <Logo variant="large" />
         </div>
 
-        {/* Step 1:  */}
-        {step === "" && (
-          <form onSubmit={handleValidate} className="space-y-4">
+        {/* Step 1: Code */}
+        {step === "code" && (
+          <form onSubmit={handleValidateCode} className="space-y-4">
             <h2 className="text-lg font-semibold text-gray-100 text-center">
               Registrierung
             </h2>
             <p className="text-sm text-gray-400 text-center">
-              Gib deinen Einladungs ein, um fortzufahren.
+              Gib deinen Einladungscode ein, um fortzufahren.
             </p>
 
             {error && (
@@ -145,16 +145,16 @@ export default function RegisterPage() {
 
             <div>
               <label
-                htmlFor="invite"
+                htmlFor="inviteCode"
                 className="block text-sm font-medium text-gray-300 mb-1"
               >
-                Einladungs
+                Einladungscode
               </label>
               <input
-                id="invite"
+                id="inviteCode"
                 type="text"
-                value={invite}
-                onChange={(e) => setInvite(e.target.value.toUpperCase())}
+                value={inviteCode}
+                onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
                 required
                 maxLength={10}
                 className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-center tracking-widest text-lg"
@@ -164,7 +164,7 @@ export default function RegisterPage() {
 
             <button
               type="submit"
-              disabled={submitting || invite.length < 4}
+              disabled={submitting || inviteCode.length < 4}
               className="w-full py-2 px-4 bg-teal-600 hover:bg-teal-500 disabled:bg-teal-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
             >
               {submitting ? "Prüfe..." : "Code prüfen"}
@@ -317,7 +317,7 @@ export default function RegisterPage() {
           <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 text-center space-y-4">
             <div className="text-4xl">✓</div>
             <h2 className="text-lg font-semibold text-gray-100">
-              Willkommen in der 1Ca-Bank!
+              Willkommen in der Clanbank!
             </h2>
             <p className="text-sm text-gray-400">
               Dein Konto wurde erstellt. Du wirst gleich weitergeleitet...
