@@ -87,15 +87,13 @@ export default function RegisterPage() {
 
     setSubmitting(true);
 
-    const { error } = await signUp(
-      "",
+    const { error } = await signUp({
       username,
       password,
-      displayName || username,
-      ingameName || username,
-      inviteCode.trim().toUpperCase(),
-      clanId
-    );
+      displayName: displayName || username,
+      ingameName: ingameName || username,
+      inviteCode: inviteCode.trim().toUpperCase(),
+    });
 
     setSubmitting(false);
 
