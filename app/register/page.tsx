@@ -4,8 +4,8 @@ import { useState, FormEvent, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
 import { supabase } from "@/lib/supabaseClient";
+import Logo from "@/components/Logo";
 
 type Step = "code" | "details" | "success";
 
@@ -20,7 +20,7 @@ export default function RegisterPage() {
   const [clanName, setClanName] = useState("");
   const [clanId, setClanId] = useState("");
 
-  // Step 2: User details (no email)
+  // Step 2: User details
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [ingameName, setIngameName] = useState("");
@@ -44,7 +44,7 @@ export default function RegisterPage() {
     setSubmitting(true);
 
     const { data, error: rpcError } = await supabase.rpc(
-      "validate_clan_code",
+      "validate_invite_code",
       { input_code: inviteCode.trim().toUpperCase() }
     );
 
@@ -55,8 +55,8 @@ export default function RegisterPage() {
       return;
     }
 
-    if (!data.valid) {
-      setError(data.error || "Ungültiger oder bereits verwendeter Code.");
+    if (!data || !data.valid) {
+      setError(data?.error || "Ungültiger oder bereits verwendeter Code.");
       return;
     }
 
@@ -70,15 +70,16 @@ export default function RegisterPage() {
     e.preventDefault();
     setError(null);
 
-    // Client-side validation
     if (password !== passwordConfirm) {
       setError("Passwörter stimmen nicht überein.");
       return;
     }
+
     if (password.length < 6) {
       setError("Passwort muss mindestens 6 Zeichen lang sein.");
       return;
     }
+
     if (username.length < 3) {
       setError("Benutzername muss mindestens 3 Zeichen lang sein.");
       return;
@@ -86,81 +87,60 @@ export default function RegisterPage() {
 
     setSubmitting(true);
 
-    const { error } = await signUp({
-      password,
-      inviteCode: inviteCode.trim().toUpperCase(),
+    const { error } = await signUp(
+      "",
       username,
-      displayName: displayName || username,
-      ingameName,
-    });
+      password,
+      displayName || username,
+      ingameName || username,
+      inviteCode.trim().toUpperCase(),
+      clanId
+    );
+
+    setSubmitting(false);
 
     if (error) {
       setError(error);
-      setSubmitting(false);
-    } else {
-      setStep("success");
-      setSubmitting(false);
-      // Auto-redirect after short delay
-      setTimeout(() => router.replace("/dashboard"), 2000);
+      return;
     }
+
+    setStep("success");
+    setTimeout(() => {
+      router.replace("/dashboard");
+    }, 2000);
   }
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-950">
-        <div className="w-8 h-8 border-2 border-teal-400 border-t-transparent rounded-full animate-spin" />
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-teal-400 border-t-transparent rounded-full animate-spin" />
+          <p className="text-gray-400 text-sm">Laden...</p>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-950 px-4">
-      <div className="w-full max-w-sm">
-        {/* Header with Logo */}
-        <div className="text-center mb-8">
-          <Image
-            src="/logo.svg"
-            alt="1Ca - Bank"
-            width={200}
-            height={48}
-            className="mx-auto mb-3"
-            priority
-          />
-          <p className="text-gray-500 mt-1 text-sm">Neues Konto erstellen</p>
+      <div className="w-full max-w-sm space-y-8">
+        {/* Logo */}
+        <div className="flex justify-center">
+          <Logo variant="large" />
         </div>
 
-        {/* Step indicator */}
-        <div className="flex items-center justify-center gap-2 mb-6">
-          <div
-            className={`w-8 h-1 rounded-full transition-colors ${
-              step === "code" ? "bg-teal-400" : "bg-teal-600"
-            }`}
-          />
-          <div
-            className={`w-8 h-1 rounded-full transition-colors ${
-              step === "details" || step === "success"
-                ? "bg-teal-400"
-                : "bg-gray-700"
-            }`}
-          />
-        </div>
-
-        {/* Step 1: Invite Code */}
+        {/* Step 1: Code */}
         {step === "code" && (
-          <form
-            onSubmit={handleValidateCode}
-            className="bg-gray-900 border border-gray-800 rounded-lg p-6 space-y-4"
-          >
-            <h2 className="text-lg font-semibold text-gray-100">
-              Einladungscode
+          <form onSubmit={handleValidateCode} className="space-y-4">
+            <h2 className="text-lg font-semibold text-gray-100 text-center">
+              Registrierung
             </h2>
-            <p className="text-sm text-gray-400">
-              Du benötigst einen Einladungscode von deinem Clan-Admin, um dich
-              zu registrieren.
+            <p className="text-sm text-gray-400 text-center">
+              Gib deinen Einladungscode ein, um fortzufahren.
             </p>
 
             {error && (
-              <div className="bg-red-900/30 border border-red-800 text-red-300 text-sm rounded px-3 py-2">
+              <div className="bg-red-900/30 border border-red-800 text-red-300 text-sm rounded-lg p-3">
                 {error}
               </div>
             )}
@@ -168,29 +148,26 @@ export default function RegisterPage() {
             <div>
               <label
                 htmlFor="inviteCode"
-                className="block text-sm text-gray-400 mb-1"
+                className="block text-sm font-medium text-gray-300 mb-1"
               >
-                Code
+                Einladungscode
               </label>
               <input
                 id="inviteCode"
                 type="text"
-                required
-                maxLength={10}
                 value={inviteCode}
-                onChange={(e) =>
-                  setInviteCode(e.target.value.toUpperCase().replace(/\s/g, ""))
-                }
-                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-gray-100 text-center text-xl font-mono tracking-[0.3em] placeholder-gray-600 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400 transition-colors uppercase"
-                placeholder="CODE"
-                autoComplete="off"
+                onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+                required
+                maxLength={6}
+                className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-center tracking-widest text-lg"
+                placeholder="XXXXXX"
               />
             </div>
 
             <button
               type="submit"
-              disabled={submitting || inviteCode.length < 4}
-              className="w-full bg-teal-600 hover:bg-teal-500 disabled:bg-teal-800 disabled:cursor-not-allowed text-white font-medium py-2 rounded transition-colors"
+              disabled={submitting || inviteCode.length < 6}
+              className="w-full py-2 px-4 bg-teal-600 hover:bg-teal-500 disabled:bg-teal-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
             >
               {submitting ? "Prüfe..." : "Code prüfen"}
             </button>
@@ -207,24 +184,17 @@ export default function RegisterPage() {
           </form>
         )}
 
-        {/* Step 2: User Details */}
+        {/* Step 2: Details */}
         {step === "details" && (
-          <form
-            onSubmit={handleRegister}
-            className="bg-gray-900 border border-gray-800 rounded-lg p-6 space-y-4"
-          >
-            <div>
-              <h2 className="text-lg font-semibold text-gray-100">
-                Konto erstellen
-              </h2>
-              <p className="text-sm text-gray-400 mt-1">
-                Clan:{" "}
-                <span className="text-teal-400 font-medium">{clanName}</span>
+          <form onSubmit={handleRegister} className="space-y-4">
+            <div className="bg-teal-900/20 border border-teal-800/50 rounded-lg p-3 text-center">
+              <p className="text-sm text-teal-300">
+                Clan: <span className="font-semibold">{clanName}</span>
               </p>
             </div>
 
             {error && (
-              <div className="bg-red-900/30 border border-red-800 text-red-300 text-sm rounded px-3 py-2">
+              <div className="bg-red-900/30 border border-red-800 text-red-300 text-sm rounded-lg p-3">
                 {error}
               </div>
             )}
@@ -232,55 +202,53 @@ export default function RegisterPage() {
             <div>
               <label
                 htmlFor="username"
-                className="block text-sm text-gray-400 mb-1"
+                className="block text-sm font-medium text-gray-300 mb-1"
               >
-                Benutzername
+                Benutzername *
               </label>
               <input
                 id="username"
                 type="text"
-                required
-                minLength={3}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-gray-100 placeholder-gray-600 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400 transition-colors"
-                placeholder="mein_name"
+                required
+                minLength={3}
                 autoComplete="username"
+                className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                placeholder="Dein Login-Name"
               />
             </div>
 
             <div>
               <label
                 htmlFor="displayName"
-                className="block text-sm text-gray-400 mb-1"
+                className="block text-sm font-medium text-gray-300 mb-1"
               >
-                Anzeigename{" "}
-                <span className="text-gray-600">(optional)</span>
+                Anzeigename
               </label>
               <input
                 id="displayName"
                 type="text"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-gray-100 placeholder-gray-600 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400 transition-colors"
-                placeholder="Wird anderen angezeigt"
+                className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                placeholder="Wird in der App angezeigt"
               />
             </div>
 
             <div>
               <label
                 htmlFor="ingameName"
-                className="block text-sm text-gray-400 mb-1"
+                className="block text-sm font-medium text-gray-300 mb-1"
               >
                 Ingame-Name
               </label>
               <input
                 id="ingameName"
                 type="text"
-                required
                 value={ingameName}
                 onChange={(e) => setIngameName(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-gray-100 placeholder-gray-600 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400 transition-colors"
+                className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                 placeholder="Dein Name im Spiel"
               />
             </div>
@@ -288,58 +256,57 @@ export default function RegisterPage() {
             <div>
               <label
                 htmlFor="password"
-                className="block text-sm text-gray-400 mb-1"
+                className="block text-sm font-medium text-gray-300 mb-1"
               >
-                Passwort
+                Passwort *
               </label>
               <input
                 id="password"
                 type="password"
-                required
-                minLength={6}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-gray-100 placeholder-gray-600 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400 transition-colors"
-                placeholder="Min. 6 Zeichen"
+                required
+                minLength={6}
                 autoComplete="new-password"
+                className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                placeholder="Mindestens 6 Zeichen"
               />
             </div>
 
             <div>
               <label
                 htmlFor="passwordConfirm"
-                className="block text-sm text-gray-400 mb-1"
+                className="block text-sm font-medium text-gray-300 mb-1"
               >
-                Passwort bestätigen
+                Passwort wiederholen *
               </label>
               <input
                 id="passwordConfirm"
                 type="password"
-                required
-                minLength={6}
                 value={passwordConfirm}
                 onChange={(e) => setPasswordConfirm(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-gray-100 placeholder-gray-600 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400 transition-colors"
-                placeholder="Passwort wiederholen"
+                required
                 autoComplete="new-password"
+                className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                placeholder="Passwort bestätigen"
               />
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex gap-3">
               <button
                 type="button"
                 onClick={() => {
                   setStep("code");
                   setError(null);
                 }}
-                className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded transition-colors"
+                className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors"
               >
                 Zurück
               </button>
               <button
                 type="submit"
                 disabled={submitting}
-                className="flex-1 bg-teal-600 hover:bg-teal-500 disabled:bg-teal-800 disabled:cursor-not-allowed text-white font-medium py-2 rounded transition-colors"
+                className="flex-1 py-2 px-4 bg-teal-600 hover:bg-teal-500 disabled:bg-teal-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
               >
                 {submitting ? "Registriere..." : "Registrieren"}
               </button>
@@ -352,7 +319,7 @@ export default function RegisterPage() {
           <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 text-center space-y-4">
             <div className="text-4xl">✓</div>
             <h2 className="text-lg font-semibold text-gray-100">
-              Willkommen bei 1Ca - Bank!
+              Willkommen in der 1Ca-Bank!
             </h2>
             <p className="text-sm text-gray-400">
               Dein Konto wurde erstellt. Du wirst gleich weitergeleitet...
