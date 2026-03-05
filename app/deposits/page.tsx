@@ -556,8 +556,8 @@ function DepositsContent() {
                         <td className="py-3 pr-4">
                           {dep.screenshot_url ? (
                             <button
-                              onClick={() => {
-                                const url = getScreenshotUrl(dep.screenshot_url!);
+                                onClick={async () => {
+                                const url = await getScreenshotUrl(dep.screenshot_url!);
                                 if (url) setLightboxUrl(url);
                               }}
                               className="text-blue-400 hover:text-blue-300 text-xs underline"
