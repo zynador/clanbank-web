@@ -224,4 +224,142 @@ export default function RegisterPage() {
             </div>
 
             {error && (
-              <div className="bg-red-900/30
+              <div className="bg-red-900/30 border border-red-800 text-red-300 text-sm rounded px-3 py-2">
+                {error}
+              </div>
+            )}
+
+            <div>
+              <label
+                htmlFor="username"
+                className="block text-sm text-gray-400 mb-1"
+              >
+                Benutzername
+              </label>
+              <input
+                id="username"
+                type="text"
+                required
+                minLength={3}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-gray-100 placeholder-gray-600 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400 transition-colors"
+                placeholder="mein_name"
+                autoComplete="username"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="displayName"
+                className="block text-sm text-gray-400 mb-1"
+              >
+                Anzeigename{" "}
+                <span className="text-gray-600">(optional)</span>
+              </label>
+              <input
+                id="displayName"
+                type="text"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-gray-100 placeholder-gray-600 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400 transition-colors"
+                placeholder="Wird anderen angezeigt"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="ingameName"
+                className="block text-sm text-gray-400 mb-1"
+              >
+                Ingame-Name
+              </label>
+              <input
+                id="ingameName"
+                type="text"
+                required
+                value={ingameName}
+                onChange={(e) => setIngameName(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-gray-100 placeholder-gray-600 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400 transition-colors"
+                placeholder="Dein Name im Spiel"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="password"
+                className="block text-sm text-gray-400 mb-1"
+              >
+                Passwort
+              </label>
+              <input
+                id="password"
+                type="password"
+                required
+                minLength={6}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-gray-100 placeholder-gray-600 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400 transition-colors"
+                placeholder="Min. 6 Zeichen"
+                autoComplete="new-password"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="passwordConfirm"
+                className="block text-sm text-gray-400 mb-1"
+              >
+                Passwort bestätigen
+              </label>
+              <input
+                id="passwordConfirm"
+                type="password"
+                required
+                minLength={6}
+                value={passwordConfirm}
+                onChange={(e) => setPasswordConfirm(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-gray-100 placeholder-gray-600 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400 transition-colors"
+                placeholder="Passwort wiederholen"
+                autoComplete="new-password"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setStep("code");
+                  setError(null);
+                }}
+                className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded transition-colors"
+              >
+                Zurück
+              </button>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="flex-1 bg-teal-600 hover:bg-teal-500 disabled:bg-teal-800 disabled:cursor-not-allowed text-white font-medium py-2 rounded transition-colors"
+              >
+                {submitting ? "Registriere..." : "Registrieren"}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* Success */}
+        {step === "success" && (
+          <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 text-center space-y-4">
+            <div className="text-4xl">✓</div>
+            <h2 className="text-lg font-semibold text-gray-100">
+              Willkommen bei 1Ca - Bank!
+            </h2>
+            <p className="text-sm text-gray-400">
+              Dein Konto wurde erstellt. Du wirst gleich weitergeleitet...
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
