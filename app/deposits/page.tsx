@@ -7,7 +7,7 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import ScreenshotUpload from "@/components/ScreenshotUpload";
 import ScreenshotLightbox from "@/components/ScreenshotLightbox";
 import { getScreenshotUrl, isScreenshotPdf } from "@/lib/screenshotHelpers";
-import supabase from "@/lib/supabaseClient";
+import { supabase } from "@/lib/supabaseClient";
 
 // ─── Typen & Konfiguration ──────────────────────────────────────
 
