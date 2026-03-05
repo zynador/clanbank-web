@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 48" fill="none">
+  <text x="0" y="36" font-family="'Segoe UI', system-ui, sans-serif" font-size="36" font-weight="800" fill="#2dd4bf" letter-spacing="-1">1Ca</text>
+  <text x="82" y="36" font-family="'Segoe UI', system-ui, sans-serif" font-size="36" font-weight="300" fill="#5eead4">–</text>
+  <text x="102" y="36" font-family="'Segoe UI', system-ui, sans-serif" font-size="36" font-weight="400" fill="#99f6e4" letter-spacing="1">Bank</text>
+  <rect x="0" y="44" width="180" height="2" rx="1" fill="url(#grad)"/>
+  <defs>
+    <linearGradient id="grad" x1="0" y1="0" x2="180" y2="0">
+      <stop offset="0%" stop-color="#2dd4bf"/>
+      <stop offset="100%" stop-color="#2dd4bf" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+</svg>
