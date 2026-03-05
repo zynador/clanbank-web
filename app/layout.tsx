@@ -3,8 +3,11 @@ import { AuthProvider } from "@/lib/auth-context";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Clanbank",
+  title: "1Ca - Bank",
   description: "Clan-Ressourcenverwaltung für The Grand Mafia",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({
