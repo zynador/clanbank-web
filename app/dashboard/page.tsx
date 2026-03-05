@@ -1,332 +1,313 @@
 "use client";
 
-import { useState, FormEvent, useEffect } from "react";
-import { useAuth } from "@/lib/auth-context";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { useAuth, Profile } from "@/lib/auth-context";
+import ProtectedRoute from "@/components/ProtectedRoute";
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import Logo from "@/components/Logo";
 
-type Step = "code" | "details" | "success";
+function DashboardContent() {
+  const { profile, signOut } = useAuth();
 
-export default function RegisterPage() {
-  const { signUp, session, loading } = useAuth();
-  const router = useRouter();
+  const roleLabels: Record<string, string> = {
+    admin: "Admin",
+    offizier: "Offizier",
+    mitglied: "Mitglied",
+  };
 
-  const [step, setStep] = useState<Step>("code");
+  const isAdmin = profile?.role === "admin";
+  const isOfficer = profile?.role === "offizier";
 
-  // Step 1: Invite code
-  const [inviteCode, setInviteCode] = useState("");
-  const [clanName, setClanName] = useState("");
-  const [clanId, setClanId] = useState("");
+  return (
+    <div className="min-h-screen bg-gray-950">
+      {/* Navigation */}
+      <nav className="border-b border-gray-800 bg-gray-900/50">
+        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+          <Logo variant="small" />
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-gray-400">
+              {profile?.display_name || profile?.username}
+              <span className="ml-2 text-xs bg-gray-800 text-gray-300 px-2 py-0.5 rounded">
+                {roleLabels[profile?.role || "mitglied"]}
+              </span>
+            </span>
+            <button
+              onClick={signOut}
+              className="text-sm text-gray-500 hover:text-gray-300 transition-colors"
+            >
+              Abmelden
+            </button>
+          </div>
+        </div>
+      </nav>
 
-  // Step 2: User details
-  const [username, setUsername] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [ingameName, setIngameName] = useState("");
-  const [password, setPassword] = useState("");
-  const [passwordConfirm, setPasswordConfirm] = useState("");
+      {/* Main content */}
+      <main className="max-w-5xl mx-auto px-4 py-8">
+        <div className="grid gap-6">
+          {/* Welcome */}
+          <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
+            <h2 className="text-xl font-semibold text-gray-100 mb-2">
+              Willkommen, {profile?.display_name || profile?.username}!
+            </h2>
+            <p className="text-gray-400 text-sm">
+              Ingame: <span className="text-gray-200">{profile?.ingame_name || "—"}</span>
+              {" · "}
+              Rolle: <span className="text-gray-200">{roleLabels[profile?.role || "mitglied"]}</span>
+            </p>
+          </div>
 
+          {/* Placeholder cards */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
+              <h3 className="text-sm font-medium text-gray-400 mb-1">
+                Einzahlungen
+              </h3>
+              <p className="text-2xl font-bold text-gray-100">—</p>
+              <p className="text-xs text-gray-600 mt-2">
+                Schritt 4 · Kommt als Nächstes
+              </p>
+            </div>
+            <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
+              <h3 className="text-sm font-medium text-gray-400 mb-1">
+                Auswertungen
+              </h3>
+              <p className="text-2xl font-bold text-gray-100">—</p>
+              <p className="text-xs text-gray-600 mt-2">
+                Schritt 5 · Dashboard
+              </p>
+            </div>
+          </div>
+
+          {/* Offizier hint */}
+          {isOfficer && (
+            <div className="bg-blue-900/20 border border-blue-800/50 rounded-lg p-4">
+              <p className="text-sm text-blue-300">
+                Als Offizier kannst du Einträge anderer Mitglieder einsehen und bearbeiten.
+              </p>
+            </div>
+          )}
+
+          {/* Admin Panel */}
+          {isAdmin && <AdminPanel />}
+        </div>
+      </main>
+    </div>
+  );
+}
+
+// Admin Panel Component
+function AdminPanel() {
+  const [members, setMembers] = useState<Profile[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editRole, setEditRole] = useState<string>("");
+  const [editIngame, setEditIngame] = useState<string>("");
+  const [saving, setSaving] = useState(false);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Redirect if already logged in
+  const roleLabels: Record<string, string> = {
+    admin: "Admin",
+    offizier: "Offizier",
+    mitglied: "Mitglied",
+  };
+
   useEffect(() => {
-    if (!loading && session) {
-      router.replace("/dashboard");
-    }
-  }, [session, loading, router]);
+    loadMembers();
+  }, []);
 
-  // Step 1: Validate invite code
-  async function handleValidateCode(e: FormEvent) {
-    e.preventDefault();
+  async function loadMembers() {
+    setLoading(true);
     setError(null);
-    setSubmitting(true);
-
-    const { data, error: rpcError } = await supabase.rpc(
-      "validate_invite_code",
-      { input_code: inviteCode.trim().toUpperCase() }
-    );
-
-    setSubmitting(false);
-
-    if (rpcError) {
-      setError("Fehler bei der Code-Prüfung: " + rpcError.message);
-      return;
-    }
-
-    if (!data || !data.valid) {
-      setError(data?.error || "Ungültiger oder bereits verwendeter Code.");
-      return;
-    }
-
-    setClanName(data.clan_name);
-    setClanId(data.clan_id);
-    setStep("details");
-  }
-
-  // Step 2: Register
-  async function handleRegister(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-
-    if (password !== passwordConfirm) {
-      setError("Passwörter stimmen nicht überein.");
-      return;
-    }
-
-    if (password.length < 6) {
-      setError("Passwort muss mindestens 6 Zeichen lang sein.");
-      return;
-    }
-
-    if (username.length < 3) {
-      setError("Benutzername muss mindestens 3 Zeichen lang sein.");
-      return;
-    }
-
-    setSubmitting(true);
-
-    const { error } = await signUp(
-      "",
-      username,
-      password,
-      displayName || username,
-      ingameName || username,
-      inviteCode.trim().toUpperCase(),
-      clanId
-    );
-
-    setSubmitting(false);
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .order("role", { ascending: true })
+      .order("username", { ascending: true });
 
     if (error) {
-      setError(error);
-      return;
+      setError("Fehler beim Laden: " + error.message);
+    } else {
+      setMembers(data as Profile[]);
     }
-
-    setStep("success");
-    setTimeout(() => {
-      router.replace("/dashboard");
-    }, 2000);
+    setLoading(false);
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-950">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-teal-400 border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-400 text-sm">Laden...</p>
-        </div>
-      </div>
-    );
+  function startEdit(member: Profile) {
+    setEditingId(member.id);
+    setEditRole(member.role);
+    setEditIngame(member.ingame_name || "");
+    setSuccessMsg(null);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditRole("");
+    setEditIngame("");
+  }
+
+  async function saveEdit(memberId: string) {
+    setSaving(true);
+    setError(null);
+    setSuccessMsg(null);
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        role: editRole,
+        ingame_name: editIngame,
+      })
+      .eq("id", memberId);
+
+    if (error) {
+      setError("Fehler beim Speichern: " + error.message);
+    } else {
+      setSuccessMsg("Änderungen gespeichert!");
+      setEditingId(null);
+      loadMembers();
+    }
+    setSaving(false);
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-950 px-4">
-      <div className="w-full max-w-sm space-y-8">
-        {/* Logo */}
-        <div className="flex justify-center">
-          <Logo variant="large" />
-        </div>
-
-        {/* Step 1: Code */}
-        {step === "code" && (
-          <form onSubmit={handleValidateCode} className="space-y-4">
-            <h2 className="text-lg font-semibold text-gray-100 text-center">
-              Registrierung
-            </h2>
-            <p className="text-sm text-gray-400 text-center">
-              Gib deinen Einladungscode ein, um fortzufahren.
-            </p>
-
-            {error && (
-              <div className="bg-red-900/30 border border-red-800 text-red-300 text-sm rounded-lg p-3">
-                {error}
-              </div>
-            )}
-
-            <div>
-              <label
-                htmlFor="inviteCode"
-                className="block text-sm font-medium text-gray-300 mb-1"
-              >
-                Einladungscode
-              </label>
-              <input
-                id="inviteCode"
-                type="text"
-                value={inviteCode}
-                onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
-                required
-                maxLength={6}
-                className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent text-center tracking-widest text-lg"
-                placeholder="XXXXXX"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={submitting || inviteCode.length < 6}
-              className="w-full py-2 px-4 bg-teal-600 hover:bg-teal-500 disabled:bg-teal-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
-            >
-              {submitting ? "Prüfe..." : "Code prüfen"}
-            </button>
-
-            <p className="text-center text-sm text-gray-500">
-              Bereits registriert?{" "}
-              <Link
-                href="/login"
-                className="text-teal-400 hover:text-teal-300 transition-colors"
-              >
-                Anmelden
-              </Link>
-            </p>
-          </form>
-        )}
-
-        {/* Step 2: Details */}
-        {step === "details" && (
-          <form onSubmit={handleRegister} className="space-y-4">
-            <div className="bg-teal-900/20 border border-teal-800/50 rounded-lg p-3 text-center">
-              <p className="text-sm text-teal-300">
-                Clan: <span className="font-semibold">{clanName}</span>
-              </p>
-            </div>
-
-            {error && (
-              <div className="bg-red-900/30 border border-red-800 text-red-300 text-sm rounded-lg p-3">
-                {error}
-              </div>
-            )}
-
-            <div>
-              <label
-                htmlFor="username"
-                className="block text-sm font-medium text-gray-300 mb-1"
-              >
-                Benutzername *
-              </label>
-              <input
-                id="username"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-                minLength={3}
-                autoComplete="username"
-                className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                placeholder="Dein Login-Name"
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="displayName"
-                className="block text-sm font-medium text-gray-300 mb-1"
-              >
-                Anzeigename
-              </label>
-              <input
-                id="displayName"
-                type="text"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                placeholder="Wird in der App angezeigt"
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="ingameName"
-                className="block text-sm font-medium text-gray-300 mb-1"
-              >
-                Ingame-Name
-              </label>
-              <input
-                id="ingameName"
-                type="text"
-                value={ingameName}
-                onChange={(e) => setIngameName(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                placeholder="Dein Name im Spiel"
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="password"
-                className="block text-sm font-medium text-gray-300 mb-1"
-              >
-                Passwort *
-              </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-                autoComplete="new-password"
-                className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                placeholder="Mindestens 6 Zeichen"
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="passwordConfirm"
-                className="block text-sm font-medium text-gray-300 mb-1"
-              >
-                Passwort wiederholen *
-              </label>
-              <input
-                id="passwordConfirm"
-                type="password"
-                value={passwordConfirm}
-                onChange={(e) => setPasswordConfirm(e.target.value)}
-                required
-                autoComplete="new-password"
-                className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-                placeholder="Passwort bestätigen"
-              />
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setStep("code");
-                  setError(null);
-                }}
-                className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors"
-              >
-                Zurück
-              </button>
-              <button
-                type="submit"
-                disabled={submitting}
-                className="flex-1 py-2 px-4 bg-teal-600 hover:bg-teal-500 disabled:bg-teal-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
-              >
-                {submitting ? "Registriere..." : "Registrieren"}
-              </button>
-            </div>
-          </form>
-        )}
-
-        {/* Success */}
-        {step === "success" && (
-          <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 text-center space-y-4">
-            <div className="text-4xl">✓</div>
-            <h2 className="text-lg font-semibold text-gray-100">
-              Willkommen in der 1Ca-Bank!
-            </h2>
-            <p className="text-sm text-gray-400">
-              Dein Konto wurde erstellt. Du wirst gleich weitergeleitet...
-            </p>
-          </div>
-        )}
+    <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-semibold text-gray-100">
+          Admin · Mitgliederverwaltung
+        </h3>
+        <span className="text-xs text-gray-500">
+          {members.length} Mitglieder
+        </span>
       </div>
+
+      {error && (
+        <div className="bg-red-900/30 border border-red-800 text-red-300 text-sm rounded px-3 py-2 mb-4">
+          {error}
+        </div>
+      )}
+
+      {successMsg && (
+        <div className="bg-green-900/30 border border-green-800 text-green-300 text-sm rounded px-3 py-2 mb-4">
+          {successMsg}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="flex justify-center py-8">
+          <div className="w-6 h-6 border-2 border-teal-400 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-800">
+                <th className="text-left py-2 px-2 text-gray-400 font-medium">
+                  Benutzername
+                </th>
+                <th className="text-left py-2 px-2 text-gray-400 font-medium">
+                  Ingame-Name
+                </th>
+                <th className="text-left py-2 px-2 text-gray-400 font-medium">
+                  Rolle
+                </th>
+                <th className="text-right py-2 px-2 text-gray-400 font-medium">
+                  Aktionen
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {members.map((member) => (
+                <tr
+                  key={member.id}
+                  className="border-b border-gray-800/50 hover:bg-gray-800/30"
+                >
+                  {editingId === member.id ? (
+                    <>
+                      <td className="py-2 px-2 text-gray-200">
+                        {member.username}
+                      </td>
+                      <td className="py-2 px-2">
+                        <input
+                          type="text"
+                          value={editIngame}
+                          onChange={(e) => setEditIngame(e.target.value)}
+                          className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-gray-100 text-sm w-full focus:outline-none focus:border-teal-500"
+                        />
+                      </td>
+                      <td className="py-2 px-2">
+                        <select
+                          value={editRole}
+                          onChange={(e) => setEditRole(e.target.value)}
+                          className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-gray-100 text-sm focus:outline-none focus:border-teal-500"
+                        >
+                          <option value="mitglied">Mitglied</option>
+                          <option value="offizier">Offizier</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                      </td>
+                      <td className="py-2 px-2 text-right">
+                        <div className="flex gap-2 justify-end">
+                          <button
+                            onClick={() => saveEdit(member.id)}
+                            disabled={saving}
+                            className="text-xs bg-teal-600 hover:bg-teal-500 disabled:bg-teal-800 text-white px-3 py-1 rounded transition-colors"
+                          >
+                            {saving ? "..." : "Speichern"}
+                          </button>
+                          <button
+                            onClick={cancelEdit}
+                            className="text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-3 py-1 rounded transition-colors"
+                          >
+                            Abbrechen
+                          </button>
+                        </div>
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="py-2 px-2 text-gray-200">
+                        {member.username}
+                      </td>
+                      <td className="py-2 px-2 text-gray-300">
+                        {member.ingame_name || "—"}
+                      </td>
+                      <td className="py-2 px-2">
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded ${
+                            member.role === "admin"
+                              ? "bg-teal-900/50 text-teal-300"
+                              : member.role === "offizier"
+                              ? "bg-blue-900/50 text-blue-300"
+                              : "bg-gray-800 text-gray-400"
+                          }`}
+                        >
+                          {roleLabels[member.role]}
+                        </span>
+                      </td>
+                      <td className="py-2 px-2 text-right">
+                        <button
+                          onClick={() => startEdit(member)}
+                          className="text-xs text-teal-400 hover:text-teal-300 transition-colors"
+                        >
+                          Bearbeiten
+                        </button>
+                      </td>
+                    </>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <ProtectedRoute>
+      <DashboardContent />
+    </ProtectedRoute>
   );
 }
