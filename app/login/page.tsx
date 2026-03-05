@@ -4,11 +4,11 @@ import { useState, FormEvent, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 
 export default function LoginPage() {
   const { signIn, session, loading } = useAuth();
   const router = useRouter();
-
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -25,9 +25,7 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
-
     const { error } = await signIn(username, password);
-
     if (error) {
       setError(error);
       setSubmitting(false);
@@ -39,7 +37,7 @@ export default function LoginPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-950">
-        <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-teal-400 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -47,11 +45,16 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-950 px-4">
       <div className="w-full max-w-sm">
-        {/* Header */}
+        {/* Header with Logo */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-amber-500 tracking-tight">
-            Clanbank
-          </h1>
+          <Image
+            src="/logo.svg"
+            alt="1Ca - Bank"
+            width={200}
+            height={48}
+            className="mx-auto mb-3"
+            priority
+          />
           <p className="text-gray-500 mt-1 text-sm">
             Clan-Ressourcenverwaltung
           </p>
@@ -83,7 +86,7 @@ export default function LoginPage() {
               required
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-gray-100 placeholder-gray-600 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors"
+              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-gray-100 placeholder-gray-600 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400 transition-colors"
               placeholder="mein_name"
               autoComplete="username"
             />
@@ -102,7 +105,7 @@ export default function LoginPage() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-gray-100 placeholder-gray-600 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors"
+              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-gray-100 placeholder-gray-600 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400 transition-colors"
               placeholder="••••••••"
               autoComplete="current-password"
             />
@@ -111,7 +114,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full bg-amber-600 hover:bg-amber-500 disabled:bg-amber-800 disabled:cursor-not-allowed text-white font-medium py-2 rounded transition-colors"
+            className="w-full bg-teal-600 hover:bg-teal-500 disabled:bg-teal-800 disabled:cursor-not-allowed text-white font-medium py-2 rounded transition-colors"
           >
             {submitting ? "Anmelden..." : "Anmelden"}
           </button>
@@ -120,7 +123,7 @@ export default function LoginPage() {
             Noch kein Konto?{" "}
             <Link
               href="/register"
-              className="text-amber-500 hover:text-amber-400 transition-colors"
+              className="text-teal-400 hover:text-teal-300 transition-colors"
             >
               Registrieren
             </Link>
