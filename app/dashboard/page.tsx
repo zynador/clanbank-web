@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { useAuth } from "@/lib/auth-context";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Dashboard from "@/components/Dashboard";
@@ -13,7 +14,6 @@ function DashboardPage() {
   const { profile, signOut } = useAuth();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<PageTab>("dashboard");
-
   const isAdmin = profile?.role === "admin";
 
   return (
@@ -22,9 +22,14 @@ function DashboardPage() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between h-14">
             <div className="flex items-center gap-4">
-              <h1 className="text-lg font-bold text-gray-100 tracking-tight">
-                Clanbank
-              </h1>
+              <Image
+                src="/logo.svg"
+                alt="1Ca - Bank"
+                width={120}
+                height={29}
+                className="shrink-0"
+                priority
+              />
               <nav className="hidden sm:flex items-center gap-1 ml-4">
                 <button
                   onClick={() => setActiveTab("dashboard")}
@@ -68,7 +73,6 @@ function DashboardPage() {
               </button>
             </div>
           </div>
-
           <div className="sm:hidden flex gap-1 pb-2 -mt-1 overflow-x-auto">
             <button
               onClick={() => setActiveTab("dashboard")}
