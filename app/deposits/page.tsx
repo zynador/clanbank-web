@@ -454,10 +454,10 @@ function DepositsContent() {
 
           {/* Screenshot-Upload */}
           <div className="mt-4">
-            <ScreenshotUpload
-              onUpload={(url: string) => setScreenshotUrl(url)}
-              onRemove={() => setScreenshotUrl(null)}
-              currentUrl={screenshotUrl}
+           <ScreenshotUpload
+              clanId={profile?.clan_id || ""}
+              existingUrl={screenshotUrl}
+              onUploadComplete={(url) => setScreenshotUrl(url)}
             />
           </div>
 
