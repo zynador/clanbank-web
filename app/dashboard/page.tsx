@@ -5,6 +5,7 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import Logo from "@/components/Logo";
+import Link from "next/link";
 
 function DashboardContent() {
   const { profile, signOut } = useAuth();
@@ -56,24 +57,22 @@ function DashboardContent() {
             </p>
           </div>
 
-          {/* Placeholder cards */}
+          {/* Navigation cards */}
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
-              <h3 className="text-sm font-medium text-gray-400 mb-1">
+            <Link href="/deposits" className="bg-gray-900 border border-gray-800 rounded-lg p-6 hover:border-teal-700 transition-colors">
+              <h3 className="text-sm font-medium text-teal-400 mb-1">
                 Einzahlungen
               </h3>
-              <p className="text-2xl font-bold text-gray-100">—</p>
-              <p className="text-xs text-gray-600 mt-2">
-                Schritt 4 · Kommt als Nächstes
+              <p className="text-sm text-gray-400">
+                Neue Einzahlung erfassen und bisherige anzeigen
               </p>
-            </div>
+            </Link>
             <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
               <h3 className="text-sm font-medium text-gray-400 mb-1">
                 Auswertungen
               </h3>
-              <p className="text-2xl font-bold text-gray-100">—</p>
-              <p className="text-xs text-gray-600 mt-2">
-                Schritt 5 · Dashboard
+              <p className="text-sm text-gray-400">
+                Kommt in Schritt 5
               </p>
             </div>
           </div>
