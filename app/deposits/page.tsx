@@ -53,40 +53,28 @@ function parseResourceInput(raw: string): number {
   }
 
   // Tausender-Trennzeichen entfernen:
-  // "500.000" oder "1.234.567" → Punkte sind Tausender wenn kein Komma vorhanden
-  // "2,5" oder "2.5" → Dezimal
   if (multiplier > 1) {
-    // Bei K/M/B: Komma oder Punkt als Dezimal behandeln
     cleaned = cleaned.replace(",", ".");
   } else {
-    // Ohne Suffix: Format erkennen
     const hasDot = cleaned.includes(".");
     const hasComma = cleaned.includes(",");
 
     if (hasDot && hasComma) {
-      // "1.234,56" → Punkt = Tausender, Komma = Dezimal
       cleaned = cleaned.replace(/\./g, "").replace(",", ".");
     } else if (hasComma && !hasDot) {
-      // "2,5" → Komma = Dezimal  |  "1,234,567" → Komma = Tausender
       const parts = cleaned.split(",");
       if (parts.length === 2 && parts[1].length <= 2) {
-        // Dezimalkomma: "2,5" oder "123,45"
         cleaned = cleaned.replace(",", ".");
       } else {
-        // Tausender-Komma: "1,234,567"
         cleaned = cleaned.replace(/,/g, "");
       }
     } else if (hasDot && !hasComma) {
-      // "500.000" vs "2.5"
       const parts = cleaned.split(".");
       if (parts.length === 2 && parts[1].length === 3 && parts[0].length >= 1) {
-        // "500.000" → Tausender-Punkt
         cleaned = cleaned.replace(/\./g, "");
       } else if (parts.length > 2) {
-        // "1.234.567" → Tausender-Punkte
         cleaned = cleaned.replace(/\./g, "");
       }
-      // Sonst: "2.5" bleibt Dezimalpunkt
     }
   }
 
@@ -204,7 +192,6 @@ function DepositsContent() {
 
   // ─── Formular absenden ───────────────────────────────────────
   const handleSubmit = async () => {
-    // Werte parsen
     const parsed: Record<ResourceType, number> = {
       Cash: parseResourceInput(values.Cash),
       Arms: parseResourceInput(values.Arms),
@@ -270,8 +257,10 @@ function DepositsContent() {
 
     const { data, error } = await supabase.rpc("update_deposit", {
       input_deposit_id: dep.id,
+      input_resource_type: dep.resource_type,
       input_amount: newAmount,
       input_note: editNote.trim(),
+      input_screenshot_url: dep.screenshot_url || null,
     });
 
     if (!error && (data as { success: boolean })?.success) {
