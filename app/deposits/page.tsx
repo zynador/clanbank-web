@@ -1,17 +1,111 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import ProtectedRoute from "@/components/ProtectedRoute";
-import { supabase } from "@/lib/supabaseClient";
 import ScreenshotUpload from "@/components/ScreenshotUpload";
 import ScreenshotLightbox from "@/components/ScreenshotLightbox";
 import { getScreenshotUrl, isScreenshotPdf } from "@/lib/screenshotHelpers";
+import supabase from "@/lib/supabaseClient";
 
-// ── Typen ──────────────────────────────────────────────────
-type ResourceType = "Cash" | "Cargo" | "Arms" | "Metal" | "Diamond";
+// ─── Typen & Konfiguration ──────────────────────────────────────
 
-interface Deposit {
+type ResourceType = "Cash" | "Arms" | "Cargo" | "Metal" | "Diamond";
+
+const RESOURCE_ORDER: ResourceType[] = ["Cash", "Arms", "Cargo", "Metal", "Diamond"];
+
+const RESOURCE_CONFIG: Record<ResourceType, { label: string; icon: string; color: string }> = {
+  Cash:    { label: "Cash",    icon: "/cash.png",    color: "#22c55e" },
+  Arms:    { label: "Arms",    icon: "/arms.png",    color: "#ef4444" },
+  Cargo:   { label: "Cargo",   icon: "/cargo.png",   color: "#3b82f6" },
+  Metal:   { label: "Metal",   icon: "/metal.png",   color: "#a855f7" },
+  Diamond: { label: "Diamond", icon: "/diamond.png", color: "#06b6d4" },
+};
+
+type ResourceValues = Record<ResourceType, string>;
+
+const EMPTY_VALUES: ResourceValues = {
+  Cash: "", Arms: "", Cargo: "", Metal: "", Diamond: "",
+};
+
+// ─── Hilfsfunktionen ────────────────────────────────────────────
+
+/**
+ * Normalisiert Eingaben wie "500K", "2.5M", "500.000", "2,5M" → Zahl
+ */
+function parseResourceInput(raw: string): number {
+  if (!raw || raw.trim() === "" || raw.trim() === "-") return 0;
+
+  let cleaned = raw.trim().toUpperCase();
+
+  // Multiplikatoren
+  let multiplier = 1;
+  if (cleaned.endsWith("B")) {
+    multiplier = 1_000_000_000;
+    cleaned = cleaned.slice(0, -1);
+  } else if (cleaned.endsWith("M")) {
+    multiplier = 1_000_000;
+    cleaned = cleaned.slice(0, -1);
+  } else if (cleaned.endsWith("K")) {
+    multiplier = 1_000;
+    cleaned = cleaned.slice(0, -1);
+  }
+
+  // Tausender-Trennzeichen entfernen:
+  // "500.000" oder "1.234.567" → Punkte sind Tausender wenn kein Komma vorhanden
+  // "2,5" oder "2.5" → Dezimal
+  if (multiplier > 1) {
+    // Bei K/M/B: Komma oder Punkt als Dezimal behandeln
+    cleaned = cleaned.replace(",", ".");
+  } else {
+    // Ohne Suffix: Format erkennen
+    const hasDot = cleaned.includes(".");
+    const hasComma = cleaned.includes(",");
+
+    if (hasDot && hasComma) {
+      // "1.234,56" → Punkt = Tausender, Komma = Dezimal
+      cleaned = cleaned.replace(/\./g, "").replace(",", ".");
+    } else if (hasComma && !hasDot) {
+      // "2,5" → Komma = Dezimal  |  "1,234,567" → Komma = Tausender
+      const parts = cleaned.split(",");
+      if (parts.length === 2 && parts[1].length <= 2) {
+        // Dezimalkomma: "2,5" oder "123,45"
+        cleaned = cleaned.replace(",", ".");
+      } else {
+        // Tausender-Komma: "1,234,567"
+        cleaned = cleaned.replace(/,/g, "");
+      }
+    } else if (hasDot && !hasComma) {
+      // "500.000" vs "2.5"
+      const parts = cleaned.split(".");
+      if (parts.length === 2 && parts[1].length === 3 && parts[0].length >= 1) {
+        // "500.000" → Tausender-Punkt
+        cleaned = cleaned.replace(/\./g, "");
+      } else if (parts.length > 2) {
+        // "1.234.567" → Tausender-Punkte
+        cleaned = cleaned.replace(/\./g, "");
+      }
+      // Sonst: "2.5" bleibt Dezimalpunkt
+    }
+  }
+
+  const num = parseFloat(cleaned);
+  if (isNaN(num) || num < 0) return 0;
+  return Math.round(num * multiplier);
+}
+
+/**
+ * Formatiert eine Zahl für die Anzeige: 1234567 → "1.234.567"
+ */
+function formatNumber(n: number): string {
+  if (n === 0) return "0";
+  return n.toLocaleString("de-DE");
+}
+
+// ─── Typen für Deposits-Liste ────────────────────────────────────
+
+interface DepositRow {
   id: string;
   user_id: string;
   resource_type: ResourceType;
@@ -21,36 +115,16 @@ interface Deposit {
   created_at: string;
   updated_at: string | null;
   updated_by: string | null;
-  profiles?: { display_name: string; ingame_name: string };
+  deleted_at: string | null;
+  profiles: {
+    username: string;
+    ingame_name: string | null;
+    display_name: string | null;
+  };
 }
 
-// ── Ressource-Icons ────────────────────────────────────────
-const RESOURCE_CONFIG: Record<ResourceType, { label: string; icon: string; color: string }> = {
-  Cash: { label: "Cash", icon: "/cash.png", color: "#22c55e" },
-  Arms: { label: "Arms", icon: "/arms.png", color: "#ef4444" },
-  Cargo: { label: "Cargo", icon: "/cargo.png", color: "#3b82f6" },
-  Metal: { label: "Metal", icon: "/metal.png", color: "#a855f7" },
-  Diamond: { label: "Diamond", icon: "/diamond.png", color: "#06b6d4" },
-};
+// ─── Haupt-Komponente ────────────────────────────────────────────
 
-// ── Zahlen formatieren ─────────────────────────────────────
-function formatNumber(n: number): string {
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
-  if (n >= 1_000) return (n / 1_000).toFixed(1).replace(/\.0$/, "") + "K";
-  return n.toLocaleString("de-DE");
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("de-DE", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-// ── Hauptkomponente ────────────────────────────────────────
 export default function DepositsPage() {
   return (
     <ProtectedRoute>
@@ -60,617 +134,504 @@ export default function DepositsPage() {
 }
 
 function DepositsContent() {
-  const { profile } = useAuth();
+  const { profile, signOut } = useAuth();
+  const router = useRouter();
 
   // Formular-State
-  const [resourceType, setResourceType] = useState<ResourceType | "">("");
-  const [amount, setAmount] = useState("");
+  const [values, setValues] = useState<ResourceValues>({ ...EMPTY_VALUES });
   const [note, setNote] = useState("");
-  const [screenshotPath, setScreenshotPath] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [successMessage, setSuccessMessage] = useState("");
-  const [errorMessage, setErrorMessage] = useState("");
+  const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  // Liste-State
-  const [deposits, setDeposits] = useState<Deposit[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // Einzahlungsliste
+  const [deposits, setDeposits] = useState<DepositRow[]>([]);
+  const [loadingDeposits, setLoadingDeposits] = useState(true);
 
-  // Bearbeiten-State
+  // Inline-Bearbeitung
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editResource, setEditResource] = useState<ResourceType | "">("");
   const [editAmount, setEditAmount] = useState("");
   const [editNote, setEditNote] = useState("");
-  const [editScreenshotPath, setEditScreenshotPath] = useState<string | null>(null);
 
-  // Löschen-Bestätigung
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-
-  // Lightbox-State
+  // Lightbox
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
-  const [lightboxIsPdf, setLightboxIsPdf] = useState(false);
 
-  // Screenshot-URLs Cache (signierte URLs für die Thumbnail-Anzeige)
-  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
+  // Refs für programmatisches Befüllen (OCR-Vorbereitung)
+  const inputRefs = useRef<Record<ResourceType, HTMLInputElement | null>>({
+    Cash: null, Arms: null, Cargo: null, Metal: null, Diamond: null,
+  });
 
-  // ── Signed URLs für Screenshots generieren ─────────────
-  const loadSignedUrls = useCallback(async (depositsList: Deposit[]) => {
-    const withScreenshots = depositsList.filter((d) => d.screenshot_url);
-    if (withScreenshots.length === 0) return;
-
-    const urls: Record<string, string> = {};
-    await Promise.all(
-      withScreenshots.map(async (d) => {
-        const url = await getScreenshotUrl(d.screenshot_url);
-        if (url) urls[d.id] = url;
-      })
-    );
-    setSignedUrls(urls);
+  // ─── Programmatisches Befüllen (für spätere OCR) ─────────────
+  const setResourceValues = useCallback((newValues: Partial<Record<ResourceType, number>>) => {
+    setValues((prev) => {
+      const updated = { ...prev };
+      for (const [key, val] of Object.entries(newValues)) {
+        if (RESOURCE_ORDER.includes(key as ResourceType) && typeof val === "number" && val > 0) {
+          updated[key as ResourceType] = formatNumber(val);
+        }
+      }
+      return updated;
+    });
   }, []);
 
-  // ── Einzahlungen laden ─────────────────────────────────
-  const loadDeposits = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from("deposits")
-        .select("id, user_id, resource_type, amount, note, screenshot_url, created_at, updated_at, updated_by, profiles!deposits_user_id_fkey(display_name, ingame_name)")
-        .is("deleted_at", null)
-        .order("created_at", { ascending: false });
+  // Expose für OCR-Integration auf Window (optional)
+  useEffect(() => {
+    (window as unknown as Record<string, unknown>).__clanbank_setValues = setResourceValues;
+    return () => {
+      delete (window as unknown as Record<string, unknown>).__clanbank_setValues;
+    };
+  }, [setResourceValues]);
 
-      if (error) throw error;
-      const depositsList = (data as unknown as Deposit[]) || [];
-      setDeposits(depositsList);
-      loadSignedUrls(depositsList);
-    } catch (err) {
-      console.error("Fehler beim Laden:", err);
-    } finally {
-      setIsLoading(false);
+  // ─── Einzahlungen laden ──────────────────────────────────────
+  const loadDeposits = useCallback(async () => {
+    setLoadingDeposits(true);
+    const { data, error } = await supabase
+      .from("deposits")
+      .select("*, profiles!deposits_user_id_fkey(username, ingame_name, display_name)")
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    if (!error && data) {
+      setDeposits(data as unknown as DepositRow[]);
     }
-  }, [loadSignedUrls]);
+    setLoadingDeposits(false);
+  }, []);
 
   useEffect(() => {
     loadDeposits();
   }, [loadDeposits]);
 
-  // ── Lightbox öffnen ────────────────────────────────────
-  async function openLightbox(screenshotUrlPath: string) {
-    const url = await getScreenshotUrl(screenshotUrlPath);
-    if (url) {
-      setLightboxUrl(url);
-      setLightboxIsPdf(isScreenshotPdf(screenshotUrlPath));
-    }
-  }
+  // ─── Formular absenden ───────────────────────────────────────
+  const handleSubmit = async () => {
+    // Werte parsen
+    const parsed: Record<ResourceType, number> = {
+      Cash: parseResourceInput(values.Cash),
+      Arms: parseResourceInput(values.Arms),
+      Cargo: parseResourceInput(values.Cargo),
+      Metal: parseResourceInput(values.Metal),
+      Diamond: parseResourceInput(values.Diamond),
+    };
 
-  // ── Einzahlung erstellen ───────────────────────────────
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setErrorMessage("");
-    setSuccessMessage("");
-
-    if (!resourceType) {
-      setErrorMessage("Bitte wähle eine Ressource aus.");
+    const filledCount = Object.values(parsed).filter((v) => v > 0).length;
+    if (filledCount === 0) {
+      setFeedback({ type: "error", text: "Mindestens eine Ressource muss einen Wert > 0 haben." });
       return;
     }
 
-    const parsedAmount = parseFloat(amount);
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      setErrorMessage("Bitte gib eine gültige Menge ein (größer als 0).");
+    setSubmitting(true);
+    setFeedback(null);
+
+    const { data, error } = await supabase.rpc("create_bulk_deposit", {
+      input_cash: parsed.Cash,
+      input_arms: parsed.Arms,
+      input_cargo: parsed.Cargo,
+      input_metal: parsed.Metal,
+      input_diamond: parsed.Diamond,
+      input_note: note.trim(),
+      input_screenshot_url: screenshotUrl,
+    });
+
+    setSubmitting(false);
+
+    if (error) {
+      setFeedback({ type: "error", text: "Fehler: " + error.message });
       return;
     }
 
-    setIsSubmitting(true);
-
-    try {
-      const { data, error } = await supabase.rpc("create_deposit", {
-        input_resource_type: resourceType,
-        input_amount: parsedAmount,
-        input_note: note.trim() || null,
-        input_screenshot_url: screenshotPath,
-      });
-
-      if (error) throw error;
-
-      const result = data as { success: boolean; message: string };
-      if (!result.success) {
-        setErrorMessage(result.message);
-        return;
-      }
-
-      setSuccessMessage(
-        `${formatNumber(parsedAmount)} ${resourceType} erfolgreich eingezahlt!`
-      );
-      setResourceType("");
-      setAmount("");
+    const result = data as { success: boolean; message: string; count?: number };
+    if (result?.success) {
+      setFeedback({ type: "success", text: result.message });
+      setValues({ ...EMPTY_VALUES });
       setNote("");
-      setScreenshotPath(null);
+      setScreenshotUrl(null);
       loadDeposits();
-
-      setTimeout(() => setSuccessMessage(""), 4000);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Unbekannter Fehler";
-      setErrorMessage("Fehler: " + message);
-    } finally {
-      setIsSubmitting(false);
+    } else {
+      setFeedback({ type: "error", text: result?.message || "Unbekannter Fehler." });
     }
-  }
+  };
 
-  // ── Einzahlung bearbeiten ──────────────────────────────
-  function startEdit(deposit: Deposit) {
-    setEditingId(deposit.id);
-    setEditResource(deposit.resource_type);
-    setEditAmount(deposit.amount.toString());
-    setEditNote(deposit.note || "");
-    setEditScreenshotPath(deposit.screenshot_url || null);
-    setDeletingId(null);
-  }
+  // ─── Inline-Bearbeitung ──────────────────────────────────────
+  const startEdit = (dep: DepositRow) => {
+    setEditingId(dep.id);
+    setEditAmount(dep.amount.toString());
+    setEditNote(dep.note || "");
+  };
 
-  function cancelEdit() {
+  const cancelEdit = () => {
     setEditingId(null);
-    setEditResource("");
     setEditAmount("");
     setEditNote("");
-    setEditScreenshotPath(null);
-  }
+  };
 
-  async function saveEdit() {
-    if (!editingId || !editResource) return;
+  const saveEdit = async (dep: DepositRow) => {
+    const newAmount = parseResourceInput(editAmount);
+    if (newAmount <= 0) return;
 
-    const parsedAmount = parseFloat(editAmount);
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      setErrorMessage("Menge muss größer als 0 sein.");
-      return;
-    }
+    const { data, error } = await supabase.rpc("update_deposit", {
+      input_deposit_id: dep.id,
+      input_amount: newAmount,
+      input_note: editNote.trim(),
+    });
 
-    setErrorMessage("");
-
-    try {
-      const { data, error } = await supabase.rpc("update_deposit", {
-        input_deposit_id: editingId,
-        input_resource_type: editResource,
-        input_amount: parsedAmount,
-        input_note: editNote.trim() || null,
-        input_screenshot_url: editScreenshotPath,
-      });
-
-      if (error) throw error;
-
-      const result = data as { success: boolean; message: string };
-      if (!result.success) {
-        setErrorMessage(result.message);
-        return;
-      }
-
-      setSuccessMessage("Einzahlung aktualisiert ✓");
+    if (!error && (data as { success: boolean })?.success) {
       cancelEdit();
       loadDeposits();
-      setTimeout(() => setSuccessMessage(""), 3000);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Unbekannter Fehler";
-      setErrorMessage("Fehler: " + message);
     }
-  }
+  };
 
-  // ── Einzahlung löschen (Soft-Delete) ──────────────────
-  async function handleDelete(depositId: string) {
-    setErrorMessage("");
+  const softDelete = async (dep: DepositRow) => {
+    if (!confirm(`Einzahlung wirklich löschen? (${dep.resource_type}: ${formatNumber(dep.amount)})`)) return;
 
-    try {
-      const { data, error } = await supabase.rpc("soft_delete_deposit", {
-        input_deposit_id: depositId,
-      });
+    const { data, error } = await supabase.rpc("soft_delete_deposit", {
+      input_deposit_id: dep.id,
+    });
 
-      if (error) throw error;
-
-      const result = data as { success: boolean; message: string };
-      if (!result.success) {
-        setErrorMessage(result.message);
-        return;
-      }
-
-      setSuccessMessage("Einzahlung gelöscht ✓");
-      setDeletingId(null);
+    if (!error && (data as { success: boolean })?.success) {
       loadDeposits();
-      setTimeout(() => setSuccessMessage(""), 3000);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Unbekannter Fehler";
-      setErrorMessage("Fehler: " + message);
     }
-  }
+  };
 
-  // ── Berechtigung prüfen ────────────────────────────────
-  function canEdit(deposit: Deposit): boolean {
+  // ─── Berechtigungsprüfung ─────────────────────────────────────
+  const canEdit = (dep: DepositRow) => {
     if (!profile) return false;
-    if (deposit.user_id === profile.id) return true;
-    if (profile.role === "admin" || profile.role === "offizier") return true;
-    return false;
-  }
-
-  function canDelete(deposit: Deposit): boolean {
-    if (!profile) return false;
-    if (deposit.user_id === profile.id) return true;
     if (profile.role === "admin") return true;
-    return false;
-  }
+    if (profile.role === "offizier") return true;
+    return dep.user_id === profile.id;
+  };
 
-  // ── Render ─────────────────────────────────────────────
+  const canDelete = (dep: DepositRow) => {
+    if (!profile) return false;
+    if (profile.role === "admin") return true;
+    return dep.user_id === profile.id;
+  };
+
+  // ─── Vorschau der geparsten Werte ─────────────────────────────
+  const parsedPreview = RESOURCE_ORDER.map((r) => ({
+    resource: r,
+    parsed: parseResourceInput(values[r]),
+  })).filter((p) => p.parsed > 0);
+
+  // ─── Render ──────────────────────────────────────────────────
+
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100">
-      {/* Lightbox */}
-      {lightboxUrl && (
-        <ScreenshotLightbox
-          url={lightboxUrl}
-          isPdf={lightboxIsPdf}
-          onClose={() => setLightboxUrl(null)}
-        />
-      )}
-
+    <div className="min-h-screen bg-[#0f1117] text-gray-100">
       {/* Header */}
-      <header className="border-b border-gray-800 bg-gray-900/80 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
+      <header className="border-b border-gray-800 bg-[#161822]">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <a href="/dashboard" className="text-gray-400 hover:text-gray-200 transition-colors">
+            <button
+              onClick={() => router.push("/dashboard")}
+              className="text-gray-400 hover:text-white transition-colors text-sm"
+            >
               ← Dashboard
-            </a>
-            <span className="text-gray-600">|</span>
-            <h1 className="text-xl font-bold text-gray-100">Einzahlungen</h1>
+            </button>
+            <h1 className="text-lg font-semibold text-white">Einzahlungen</h1>
           </div>
-          {profile && (
+          <div className="flex items-center gap-3">
             <span className="text-sm text-gray-400">
-              {profile.ingame_name || profile.display_name}
+              {profile?.ingame_name || profile?.username}
             </span>
-          )}
+            <button
+              onClick={() => signOut()}
+              className="text-xs text-gray-500 hover:text-red-400 transition-colors"
+            >
+              Abmelden
+            </button>
+          </div>
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 py-8 space-y-8">
-        {/* ── Erfolgsmeldung ──────────────────────────── */}
-        {successMessage && (
-          <div className="bg-green-900/40 border border-green-700 rounded-xl px-5 py-4 text-green-300 text-center animate-fade-in">
-            {successMessage}
-          </div>
-        )}
+      <main className="max-w-6xl mx-auto px-4 py-6 space-y-8">
+        {/* ─── Schnell-Eingabeformular ─────────────────────────── */}
+        <section className="bg-[#161822] border border-gray-800 rounded-xl p-6">
+          <h2 className="text-base font-medium text-gray-300 mb-5">Neue Einzahlung</h2>
 
-        {/* ── Fehlermeldung ───────────────────────────── */}
-        {errorMessage && (
-          <div className="bg-red-900/40 border border-red-700 rounded-xl px-5 py-4 text-red-300 text-center">
-            {errorMessage}
-            <button
-              onClick={() => setErrorMessage("")}
-              className="ml-3 text-red-400 hover:text-red-200"
-            >
-              ✕
-            </button>
-          </div>
-        )}
+          {/* 5 Ressourcen-Felder */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            {RESOURCE_ORDER.map((resource) => {
+              const config = RESOURCE_CONFIG[resource];
+              const parsed = parseResourceInput(values[resource]);
+              const hasValue = values[resource].trim() !== "" && parsed > 0;
 
-        {/* ── Einzahlungsformular ─────────────────────── */}
-        <section className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
-          <h2 className="text-lg font-semibold mb-5 text-gray-200">
-            Neue Einzahlung
-          </h2>
-
-          <div className="space-y-5">
-            {/* Ressource auswählen */}
-            <div>
-              <label className="block text-sm text-gray-400 mb-2">
-                Ressource
-              </label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {(Object.keys(RESOURCE_CONFIG) as ResourceType[]).map((res) => {
-                  const cfg = RESOURCE_CONFIG[res];
-                  const isSelected = resourceType === res;
-                  return (
-                    <button
-                      key={res}
-                      type="button"
-                      onClick={() => setResourceType(res)}
-                      className={`flex flex-col items-center gap-1.5 p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer ${
-                        isSelected
-                          ? "border-current bg-gray-800 scale-[1.03] shadow-lg"
-                          : "border-gray-700 bg-gray-800/50 hover:border-gray-600 hover:bg-gray-800"
-                      }`}
-                      style={isSelected ? { borderColor: cfg.color, color: cfg.color } : {}}
+              return (
+                <div
+                  key={resource}
+                  className="relative group rounded-lg border transition-all duration-200"
+                  style={{
+                    borderColor: hasValue ? config.color + "66" : "#374151",
+                    backgroundColor: hasValue ? config.color + "0a" : "transparent",
+                  }}
+                >
+                  {/* Icon + Label */}
+                  <div className="flex flex-col items-center pt-3 pb-1 px-2">
+                    <img
+                      src={config.icon}
+                      alt={config.label}
+                      className="w-8 h-8 object-contain mb-1"
+                      draggable={false}
+                    />
+                    <span
+                      className="text-xs font-medium"
+                      style={{ color: config.color }}
                     >
-                      <img src={cfg.icon} alt={cfg.label} className="w-8 h-8 object-contain" />
-                      <span className={`text-sm font-medium ${isSelected ? "" : "text-gray-300"}`}>
-                        {cfg.label}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+                      {config.label}
+                    </span>
+                  </div>
 
-            {/* Menge */}
-            <div>
-              <label htmlFor="amount" className="block text-sm text-gray-400 mb-2">
-                Menge
-              </label>
-              <input
-                id="amount"
-                type="number"
-                min="1"
-                step="any"
-                placeholder="z.B. 500000"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
-              />
-            </div>
-
-            {/* Notiz */}
-            <div>
-              <label htmlFor="note" className="block text-sm text-gray-400 mb-2">
-                Notiz{" "}
-                <span className="text-gray-600">(optional)</span>
-              </label>
-              <input
-                id="note"
-                type="text"
-                placeholder="z.B. Kriegswoche 12"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                maxLength={200}
-                className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
-              />
-            </div>
-
-            {/* Screenshot-Upload */}
-            {profile && (
-              <ScreenshotUpload
-                clanId={profile.clan_id}
-                onUploadComplete={(path) => setScreenshotPath(path)}
-              />
-            )}
-
-            {/* Submit-Button */}
-            <button
-              onClick={handleSubmit}
-              disabled={isSubmitting || !resourceType || !amount}
-              className="w-full py-3.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-semibold rounded-xl transition-colors duration-200 cursor-pointer disabled:cursor-not-allowed"
-            >
-              {isSubmitting ? "Wird gespeichert..." : "Einzahlung speichern"}
-            </button>
-          </div>
-        </section>
-
-        {/* ── Einzahlungsliste ────────────────────────── */}
-        <section className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
-          <h2 className="text-lg font-semibold mb-5 text-gray-200">
-            Letzte Einzahlungen
-          </h2>
-
-          {isLoading ? (
-            <div className="text-center py-10 text-gray-500">
-              Wird geladen...
-            </div>
-          ) : deposits.length === 0 ? (
-            <div className="text-center py-10 text-gray-500">
-              Noch keine Einzahlungen vorhanden.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {deposits.map((deposit) => {
-                const cfg = RESOURCE_CONFIG[deposit.resource_type];
-                const isOwn = deposit.user_id === profile?.id;
-                const isEditing = editingId === deposit.id;
-                const isDeleting = deletingId === deposit.id;
-                const thumbnailUrl = signedUrls[deposit.id];
-                const hasPdf = isScreenshotPdf(deposit.screenshot_url);
-
-                return (
-                  <div
-                    key={deposit.id}
-                    className={`border rounded-xl p-4 transition-colors ${
-                      isOwn
-                        ? "border-blue-900/50 bg-blue-950/20"
-                        : "border-gray-800 bg-gray-800/30"
-                    }`}
-                  >
-                    {isEditing ? (
-                      /* ── Bearbeitungsmodus ──────────── */
-                      <div className="space-y-3">
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                          {(Object.keys(RESOURCE_CONFIG) as ResourceType[]).map(
-                            (res) => {
-                              const c = RESOURCE_CONFIG[res];
-                              const sel = editResource === res;
-                              return (
-                                <button
-                                  key={res}
-                                  type="button"
-                                  onClick={() => setEditResource(res)}
-                                  className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg border text-sm transition-all cursor-pointer ${
-                                    sel
-                                      ? "border-current bg-gray-800"
-                                      : "border-gray-700 bg-gray-800/50 hover:border-gray-600"
-                                  }`}
-                                  style={sel ? { borderColor: c.color, color: c.color } : {}}
-                                >
-                                  <img src={c.icon} alt={c.label} className="w-5 h-5 object-contain inline" />
-                                  <span>{c.label}</span>
-                                </button>
-                              );
-                            }
-                          )}
-                        </div>
-                        <input
-                          type="number"
-                          min="1"
-                          value={editAmount}
-                          onChange={(e) => setEditAmount(e.target.value)}
-                          className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-100 focus:outline-none focus:border-blue-500"
-                          placeholder="Menge"
-                        />
-                        <input
-                          type="text"
-                          value={editNote}
-                          onChange={(e) => setEditNote(e.target.value)}
-                          className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-100 focus:outline-none focus:border-blue-500"
-                          placeholder="Notiz (optional)"
-                          maxLength={200}
-                        />
-                        {/* Screenshot im Bearbeitungsmodus */}
-                        {profile && (
-                          <ScreenshotUpload
-                            clanId={profile.clan_id}
-                            depositId={editingId || undefined}
-                            existingUrl={thumbnailUrl || null}
-                            onUploadComplete={(path) => setEditScreenshotPath(path)}
-                          />
-                        )}
-                        <div className="flex gap-2">
-                          <button
-                            onClick={saveEdit}
-                            className="flex-1 py-2 bg-green-700 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-colors cursor-pointer"
-                          >
-                            Speichern
-                          </button>
-                          <button
-                            onClick={cancelEdit}
-                            className="flex-1 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg text-sm font-medium transition-colors cursor-pointer"
-                          >
-                            Abbrechen
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      /* ── Anzeigemodus ──────────────── */
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <span
-                            className="text-2xl flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center"
-                            style={{ backgroundColor: cfg.color + "20" }}
-                          >
-                            <img src={cfg.icon} alt={cfg.label} className="w-8 h-8 object-contain" />
-                          </span>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-semibold text-gray-100">
-                                {formatNumber(deposit.amount)}
-                              </span>
-                              <span
-                                className="text-sm font-medium px-2 py-0.5 rounded-full"
-                                style={{
-                                  backgroundColor: cfg.color + "20",
-                                  color: cfg.color,
-                                }}
-                              >
-                                {cfg.label}
-                              </span>
-                              {isOwn && (
-                                <span className="text-xs text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded-full">
-                                  Eigene
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-sm text-gray-500 mt-0.5">
-                              {deposit.profiles?.ingame_name ||
-                                deposit.profiles?.display_name ||
-                                "Unbekannt"}{" "}
-                              · {formatDate(deposit.created_at)}
-                            </div>
-                            {deposit.note && (
-                              <div className="text-sm text-gray-400 mt-1 truncate">
-                                📝 {deposit.note}
-                              </div>
-                            )}
-                            {deposit.updated_at && deposit.updated_at !== deposit.created_at && (
-                              <div className="text-xs text-gray-600 mt-0.5">
-                                ✏️ Bearbeitet am {formatDate(deposit.updated_at)}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Rechte Seite: Thumbnail + Aktionen */}
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          {/* Screenshot-Thumbnail */}
-                          {deposit.screenshot_url && (
-                            <button
-                              onClick={() => openLightbox(deposit.screenshot_url!)}
-                              className="flex-shrink-0 group relative"
-                              title="Screenshot anzeigen"
-                            >
-                              {hasPdf ? (
-                                <div className="w-10 h-10 rounded-lg border border-gray-600 bg-gray-800 flex items-center justify-center group-hover:border-amber-500 transition-colors cursor-pointer">
-                                  <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                                  </svg>
-                                </div>
-                              ) : thumbnailUrl ? (
-                                <img
-                                  src={thumbnailUrl}
-                                  alt="Screenshot"
-                                  className="w-10 h-10 object-cover rounded-lg border border-gray-600 group-hover:border-amber-500 transition-colors cursor-pointer"
-                                />
-                              ) : (
-                                <div className="w-10 h-10 rounded-lg border border-gray-600 bg-gray-800 flex items-center justify-center animate-pulse">
-                                  <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                  </svg>
-                                </div>
-                              )}
-                              {/* Hover-Overlay */}
-                              <div className="absolute inset-0 bg-black/40 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
-                                </svg>
-                              </div>
-                            </button>
-                          )}
-
-                          {/* Aktionen */}
-                          {(canEdit(deposit) || canDelete(deposit)) && !isDeleting && (
-                            <div className="flex gap-1">
-                              {canEdit(deposit) && (
-                                <button
-                                  onClick={() => startEdit(deposit)}
-                                  className="p-2 text-gray-500 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors cursor-pointer"
-                                  title="Bearbeiten"
-                                >
-                                  ✏️
-                                </button>
-                              )}
-                              {canDelete(deposit) && (
-                                <button
-                                  onClick={() => setDeletingId(deposit.id)}
-                                  className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors cursor-pointer"
-                                  title="Löschen"
-                                >
-                                  🗑️
-                                </button>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Löschen-Bestätigung */}
-                          {isDeleting && (
-                            <div className="flex gap-1">
-                              <button
-                                onClick={() => handleDelete(deposit.id)}
-                                className="px-3 py-1.5 bg-red-700 hover:bg-red-600 text-white text-sm rounded-lg transition-colors cursor-pointer"
-                              >
-                                Ja, löschen
-                              </button>
-                              <button
-                                onClick={() => setDeletingId(null)}
-                                className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm rounded-lg transition-colors cursor-pointer"
-                              >
-                                Nein
-                              </button>
-                            </div>
-                          )}
-                        </div>
+                  {/* Eingabefeld */}
+                  <div className="px-2 pb-3">
+                    <input
+                      ref={(el) => { inputRefs.current[resource] = el; }}
+                      type="text"
+                      inputMode="text"
+                      placeholder="-"
+                      value={values[resource]}
+                      onChange={(e) =>
+                        setValues((prev) => ({ ...prev, [resource]: e.target.value }))
+                      }
+                      className="w-full bg-[#0f1117] border border-gray-700 rounded-md px-3 py-2 text-center text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-2 transition-all"
+                      style={{
+                        // @ts-expect-error CSS custom property for focus ring
+                        "--tw-ring-color": config.color + "80",
+                      }}
+                      onFocus={(e) => {
+                        e.target.style.borderColor = config.color;
+                      }}
+                      onBlur={(e) => {
+                        e.target.style.borderColor = "#374151";
+                      }}
+                    />
+                    {/* Geparster Wert als Vorschau */}
+                    {hasValue && (
+                      <div
+                        className="text-xs text-center mt-1 opacity-70"
+                        style={{ color: config.color }}
+                      >
+                        {formatNumber(parsed)}
                       </div>
                     )}
                   </div>
-                );
-              })}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Hinweis unter den Feldern */}
+          <p className="text-xs text-gray-600 mt-2">
+            Eingabe: 500000 · 500K · 2.5M · 500.000 — leere Felder werden übersprungen
+          </p>
+
+          {/* Vorschau der Batch */}
+          {parsedPreview.length > 0 && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {parsedPreview.map(({ resource, parsed }) => (
+                <span
+                  key={resource}
+                  className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full"
+                  style={{
+                    backgroundColor: RESOURCE_CONFIG[resource].color + "1a",
+                    color: RESOURCE_CONFIG[resource].color,
+                  }}
+                >
+                  <img src={RESOURCE_CONFIG[resource].icon} alt="" className="w-3.5 h-3.5" />
+                  {formatNumber(parsed)}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Notiz */}
+          <div className="mt-4">
+            <input
+              type="text"
+              placeholder="Optionale Notiz (gilt für alle Ressourcen)"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              className="w-full bg-[#0f1117] border border-gray-700 rounded-md px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
+            />
+          </div>
+
+          {/* Screenshot-Upload */}
+          <div className="mt-4">
+            <ScreenshotUpload
+              onUpload={(url: string) => setScreenshotUrl(url)}
+              onRemove={() => setScreenshotUrl(null)}
+              currentUrl={screenshotUrl}
+            />
+          </div>
+
+          {/* Feedback */}
+          {feedback && (
+            <div
+              className={`mt-4 px-4 py-3 rounded-lg text-sm ${
+                feedback.type === "success"
+                  ? "bg-green-500/10 text-green-400 border border-green-500/20"
+                  : "bg-red-500/10 text-red-400 border border-red-500/20"
+              }`}
+            >
+              {feedback.text}
+            </div>
+          )}
+
+          {/* Submit */}
+          <button
+            onClick={handleSubmit}
+            disabled={submitting || parsedPreview.length === 0}
+            className="mt-4 w-full sm:w-auto px-8 py-2.5 rounded-lg text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-blue-600 hover:bg-blue-500 text-white"
+          >
+            {submitting
+              ? "Speichern..."
+              : parsedPreview.length > 0
+                ? `${parsedPreview.length} Einzahlung${parsedPreview.length > 1 ? "en" : ""} speichern`
+                : "Einzahlung speichern"}
+          </button>
+        </section>
+
+        {/* ─── Einzahlungsliste ────────────────────────────────── */}
+        <section className="bg-[#161822] border border-gray-800 rounded-xl p-6">
+          <h2 className="text-base font-medium text-gray-300 mb-4">
+            Letzte Einzahlungen
+          </h2>
+
+          {loadingDeposits ? (
+            <p className="text-gray-500 text-sm">Laden...</p>
+          ) : deposits.length === 0 ? (
+            <p className="text-gray-500 text-sm">Noch keine Einzahlungen vorhanden.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-gray-500 text-xs uppercase tracking-wider border-b border-gray-800">
+                    <th className="pb-3 pr-4">Spieler</th>
+                    <th className="pb-3 pr-4">Ressource</th>
+                    <th className="pb-3 pr-4 text-right">Menge</th>
+                    <th className="pb-3 pr-4">Notiz</th>
+                    <th className="pb-3 pr-4">Screenshot</th>
+                    <th className="pb-3 pr-4">Datum</th>
+                    <th className="pb-3">Aktionen</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deposits.map((dep) => {
+                    const config = RESOURCE_CONFIG[dep.resource_type];
+                    const isEditing = editingId === dep.id;
+                    const playerName =
+                      dep.profiles?.ingame_name || dep.profiles?.display_name || dep.profiles?.username || "?";
+
+                    return (
+                      <tr key={dep.id} className="border-b border-gray-800/50 hover:bg-gray-800/20">
+                        <td className="py-3 pr-4 text-gray-300">{playerName}</td>
+                        <td className="py-3 pr-4">
+                          <span className="inline-flex items-center gap-1.5">
+                            <img src={config.icon} alt="" className="w-4 h-4" />
+                            <span style={{ color: config.color }}>{config.label}</span>
+                          </span>
+                        </td>
+                        <td className="py-3 pr-4 text-right font-mono text-gray-200">
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={editAmount}
+                              onChange={(e) => setEditAmount(e.target.value)}
+                              className="w-28 bg-[#0f1117] border border-gray-600 rounded px-2 py-1 text-right text-sm text-white"
+                            />
+                          ) : (
+                            formatNumber(dep.amount)
+                          )}
+                        </td>
+                        <td className="py-3 pr-4 text-gray-400 max-w-[150px] truncate">
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={editNote}
+                              onChange={(e) => setEditNote(e.target.value)}
+                              className="w-full bg-[#0f1117] border border-gray-600 rounded px-2 py-1 text-sm text-white"
+                              placeholder="Notiz"
+                            />
+                          ) : (
+                            dep.note || "–"
+                          )}
+                        </td>
+                        <td className="py-3 pr-4">
+                          {dep.screenshot_url ? (
+                            <button
+                              onClick={() => {
+                                const url = getScreenshotUrl(dep.screenshot_url!);
+                                if (url) setLightboxUrl(url);
+                              }}
+                              className="text-blue-400 hover:text-blue-300 text-xs underline"
+                            >
+                              Anzeigen
+                            </button>
+                          ) : (
+                            <span className="text-gray-600">–</span>
+                          )}
+                        </td>
+                        <td className="py-3 pr-4 text-gray-500 text-xs whitespace-nowrap">
+                          {new Date(dep.created_at).toLocaleDateString("de-DE", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "2-digit",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </td>
+                        <td className="py-3">
+                          {isEditing ? (
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => saveEdit(dep)}
+                                className="text-xs px-2 py-1 rounded bg-green-600/20 text-green-400 hover:bg-green-600/30"
+                              >
+                                ✓
+                              </button>
+                              <button
+                                onClick={cancelEdit}
+                                className="text-xs px-2 py-1 rounded bg-gray-600/20 text-gray-400 hover:bg-gray-600/30"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex gap-1">
+                              {canEdit(dep) && (
+                                <button
+                                  onClick={() => startEdit(dep)}
+                                  className="text-xs px-2 py-1 rounded bg-gray-700/50 text-gray-400 hover:text-white hover:bg-gray-700"
+                                >
+                                  ✎
+                                </button>
+                              )}
+                              {canDelete(dep) && (
+                                <button
+                                  onClick={() => softDelete(dep)}
+                                  className="text-xs px-2 py-1 rounded bg-gray-700/50 text-red-400/60 hover:text-red-400 hover:bg-red-900/20"
+                                >
+                                  🗑
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </section>
       </main>
+
+      {/* Lightbox */}
+      {lightboxUrl && (
+        <ScreenshotLightbox
+          url={lightboxUrl}
+          isPdf={isScreenshotPdf(lightboxUrl)}
+          onClose={() => setLightboxUrl(null)}
+        />
+      )}
     </div>
   );
 }
