@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
-
 type ResourceType = "Cash" | "Arms" | "Cargo" | "Metal" | "Diamond";
 
 interface DepositRow {
@@ -31,8 +30,10 @@ interface ResourceTotal {
 }
 
 // ─── Config ──────────────────────────────────────────────────────────────────
-
-const RESOURCE_CONFIG: Record<ResourceType, { label: string; icon: string; color: string }> = {
+const RESOURCE_CONFIG: Record<
+  ResourceType,
+  { label: string; icon: string; color: string }
+> = {
   Cash: { label: "Cash", icon: "/cash.png", color: "#22c55e" },
   Arms: { label: "Arms", icon: "/arms.png", color: "#ef4444" },
   Cargo: { label: "Cargo", icon: "/cargo.png", color: "#3b82f6" },
@@ -40,13 +41,22 @@ const RESOURCE_CONFIG: Record<ResourceType, { label: string; icon: string; color
   Diamond: { label: "Diamond", icon: "/diamond.png", color: "#06b6d4" },
 };
 
-const RESOURCES: ResourceType[] = ["Cash", "Arms", "Cargo", "Metal", "Diamond"];
+const RESOURCES: ResourceType[] = [
+  "Cash",
+  "Arms",
+  "Cargo",
+  "Metal",
+  "Diamond",
+];
 
 type TimeFilter = "current_month" | "last_month" | "all_time" | "custom";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function getDateRange(filter: TimeFilter, customFrom?: string, customTo?: string) {
+function getDateRange(
+  filter: TimeFilter,
+  customFrom?: string,
+  customTo?: string
+) {
   const now = new Date();
   switch (filter) {
     case "current_month": {
@@ -60,8 +70,12 @@ function getDateRange(filter: TimeFilter, customFrom?: string, customTo?: string
     }
     case "custom": {
       return {
-        from: customFrom ? new Date(customFrom).toISOString() : new Date(2020, 0, 1).toISOString(),
-        to: customTo ? new Date(customTo + "T23:59:59").toISOString() : now.toISOString(),
+        from: customFrom
+          ? new Date(customFrom).toISOString()
+          : new Date(2020, 0, 1).toISOString(),
+        to: customTo
+          ? new Date(customTo + "T23:59:59").toISOString()
+          : now.toISOString(),
       };
     }
     default:
@@ -70,23 +84,28 @@ function getDateRange(filter: TimeFilter, customFrom?: string, customTo?: string
 }
 
 function formatNumber(n: number): string {
-  if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1).replace(/\.0$/, "") + "B";
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
+  if (n >= 1_000_000_000)
+    return (n / 1_000_000_000).toFixed(1).replace(/\.0$/, "") + "B";
+  if (n >= 1_000_000)
+    return (n / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
   if (n >= 1_000) return (n / 1_000).toFixed(1).replace(/\.0$/, "") + "K";
   return n.toLocaleString("de-DE");
 }
 
 function getFilterLabel(filter: TimeFilter): string {
   switch (filter) {
-    case "current_month": return "Aktueller Monat";
-    case "last_month": return "Letzter Monat";
-    case "all_time": return "Gesamtzeitraum";
-    case "custom": return "Benutzerdefiniert";
+    case "current_month":
+      return "Aktueller Monat";
+    case "last_month":
+      return "Letzter Monat";
+    case "all_time":
+      return "Gesamtzeitraum";
+    case "custom":
+      return "Benutzerdefiniert";
   }
 }
 
 // ─── Bar Chart (pure CSS) ────────────────────────────────────────────────────
-
 function ResourceBarChart({ data }: { data: ResourceTotal[] }) {
   const maxVal = Math.max(...data.map((d) => d.total), 1);
 
@@ -100,11 +119,17 @@ function ResourceBarChart({ data }: { data: ResourceTotal[] }) {
             <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-2">
                 <img src={cfg.icon} alt={cfg.label} className="w-5 h-5" />
-                <span className="text-sm font-medium text-zinc-200">{cfg.label}</span>
+                <span className="text-sm font-medium text-zinc-200">
+                  {cfg.label}
+                </span>
               </div>
               <div className="text-right">
-                <span className="text-sm font-bold text-zinc-100">{formatNumber(d.total)}</span>
-                <span className="text-xs text-zinc-500 ml-2">({d.count}x)</span>
+                <span className="text-sm font-bold text-zinc-100">
+                  {formatNumber(d.total)}
+                </span>
+                <span className="text-xs text-zinc-500 ml-2">
+                  ({d.count}x)
+                </span>
               </div>
             </div>
             <div className="h-3 rounded-full bg-zinc-800/80 overflow-hidden">
@@ -125,7 +150,6 @@ function ResourceBarChart({ data }: { data: ResourceTotal[] }) {
 }
 
 // ─── Ranking Medal ───────────────────────────────────────────────────────────
-
 function RankBadge({ rank }: { rank: number }) {
   if (rank === 1) return <span className="text-lg">🥇</span>;
   if (rank === 2) return <span className="text-lg">🥈</span>;
@@ -138,37 +162,50 @@ function RankBadge({ rank }: { rank: number }) {
 }
 
 // ─── Main Dashboard Component ────────────────────────────────────────────────
-
 export default function Dashboard() {
   const [deposits, setDeposits] = useState<DepositRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("all_time");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
-  const [activeTab, setActiveTab] = useState<"ranking" | "resources">("ranking");
+  const [activeTab, setActiveTab] = useState<"ranking" | "resources">(
+    "ranking"
+  );
 
-  // ─── Fetch deposits ────────────────────────────────────────────────────────
+  // ─── Fetch deposits ──────────────────────────────────────────────────────
   const fetchDeposits = useCallback(async () => {
     setLoading(true);
+    setError(null);
 
-    let query = supabase
-      .from("deposits")
-      .select("id, user_id, resource_type, amount, created_at, profiles(display_name, ingame_name)")
-      .is("deleted_at", null)
-      .order("created_at", { ascending: false });
+    try {
+      let query = supabase
+        .from("deposits")
+        .select(
+          "id, user_id, resource_type, amount, created_at, profiles!deposits_user_id_fkey(display_name, ingame_name)"
+        )
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false });
 
-    const range = getDateRange(timeFilter, customFrom, customTo);
-    if (range.from) query = query.gte("created_at", range.from);
-    if (range.to) query = query.lte("created_at", range.to);
+      const range = getDateRange(timeFilter, customFrom, customTo);
+      if (range.from) query = query.gte("created_at", range.from);
+      if (range.to) query = query.lte("created_at", range.to);
 
-    const { data, error } = await query;
+      const { data, error: fetchError } = await query;
 
-    if (error) {
-      console.error("Dashboard fetch error:", error);
+      if (fetchError) {
+        console.error("Dashboard fetch error:", fetchError);
+        setError("Fehler beim Laden der Daten. Bitte versuche es erneut.");
+        setDeposits([]);
+      } else {
+        setDeposits((data as unknown as DepositRow[]) || []);
+      }
+    } catch (err) {
+      console.error("Dashboard fetch exception:", err);
+      setError("Verbindungsfehler. Bitte prüfe deine Internetverbindung.");
       setDeposits([]);
-    } else {
-      setDeposits((data as unknown as DepositRow[]) || []);
     }
+
     setLoading(false);
   }, [timeFilter, customFrom, customTo]);
 
@@ -176,18 +213,26 @@ export default function Dashboard() {
     fetchDeposits();
   }, [fetchDeposits]);
 
-  // ─── Compute stats ─────────────────────────────────────────────────────────
-
-  // Player totals
+  // ─── Compute stats ───────────────────────────────────────────────────────
   const playerMap = new Map<string, PlayerTotal>();
   for (const d of deposits) {
     const existing = playerMap.get(d.user_id);
     if (existing) {
       existing.total += Number(d.amount);
-      existing.byResource[d.resource_type] = (existing.byResource[d.resource_type] || 0) + Number(d.amount);
+      existing.byResource[d.resource_type] =
+        (existing.byResource[d.resource_type] || 0) + Number(d.amount);
     } else {
-      const profile = d.profiles as { display_name: string; ingame_name: string } | null;
-      const byResource = { Cash: 0, Arms: 0, Cargo: 0, Metal: 0, Diamond: 0 } as Record<ResourceType, number>;
+      const profile = d.profiles as {
+        display_name: string;
+        ingame_name: string;
+      } | null;
+      const byResource = {
+        Cash: 0,
+        Arms: 0,
+        Cargo: 0,
+        Metal: 0,
+        Diamond: 0,
+      } as Record<ResourceType, number>;
       byResource[d.resource_type] = Number(d.amount);
       playerMap.set(d.user_id, {
         user_id: d.user_id,
@@ -198,9 +243,11 @@ export default function Dashboard() {
       });
     }
   }
-  const playerRanking = Array.from(playerMap.values()).sort((a, b) => b.total - a.total);
 
-  // Resource totals
+  const playerRanking = Array.from(playerMap.values()).sort(
+    (a, b) => b.total - a.total
+  );
+
   const resourceTotals: ResourceTotal[] = RESOURCES.map((type) => {
     const matching = deposits.filter((d) => d.resource_type === type);
     return {
@@ -214,11 +261,10 @@ export default function Dashboard() {
   const totalAmount = deposits.reduce((sum, d) => sum + Number(d.amount), 0);
   const totalPlayers = playerMap.size;
 
-  // ─── Render ────────────────────────────────────────────────────────────────
-
+  // ─── Render ──────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
-      {/* ── Header Stats ────────────────────────────────────────────────── */}
+      {/* ── Header Stats ────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatCard
           label="Einzahlungen"
@@ -240,11 +286,15 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* ── Time filter ─────────────────────────────────────────────────── */}
+      {/* ── Time filter ─────────────────────────────────────────────── */}
       <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-4">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mr-2">Zeitraum:</span>
-          {(["all_time", "current_month", "last_month", "custom"] as TimeFilter[]).map((f) => (
+          <span className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mr-2">
+            Zeitraum:
+          </span>
+          {(
+            ["all_time", "current_month", "last_month", "custom"] as TimeFilter[]
+          ).map((f) => (
             <button
               key={f}
               onClick={() => setTimeFilter(f)}
@@ -258,7 +308,6 @@ export default function Dashboard() {
             </button>
           ))}
         </div>
-
         {timeFilter === "custom" && (
           <div className="flex flex-wrap gap-3 mt-3 items-center">
             <label className="text-sm text-zinc-400">
@@ -283,158 +332,226 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* ── Loading state ───────────────────────────────────────────────── */}
+      {/* ── Error state ─────────────────────────────────────────────── */}
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex items-center justify-between">
+          <p className="text-sm text-red-400">{error}</p>
+          <button
+            onClick={fetchDeposits}
+            className="px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 text-sm rounded-lg transition-colors"
+          >
+            Erneut laden
+          </button>
+        </div>
+      )}
+
+      {/* ── Loading state ───────────────────────────────────────────── */}
       {loading ? (
         <div className="flex items-center justify-center py-16">
           <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
           <span className="ml-3 text-zinc-400">Lade Daten...</span>
         </div>
-      ) : deposits.length === 0 ? (
+      ) : deposits.length === 0 && !error ? (
         <div className="text-center py-16">
-          <p className="text-zinc-500 text-lg">Keine Einzahlungen im gewählten Zeitraum</p>
-          <p className="text-zinc-600 text-sm mt-1">Wähle einen anderen Zeitraum oder erstelle eine Einzahlung.</p>
+          <p className="text-zinc-500 text-lg">
+            Keine Einzahlungen im gewählten Zeitraum
+          </p>
+          <p className="text-zinc-600 text-sm mt-1">
+            Wähle einen anderen Zeitraum oder erstelle eine Einzahlung.
+          </p>
         </div>
       ) : (
-        <>
-          {/* ── Tabs ──────────────────────────────────────────────────── */}
-          <div className="flex gap-1 bg-zinc-900/60 border border-zinc-800 rounded-xl p-1">
-            <button
-              onClick={() => setActiveTab("ranking")}
-              className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                activeTab === "ranking"
-                  ? "bg-zinc-800 text-zinc-100 shadow-sm"
-                  : "text-zinc-400 hover:text-zinc-300"
-              }`}
-            >
-              Spieler-Ranking
-            </button>
-            <button
-              onClick={() => setActiveTab("resources")}
-              className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                activeTab === "resources"
-                  ? "bg-zinc-800 text-zinc-100 shadow-sm"
-                  : "text-zinc-400 hover:text-zinc-300"
-              }`}
-            >
-              Ressourcen-Übersicht
-            </button>
-          </div>
+        !error && (
+          <>
+            {/* ── Tabs ──────────────────────────────────────────────── */}
+            <div className="flex gap-1 bg-zinc-900/60 border border-zinc-800 rounded-xl p-1">
+              <button
+                onClick={() => setActiveTab("ranking")}
+                className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                  activeTab === "ranking"
+                    ? "bg-zinc-800 text-zinc-100 shadow-sm"
+                    : "text-zinc-400 hover:text-zinc-300"
+                }`}
+              >
+                Spieler-Ranking
+              </button>
+              <button
+                onClick={() => setActiveTab("resources")}
+                className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                  activeTab === "resources"
+                    ? "bg-zinc-800 text-zinc-100 shadow-sm"
+                    : "text-zinc-400 hover:text-zinc-300"
+                }`}
+              >
+                Ressourcen-Übersicht
+              </button>
+            </div>
 
-          {/* ── Ranking Tab ───────────────────────────────────────────── */}
-          {activeTab === "ranking" && (
-            <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl overflow-hidden">
-              {/* Desktop table */}
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-zinc-800">
-                      <th className="text-left text-xs text-zinc-500 uppercase tracking-wider font-semibold px-4 py-3 w-12">#</th>
-                      <th className="text-left text-xs text-zinc-500 uppercase tracking-wider font-semibold px-4 py-3">Spieler</th>
-                      {RESOURCES.map((r) => (
-                        <th key={r} className="text-right text-xs text-zinc-500 uppercase tracking-wider font-semibold px-4 py-3">
-                          <div className="flex items-center justify-end gap-1">
-                            <img src={RESOURCE_CONFIG[r].icon} alt={r} className="w-4 h-4" />
-                            <span>{r}</span>
-                          </div>
+            {/* ── Ranking Tab ───────────────────────────────────────── */}
+            {activeTab === "ranking" && (
+              <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl overflow-hidden">
+                {/* Desktop table */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-zinc-800">
+                        <th className="text-left text-xs text-zinc-500 uppercase tracking-wider font-semibold px-4 py-3 w-12">
+                          #
                         </th>
-                      ))}
-                      <th className="text-right text-xs text-zinc-500 uppercase tracking-wider font-semibold px-4 py-3">Gesamt</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {playerRanking.map((player, i) => (
-                      <tr
-                        key={player.user_id}
-                        className={`border-b border-zinc-800/50 transition-colors hover:bg-zinc-800/30 ${
-                          i < 3 ? "bg-zinc-800/10" : ""
-                        }`}
-                      >
-                        <td className="px-4 py-3">
-                          <RankBadge rank={i + 1} />
-                        </td>
-                        <td className="px-4 py-3">
-                          <div>
-                            <span className="text-sm font-medium text-zinc-200">{player.ingame_name}</span>
-                            <span className="text-xs text-zinc-500 ml-2">({player.display_name})</span>
-                          </div>
-                        </td>
+                        <th className="text-left text-xs text-zinc-500 uppercase tracking-wider font-semibold px-4 py-3">
+                          Spieler
+                        </th>
                         {RESOURCES.map((r) => (
-                          <td key={r} className="text-right px-4 py-3">
-                            <span
-                              className="text-sm"
-                              style={{ color: player.byResource[r] > 0 ? RESOURCE_CONFIG[r].color : "#52525b" }}
-                            >
-                              {player.byResource[r] > 0 ? formatNumber(player.byResource[r]) : "—"}
+                          <th
+                            key={r}
+                            className="text-right text-xs text-zinc-500 uppercase tracking-wider font-semibold px-4 py-3"
+                          >
+                            <div className="flex items-center justify-end gap-1">
+                              <img
+                                src={RESOURCE_CONFIG[r].icon}
+                                alt={r}
+                                className="w-4 h-4"
+                              />
+                              <span>{r}</span>
+                            </div>
+                          </th>
+                        ))}
+                        <th className="text-right text-xs text-zinc-500 uppercase tracking-wider font-semibold px-4 py-3">
+                          Gesamt
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {playerRanking.map((player, i) => (
+                        <tr
+                          key={player.user_id}
+                          className={`border-b border-zinc-800/50 transition-colors hover:bg-zinc-800/30 ${
+                            i < 3 ? "bg-zinc-800/10" : ""
+                          }`}
+                        >
+                          <td className="px-4 py-3">
+                            <RankBadge rank={i + 1} />
+                          </td>
+                          <td className="px-4 py-3">
+                            <div>
+                              <span className="text-sm font-medium text-zinc-200">
+                                {player.ingame_name}
+                              </span>
+                              <span className="text-xs text-zinc-500 ml-2">
+                                ({player.display_name})
+                              </span>
+                            </div>
+                          </td>
+                          {RESOURCES.map((r) => (
+                            <td key={r} className="text-right px-4 py-3">
+                              <span
+                                className="text-sm"
+                                style={{
+                                  color:
+                                    player.byResource[r] > 0
+                                      ? RESOURCE_CONFIG[r].color
+                                      : "#52525b",
+                                }}
+                              >
+                                {player.byResource[r] > 0
+                                  ? formatNumber(player.byResource[r])
+                                  : "—"}
+                              </span>
+                            </td>
+                          ))}
+                          <td className="text-right px-4 py-3">
+                            <span className="text-sm font-bold text-zinc-100">
+                              {formatNumber(player.total)}
                             </span>
                           </td>
-                        ))}
-                        <td className="text-right px-4 py-3">
-                          <span className="text-sm font-bold text-zinc-100">{formatNumber(player.total)}</span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
 
-              {/* Mobile cards */}
-              <div className="md:hidden divide-y divide-zinc-800">
-                {playerRanking.map((player, i) => (
-                  <div key={player.user_id} className="p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <RankBadge rank={i + 1} />
-                        <div>
-                          <span className="text-sm font-medium text-zinc-200">{player.ingame_name}</span>
-                          <span className="text-xs text-zinc-500 block">{player.display_name}</span>
-                        </div>
-                      </div>
-                      <span className="text-sm font-bold text-zinc-100">{formatNumber(player.total)}</span>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {RESOURCES.map(
-                        (r) =>
-                          player.byResource[r] > 0 && (
-                            <span
-                              key={r}
-                              className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-zinc-800/60"
-                            >
-                              <img src={RESOURCE_CONFIG[r].icon} alt={r} className="w-3.5 h-3.5" />
-                              <span style={{ color: RESOURCE_CONFIG[r].color }}>{formatNumber(player.byResource[r])}</span>
+                {/* Mobile cards */}
+                <div className="md:hidden divide-y divide-zinc-800">
+                  {playerRanking.map((player, i) => (
+                    <div key={player.user_id} className="p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <RankBadge rank={i + 1} />
+                          <div>
+                            <span className="text-sm font-medium text-zinc-200">
+                              {player.ingame_name}
                             </span>
-                          )
-                      )}
+                            <span className="text-xs text-zinc-500 block">
+                              {player.display_name}
+                            </span>
+                          </div>
+                        </div>
+                        <span className="text-sm font-bold text-zinc-100">
+                          {formatNumber(player.total)}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {RESOURCES.map(
+                          (r) =>
+                            player.byResource[r] > 0 && (
+                              <span
+                                key={r}
+                                className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-zinc-800/60"
+                              >
+                                <img
+                                  src={RESOURCE_CONFIG[r].icon}
+                                  alt={r}
+                                  className="w-3.5 h-3.5"
+                                />
+                                <span
+                                  style={{ color: RESOURCE_CONFIG[r].color }}
+                                >
+                                  {formatNumber(player.byResource[r])}
+                                </span>
+                              </span>
+                            )
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* ── Resources Tab ─────────────────────────────────────────── */}
-          {activeTab === "resources" && (
-            <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-6">
-              <ResourceBarChart data={resourceTotals} />
-            </div>
-          )}
-        </>
+            {/* ── Resources Tab ─────────────────────────────────────── */}
+            {activeTab === "resources" && (
+              <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-6">
+                <ResourceBarChart data={resourceTotals} />
+              </div>
+            )}
+          </>
+        )
       )}
     </div>
   );
 }
 
 // ─── Stat Card ───────────────────────────────────────────────────────────────
-
-function StatCard({ label, value, sub, accent }: { label: string; value: string; sub: string; accent: string }) {
+function StatCard({
+  label,
+  value,
+  sub,
+  accent,
+}: {
+  label: string;
+  value: string;
+  sub: string;
+  accent: string;
+}) {
   return (
-    <div
-      className="relative bg-zinc-900/60 border border-zinc-800 rounded-xl p-5 overflow-hidden"
-    >
+    <div className="relative bg-zinc-900/60 border border-zinc-800 rounded-xl p-5 overflow-hidden">
       <div
         className="absolute top-0 left-0 w-full h-0.5"
         style={{ backgroundColor: accent }}
       />
-      <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">{label}</p>
+      <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">
+        {label}
+      </p>
       <p className="text-2xl font-bold text-zinc-100 mt-1">{value}</p>
       <p className="text-xs text-zinc-500 mt-0.5">{sub}</p>
     </div>
