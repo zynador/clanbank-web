@@ -95,33 +95,13 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
 
         if (signedError || !signedData?.signedUrl) throw new Error("Signed URL fehlgeschlagen");
 
-        // Bild laden → Canvas → PNG Blob
-        const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-          const el = new Image();
-          el.crossOrigin = "anonymous";
-          el.onload = () => resolve(el);
-          el.onerror = reject;
-          el.src = signedData.signedUrl;
-        });
+        console.log("=== SIGNED URL:", signedData.signedUrl);
 
-        const canvas = document.createElement("canvas");
-        canvas.width = img.naturalWidth;
-        canvas.height = img.naturalHeight;
-        canvas.getContext("2d")!.drawImage(img, 0, 0);
-
-        const pngUrl = await new Promise<string>((resolve, reject) => {
-          canvas.toBlob((b) => {
-            if (!b) { reject(new Error("toBlob failed")); return; }
-            resolve(URL.createObjectURL(b));
-          }, "image/png");
-        });
-
-        // Tesseract OCR
+        // Tesseract direkt mit URL
         const { createWorker } = await import("tesseract.js");
         const worker = await createWorker("eng");
-        const { data } = await worker.recognize(pngUrl);
+        const { data } = await worker.recognize(signedData.signedUrl);
         await worker.terminate();
-        URL.revokeObjectURL(pngUrl);
 
         if (cancelled) return;
 
