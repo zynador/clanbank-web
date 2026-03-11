@@ -228,7 +228,10 @@ function DepositsContent() {
               <ScreenshotUpload
                 clanId={profile.clan_id}
                 existingUrl={screenshotUrl}
-                onUploadComplete={(url) => setScreenshotUrl(url)}
+                onUploadComplete={(url) => {
+                  console.log("Screenshot URL:", url);
+                  setScreenshotUrl(url);
+                }}
               />
             )}
             <OcrReader imageUrl={screenshotUrl} onResult={handleOcrResult} />
