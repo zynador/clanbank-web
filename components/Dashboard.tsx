@@ -185,6 +185,7 @@ export default function Dashboard() {
           "id, user_id, resource_type, amount, created_at, profiles!deposits_user_id_fkey(display_name, ingame_name)"
         )
         .is("deleted_at", null)
+        .eq("status", "approved")
         .order("created_at", { ascending: false });
 
       const range = getDateRange(timeFilter, customFrom, customTo);
