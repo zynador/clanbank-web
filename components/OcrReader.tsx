@@ -128,7 +128,11 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
         if (cancelled) return;
 
         const text = data.text;
+        console.log("=== OCR RAW TEXT ===");
+        console.log(text);
+        console.log("=== HAT BAM BAMM:", hasBamBamm(text));
         const amounts = extractAmounts(text);
+        console.log("=== AMOUNTS:", amounts);
 
         if (!hasBamBamm(text)) {
           setStatus("no_recipient");
