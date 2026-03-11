@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/auth-context";
 import { supabase } from "@/lib/supabaseClient";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import ScreenshotUpload from "@/components/ScreenshotUpload";
+import OcrReader from "@/components/OcrReader";
 
 type DepositStatus = "pending" | "approved" | "rejected";
 
@@ -64,6 +65,15 @@ function DepositsContent() {
   const [editSubmitting, setEditSubmitting] = useState(false);
 
   const isOfficerOrAdmin = profile?.role === "admin" || profile?.role === "offizier";
+  function handleOcrResult(amounts: Record<string, string>) {
+  setFormAmounts((prev) => ({
+    Cash: amounts.Cash || prev.Cash,
+    Arms: amounts.Arms || prev.Arms,
+    Cargo: amounts.Cargo || prev.Cargo,
+    Metal: amounts.Metal || prev.Metal,
+    Diamond: amounts.Diamond || prev.Diamond,
+  }));
+}
 
   const fetchDeposits = useCallback(async () => {
     if (!profile) return;
@@ -210,7 +220,7 @@ function DepositsContent() {
               className="w-full bg-[#0f1117] border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-teal-500"
             />
           </div>
-          <div className="mb-4">
+         <div className="mb-4">
             <label className="block text-xs text-gray-500 mb-1">
               Screenshot <span className="text-red-400">*</span>
             </label>
@@ -221,6 +231,7 @@ function DepositsContent() {
                 onUploadComplete={(url) => setScreenshotUrl(url)}
               />
             )}
+            <OcrReader imageUrl={screenshotUrl} onResult={handleOcrResult} />
           </div>
           <button
             onClick={handleSubmit}
