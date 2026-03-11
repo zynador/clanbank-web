@@ -1,7 +1,8 @@
 "use client";
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { supabase } from "@/lib/supabaseClient";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import ScreenshotUpload from "@/components/ScreenshotUpload";
 
@@ -31,13 +32,6 @@ function StatusBadge({ status }: { status: DepositStatus }) {
 }
 
 const RESOURCE_ORDER = ["Cash", "Arms", "Cargo", "Metal", "Diamond"];
-const RESOURCE_LABELS: Record<string, string> = {
-  Cash: "Cash",
-  Arms: "Arms",
-  Cargo: "Cargo",
-  Metal: "Metal",
-  Diamond: "Diamond",
-};
 
 export default function DepositsPage() {
   return (
@@ -48,14 +42,13 @@ export default function DepositsPage() {
 }
 
 function DepositsContent() {
-  const { supabase, profile } = useAuth();
+  const { profile } = useAuth();
   const router = useRouter();
   const [deposits, setDeposits] = useState<DepositRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Form state
   const [formAmounts, setFormAmounts] = useState<Record<string, string>>({
     Cash: "", Arms: "", Cargo: "", Metal: "", Diamond: "",
   });
@@ -63,7 +56,6 @@ function DepositsContent() {
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Edit state
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editResource, setEditResource] = useState("");
   const [editAmount, setEditAmount] = useState("");
@@ -74,7 +66,7 @@ function DepositsContent() {
   const isOfficerOrAdmin = profile?.role === "admin" || profile?.role === "offizier";
 
   const fetchDeposits = useCallback(async () => {
-    if (!supabase || !profile) return;
+    if (!profile) return;
     setLoading(true);
     const query = supabase
       .from("deposits")
@@ -90,12 +82,12 @@ function DepositsContent() {
     if (err) setError(err.message);
     else setDeposits((data as DepositRow[]) || []);
     setLoading(false);
-  }, [supabase, profile, isOfficerOrAdmin]);
+  }, [profile, isOfficerOrAdmin]);
 
   useEffect(() => { fetchDeposits(); }, [fetchDeposits]);
 
   async function handleSubmit() {
-    if (!supabase || !profile) return;
+    if (!profile) return;
     const hasAmount = RESOURCE_ORDER.some((r) => parseFloat(formAmounts[r]) > 0);
     if (!hasAmount) { setError("Mindestens eine Ressource muss > 0 sein."); return; }
     if (!screenshotUrl) { setError("Bitte lade einen Screenshot hoch (Pflichtfeld)."); return; }
@@ -122,7 +114,6 @@ function DepositsContent() {
   }
 
   async function handleDelete(id: string) {
-    if (!supabase) return;
     if (!confirm("Einzahlung wirklich löschen?")) return;
     const { error: err } = await supabase.rpc("soft_delete_deposit", { input_deposit_id: id });
     if (err) setError(err.message);
@@ -130,7 +121,6 @@ function DepositsContent() {
   }
 
   async function handleResubmit(id: string) {
-    if (!supabase) return;
     const { error: err } = await supabase.rpc("resubmit_deposit", { input_deposit_id: id });
     if (err) setError(err.message);
     else { setSuccess("Erneut eingereicht – wartet auf Genehmigung."); fetchDeposits(); }
@@ -145,7 +135,6 @@ function DepositsContent() {
   }
 
   async function saveEdit(id: string) {
-    if (!supabase) return;
     setEditSubmitting(true);
     const { error: err } = await supabase.rpc("update_deposit", {
       input_deposit_id: id,
@@ -172,7 +161,7 @@ function DepositsContent() {
     <div className="min-h-screen bg-[#0f1117] text-gray-100">
       <header className="border-b border-gray-800 bg-[#161822] sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
-          <button onClick={() => router.push("/dashboard")} className="text-teal-400 hover:text-teal-300 text-sm flex items-center gap-1">
+          <button onClick={() => router.push("/dashboard")} className="text-teal-400 hover:text-teal-300 text-sm">
             ← Dashboard
           </button>
           <span className="text-sm text-gray-400">{profile?.ingame_name || profile?.username}</span>
@@ -180,16 +169,26 @@ function DepositsContent() {
       </header>
 
       <main className="max-w-4xl mx-auto px-4 py-6 space-y-6">
-        {error && <div className="bg-red-900/30 border border-red-700 text-red-300 rounded-lg p-3 text-sm">{error}<button className="ml-2 text-red-400 hover:text-red-200" onClick={() => setError(null)}>✕</button></div>}
-        {success && <div className="bg-green-900/30 border border-green-700 text-green-300 rounded-lg p-3 text-sm">{success}<button className="ml-2 text-green-400 hover:text-green-200" onClick={() => setSuccess(null)}>✕</button></div>}
+        {error && (
+          <div className="bg-red-900/30 border border-red-700 text-red-300 rounded-lg p-3 text-sm">
+            {error}
+            <button className="ml-2 text-red-400 hover:text-red-200" onClick={() => setError(null)}>✕</button>
+          </div>
+        )}
+        {success && (
+          <div className="bg-green-900/30 border border-green-700 text-green-300 rounded-lg p-3 text-sm">
+            {success}
+            <button className="ml-2 text-green-400 hover:text-green-200" onClick={() => setSuccess(null)}>✕</button>
+          </div>
+        )}
 
-        {/* Form */}
+        {/* Formular */}
         <section className="bg-[#161822] border border-gray-800 rounded-xl p-5">
           <h2 className="text-base font-medium text-gray-300 mb-4">Neue Einzahlung</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
             {RESOURCE_ORDER.map((r) => (
               <div key={r}>
-                <label className="block text-xs text-gray-500 mb-1">{RESOURCE_LABELS[r]}</label>
+                <label className="block text-xs text-gray-500 mb-1">{r}</label>
                 <input
                   type="number"
                   min="0"
@@ -212,7 +211,9 @@ function DepositsContent() {
             />
           </div>
           <div className="mb-4">
-            <label className="block text-xs text-gray-500 mb-1">Screenshot <span className="text-red-400">*</span></label>
+            <label className="block text-xs text-gray-500 mb-1">
+              Screenshot <span className="text-red-400">*</span>
+            </label>
             {profile?.clan_id && (
               <ScreenshotUpload
                 clanId={profile.clan_id}
@@ -230,7 +231,7 @@ function DepositsContent() {
           </button>
         </section>
 
-        {/* List */}
+        {/* Liste */}
         <section className="bg-[#161822] border border-gray-800 rounded-xl p-5">
           <h2 className="text-base font-medium text-gray-300 mb-4">Einzahlungen</h2>
           {loading ? (
@@ -271,10 +272,17 @@ function DepositsContent() {
                         />
                       )}
                       <div className="flex gap-2">
-                        <button onClick={() => saveEdit(dep.id)} disabled={editSubmitting} className="flex-1 bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white rounded py-1.5 text-sm">
+                        <button
+                          onClick={() => saveEdit(dep.id)}
+                          disabled={editSubmitting}
+                          className="flex-1 bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white rounded py-1.5 text-sm"
+                        >
                           {editSubmitting ? "..." : "Speichern"}
                         </button>
-                        <button onClick={() => setEditingId(null)} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white rounded py-1.5 text-sm">
+                        <button
+                          onClick={() => setEditingId(null)}
+                          className="flex-1 bg-gray-700 hover:bg-gray-600 text-white rounded py-1.5 text-sm"
+                        >
                           Abbrechen
                         </button>
                       </div>
@@ -303,17 +311,26 @@ function DepositsContent() {
                       )}
                       <div className="flex gap-2 mt-2 flex-wrap">
                         {(dep.user_id === profile?.id || isOfficerOrAdmin) && dep.status !== "approved" && (
-                          <button onClick={() => startEdit(dep)} className="text-xs text-gray-400 hover:text-gray-200 border border-gray-700 rounded px-2 py-1">
+                          <button
+                            onClick={() => startEdit(dep)}
+                            className="text-xs text-gray-400 hover:text-gray-200 border border-gray-700 rounded px-2 py-1"
+                          >
                             Bearbeiten
                           </button>
                         )}
                         {dep.status === "rejected" && dep.user_id === profile?.id && (
-                          <button onClick={() => handleResubmit(dep.id)} className="text-xs text-teal-400 hover:text-teal-300 border border-teal-800 rounded px-2 py-1">
+                          <button
+                            onClick={() => handleResubmit(dep.id)}
+                            className="text-xs text-teal-400 hover:text-teal-300 border border-teal-800 rounded px-2 py-1"
+                          >
                             ↺ Erneut einreichen
                           </button>
                         )}
                         {(dep.user_id === profile?.id || isOfficerOrAdmin) && (
-                          <button onClick={() => handleDelete(dep.id)} className="text-xs text-red-400 hover:text-red-300 border border-red-900 rounded px-2 py-1">
+                          <button
+                            onClick={() => handleDelete(dep.id)}
+                            className="text-xs text-red-400 hover:text-red-300 border border-red-900 rounded px-2 py-1"
+                          >
                             Löschen
                           </button>
                         )}
