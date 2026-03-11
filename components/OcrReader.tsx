@@ -138,9 +138,18 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
         ctx.drawImage(img, 0, 0);
         URL.revokeObjectURL(localUrl);
 
+        // Canvas → Blob → URL für Tesseract
+        const pngUrl = await new Promise<string>((resolve, reject) => {
+          canvas.toBlob((b) => {
+            if (!b) { reject(new Error("Canvas toBlob failed")); return; }
+            resolve(URL.createObjectURL(b));
+          }, "image/png");
+        });
+
         const worker = await createWorker("eng");
-        const { data } = await worker.recognize(canvas);
+        const { data } = await worker.recognize(pngUrl);
         await worker.terminate();
+        URL.revokeObjectURL(pngUrl);
 
         if (cancelled) return;
 
