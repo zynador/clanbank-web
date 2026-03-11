@@ -115,9 +115,15 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
         // Tesseract.js dynamisch laden (kein Build-Fehler bei SSR)
         const { createWorker } = await import("tesseract.js");
 
+        // Bild erst als Blob laden (CORS-Umgehung)
+        const response = await fetch(imageUrl!);
+        const blob = await response.blob();
+        const localUrl = URL.createObjectURL(blob);
+
         const worker = await createWorker("eng");
-        const { data } = await worker.recognize(imageUrl!);
+        const { data } = await worker.recognize(localUrl);
         await worker.terminate();
+        URL.revokeObjectURL(localUrl);
 
         if (cancelled) return;
 
