@@ -113,12 +113,11 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
     async function runOcr() {
       try {
         // Tesseract.js dynamisch laden (kein Build-Fehler bei SSR)
-        const Tesseract = (await import("tesseract.js")).default;
+        const { createWorker } = await import("tesseract.js");
 
-        const { data } = await Tesseract.recognize(imageUrl!, {
-          lang: "eng",
-          logger: () => {},
-        });
+        const worker = await createWorker("eng");
+        const { data } = await worker.recognize(imageUrl!);
+        await worker.terminate();
 
         if (cancelled) return;
 
