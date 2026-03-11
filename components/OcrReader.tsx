@@ -115,15 +115,32 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
         // Tesseract.js dynamisch laden (kein Build-Fehler bei SSR)
         const { createWorker } = await import("tesseract.js");
 
-        // Bild erst als Blob laden (CORS-Umgehung)
+        // Bild als Blob laden und als korrekte Image-URL übergeben
         const response = await fetch(imageUrl!);
         const blob = await response.blob();
-        const localUrl = URL.createObjectURL(blob);
+        const mimeType = blob.type || "image/jpeg";
+        const correctedBlob = new Blob([blob], { type: mimeType });
+        const localUrl = URL.createObjectURL(correctedBlob);
+
+        // Bild in canvas zeichnen → sauberes PNG für Tesseract
+        const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const el = new Image();
+          el.crossOrigin = "anonymous";
+          el.onload = () => resolve(el);
+          el.onerror = reject;
+          el.src = localUrl;
+        });
+
+        const canvas = document.createElement("canvas");
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(img, 0, 0);
+        URL.revokeObjectURL(localUrl);
 
         const worker = await createWorker("eng");
-        const { data } = await worker.recognize(localUrl);
+        const { data } = await worker.recognize(canvas);
         await worker.terminate();
-        URL.revokeObjectURL(localUrl);
 
         if (cancelled) return;
 
