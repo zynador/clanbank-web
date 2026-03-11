@@ -163,4 +163,77 @@ export default function ApprovalQueue() {
             {/* Screenshot */}
             {dep.screenshot_url ? (
               <button onClick={() => openScreenshot(dep.screenshot_url!)}
-                className="text-xs px-3 py-1.5 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20
+                className="text-xs px-3 py-1.5 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-colors">
+                📷 Screenshot ansehen
+              </button>
+            ) : (
+              <span className="text-xs text-red-400/70">⚠ Kein Screenshot vorhanden</span>
+            )}
+
+            {/* Ablehnen-Formular */}
+            {isRejecting && (
+              <div className="bg-[#0f1117] border border-red-500/20 rounded-lg p-3 space-y-2">
+                <p className="text-xs text-red-400 font-medium">Ablehnungsgrund (optional)</p>
+                <input type="text" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)}
+                  placeholder="z.B. Falscher Spielername im Screenshot"
+                  className="w-full bg-[#161822] border border-gray-700 rounded px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-red-500" />
+                <div className="flex gap-2">
+                  <button onClick={handleReject} disabled={isActing}
+                    className="text-xs px-3 py-1.5 rounded bg-red-600/20 text-red-400 border border-red-500/30 hover:bg-red-600/30 disabled:opacity-40">
+                    {isActing ? "..." : "✕ Ablehnen bestätigen"}
+                  </button>
+                  <button onClick={() => { setRejectingId(null); setRejectReason(""); }}
+                    className="text-xs px-3 py-1.5 rounded bg-gray-700/50 text-gray-400 hover:bg-gray-700">
+                    Abbrechen
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Korrigieren-Formular */}
+            {isCorrecting && (
+              <div className="bg-[#0f1117] border border-blue-500/20 rounded-lg p-3 space-y-2">
+                <p className="text-xs text-blue-400 font-medium">Korrektur Menge ({dep.resource_type})</p>
+                <input type="number" value={correctAmount} onChange={(e) => setCorrectAmount(e.target.value)}
+                  placeholder={dep.amount.toString()}
+                  className="w-full bg-[#161822] border border-gray-700 rounded px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500" />
+                <div className="flex gap-2">
+                  <button onClick={handleCorrectAndApprove} disabled={isActing || !correctAmount}
+                    className="text-xs px-3 py-1.5 rounded bg-blue-600/20 text-blue-400 border border-blue-500/30 hover:bg-blue-600/30 disabled:opacity-40">
+                    {isActing ? "..." : "✓ Korrigieren & Genehmigen"}
+                  </button>
+                  <button onClick={() => { setCorrectingDep(null); setCorrectAmount(""); }}
+                    className="text-xs px-3 py-1.5 rounded bg-gray-700/50 text-gray-400 hover:bg-gray-700">
+                    Abbrechen
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Aktions-Buttons */}
+            {!isRejecting && !isCorrecting && (
+              <div className="flex flex-wrap gap-2">
+                <button onClick={() => handleApprove(dep)} disabled={isActing}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-green-600/20 text-green-400 border border-green-500/30 hover:bg-green-600/30 disabled:opacity-40 transition-colors">
+                  {isActing ? "..." : "✓ Genehmigen"}
+                </button>
+                <button onClick={() => { setCorrectingDep(dep); setCorrectAmount(dep.amount.toString()); }}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-blue-600/20 text-blue-400 border border-blue-500/30 hover:bg-blue-600/30 transition-colors">
+                  ✎ Korrigieren & Genehmigen
+                </button>
+                <button onClick={() => setRejectingId(dep.id)}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-red-600/20 text-red-400 border border-red-500/30 hover:bg-red-600/30 transition-colors">
+                  ✕ Ablehnen
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {lightboxUrl && (
+        <ScreenshotLightbox url={lightboxUrl} isPdf={lightboxIsPdf} onClose={() => setLightboxUrl(null)} />
+      )}
+    </div>
+  );
+}
