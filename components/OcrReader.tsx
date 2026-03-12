@@ -61,9 +61,7 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
 
         if (signedError || !signedData?.signedUrl) throw new Error("Signed URL fehlgeschlagen");
 
-        const { createWorker } = await import("tesseract.js");
-
-        // Bild laden und ggf. hochskalieren (Desktop-Screenshots < 600px)
+        // Bild laden und ggf. hochskalieren
         const img = await new Promise<HTMLImageElement>((resolve, reject) => {
           const el = new Image();
           el.crossOrigin = "anonymous";
@@ -75,7 +73,6 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
         let recognizeTarget: string = signedData.signedUrl;
 
         if (img.naturalWidth < 600) {
-          // 3x Upscaling für kleine Desktop-Screenshots
           const scale = 3;
           const canvas = document.createElement("canvas");
           canvas.width = img.naturalWidth * scale;
@@ -87,6 +84,7 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
           console.log("=== UPSCALING 3x:", img.naturalWidth, "→", canvas.width);
         }
 
+        const { createWorker } = await import("tesseract.js");
         const worker = await createWorker("eng");
         const { data } = await worker.recognize(recognizeTarget);
         await worker.terminate();
@@ -102,8 +100,8 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
         const imageHeight = data.words.length > 0
           ? Math.max(...data.words.map(w => w.bbox.y1))
           : 1600;
-        const colWidth = imageWidth / 5;
 
+        // Benachbarte Wörter zusammenfügen: "6,81" + "M" → "6,81M"
         type MergedWord = { text: string; x: number; y: number; };
         const words = data.words;
         const merged: MergedWord[] = [];
@@ -123,6 +121,7 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
           }
         }
 
+        // Y-Positionen der "senden an" Zeilen
         const sendenAnYPositions = data.words
           .filter(w => w.text.toLowerCase() === "senden")
           .map(w => w.bbox.y0);
@@ -132,25 +131,47 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
           : imageHeight * 0.35;
         const dataAreaStart = firstSendenAnY * 0.8;
 
+        // Dynamische Spaltenberechnung basierend auf Wert-Positionen
+        const valueXPositions = merged
+          .filter(w => {
+            const v = parseValue(w.text);
+            return v !== null && v >= 1000 && w.y >= dataAreaStart;
+          })
+          .map(w => w.x);
+
+        let colWidth: number;
+        let colOffset: number;
+
+        if (valueXPositions.length >= 2) {
+          const minX = Math.min(...valueXPositions);
+          const maxX = Math.max(...valueXPositions);
+          colOffset = minX - (maxX - minX) / 8;
+          colWidth = (maxX - colOffset) / 4.5;
+        } else {
+          colOffset = 0;
+          colWidth = imageWidth / 5;
+        }
+
+        function getCol(x: number): number {
+          return Math.min(Math.max(Math.floor((x - colOffset) / colWidth), 0), 4);
+        }
+
         console.log("=== BILDGRÖSSE:", imageWidth, "x", imageHeight);
         console.log("=== SENDEN AN Y:", sendenAnYPositions);
         console.log("=== DATENBEREICH AB Y:", dataAreaStart);
-        console.log("=== ALLE MERGED:", merged.map(w => ({ text: w.text, x: w.x, y: w.y })));
-        const mergedMitWert = merged.filter(w => parseValue(w.text) !== null);
-        console.log("=== MERGED MIT WERT:", mergedMitWert.map(w => ({ text: w.text, value: parseValue(w.text), x: w.x, y: w.y })));
+        console.log("=== COL OFFSET:", colOffset, "COL WIDTH:", colWidth);
 
         const totals = [0, 0, 0, 0, 0];
 
         for (const w of merged) {
           const value = parseValue(w.text);
           if (!value || value < 1000) continue;
-
           if (w.y < dataAreaStart) continue;
 
           const isUnderSendenAn = sendenAnYPositions.some(y => w.y > y);
           if (!isUnderSendenAn) continue;
 
-          const col = Math.min(Math.floor(w.x / colWidth), 4);
+          const col = getCol(w.x);
           console.log(`=== ZUORDNUNG: ${w.text} → ${RESOURCES[col]} (Spalte ${col}, x=${w.x})`);
           totals[col] += value;
         }
