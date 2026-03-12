@@ -74,7 +74,8 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
 
         setSuggestion(result);
         setStatus("done");
-      } catch {
+      } catch (err) {
+        console.error("OCR Fehler:", err);
         if (!cancelled) setStatus("error");
       }
     }
