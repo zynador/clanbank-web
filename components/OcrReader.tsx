@@ -20,13 +20,13 @@ const RESOURCES = ["Cash", "Arms", "Cargo", "Metal", "Diamond"] as const;
 function parseValue(raw: string): number | null {
   const cleaned = raw.replace(/\s/g, "").replace(/,/g, ".").toUpperCase();
   const fixed = cleaned.replace(/^T(\d)/, "7$1");
-  const match = fixed.match(/^(\d+(?:\.\d+)?)([KMB]?)$/);
+  const match = fixed.match(/^(\d+(?:\.\d+)?)([KM]?)$/);
   if (!match) return null;
   const num = parseFloat(match[1]);
   const suffix = match[2];
   if (suffix === "K") return Math.round(num * 1_000);
   if (suffix === "M") return Math.round(num * 1_000_000);
-  if (suffix === "B") return Math.round(num * 1_000_000_000);
+  // Kein B (Milliarden) – kommt im Spiel nicht vor
   if (num > 100) return null;
   return Math.round(num);
 }
