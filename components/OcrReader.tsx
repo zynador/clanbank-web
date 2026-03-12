@@ -51,7 +51,11 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
           body: JSON.stringify({ imageUrl: signedData.signedUrl }),
         });
 
-        if (!res.ok) throw new Error("API Fehler");
+        if (!res.ok) {
+          const errText = await res.text();
+          console.error("API 500 Details:", errText);
+          throw new Error("API Fehler");
+        }
         const json = await res.json();
         if (json.error) throw new Error(json.error);
 
