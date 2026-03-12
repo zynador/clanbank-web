@@ -3,9 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 export async function POST(req: NextRequest) {
   try {
     const { imageUrl } = await req.json();
-    if (!imageUrl) {
-      return NextResponse.json({ error: "Keine imageUrl" }, { status: 400 });
-    }
+    if (!imageUrl) return NextResponse.json({ error: "Keine imageUrl" }, { status: 400 });
 
     const imgRes = await fetch(imageUrl);
     if (!imgRes.ok) throw new Error("Bild konnte nicht geladen werden");
@@ -16,17 +14,20 @@ export async function POST(req: NextRequest) {
     const prompt = `Du analysierst einen Screenshot aus dem Spiel "The Grand Mafia".
 Das Bild zeigt einen Ressourcen-Transport-Bericht mit mehreren Einträgen.
 
-Jeder Eintrag hat einen grünen Header mit "Ressourcen senden an: [Name]".
-Darunter stehen 5 Ressourcen-Spalten mit Icons: Cash, Arms, Cargo, Metal, Diamond.
-Werte wie "5 M" bedeuten 5.000.000. "500 K" bedeutet 500.000. "-" bedeutet 0.
+WICHTIGE REGELN:
+- Jeder Eintrag hat einen grünen Header "Ressourcen senden an: [Name]"
+- Darunter stehen IMMER genau 5 Icons in fester Reihenfolge von links nach rechts: Cash, Arms, Cargo, Metal, Diamond
+- Unter jedem Icon steht entweder ein Wert ODER "-" (= 0)
+- Pro Zeile können alle 5, nur eine, oder mehrere Ressourcen einen Wert haben
+- "5 M" oder "5,0 M" = 5000000, "500 K" oder "500,0 K" = 500000, "-" = 0
+- Kleine Zahlen ohne Suffix wie "4" bedeuten einfach 4 (NICHT 4 Millionen!)
 
-Deine Aufgabe:
-1. Finde ALLE Einträge wo der Empfänger "Bam bamm" ist
-2. Summiere die Werte pro Ressource über ALLE Bam-bamm-Einträge
-3. Ignoriere Einträge an andere Empfänger
-4. Ignoriere Einträge mit "sind von" (eingehende Transfers)
-
-Gib die Summen als ganze Zahlen zurück (5M = 5000000).
+DEINE AUFGABE:
+1. Finde ALLE Einträge mit Empfänger "Bam bamm" (orangefarbener Text im grünen Header)
+2. Für jeden Bam-bamm-Eintrag: lies den Wert unter JEDEM der 5 Icons einzeln ab (Position 1=Cash, 2=Arms, 3=Cargo, 4=Metal, 5=Diamond)
+3. Summiere alle Werte pro Ressource über alle Bam-bamm-Einträge
+4. Ignoriere Einträge an andere Empfänger vollständig
+5. Ignoriere Einträge mit "sind von" vollständig (= eingehende Transfers)
 
 Antworte NUR mit diesem JSON, kein Markdown, keine Backticks, keine Erklärung:
 {"Cash":0,"Arms":0,"Cargo":0,"Metal":0,"Diamond":0}`;
@@ -41,18 +42,13 @@ Antworte NUR mit diesem JSON, kein Markdown, keine Backticks, keine Erklärung:
       body: JSON.stringify({
         model: "claude-haiku-4-5",
         max_tokens: 200,
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "image",
-                source: { type: "base64", media_type: contentType, data: base64 },
-              },
-              { type: "text", text: prompt },
-            ],
-          },
-        ],
+        messages: [{
+          role: "user",
+          content: [
+            { type: "image", source: { type: "base64", media_type: contentType, data: base64 } },
+            { type: "text", text: prompt },
+          ],
+        }],
       }),
     });
 
@@ -63,10 +59,7 @@ Antworte NUR mit diesem JSON, kein Markdown, keine Backticks, keine Erklärung:
 
     const data = await response.json();
     let text = data.content?.[0]?.text?.trim() ?? "";
-
-    // Markdown-Backticks entfernen falls vorhanden
     text = text.replace(/^```[a-z]*\n?/i, "").replace(/```$/i, "").trim();
-
     const parsed = JSON.parse(text);
     return NextResponse.json({ result: parsed });
   } catch (e: unknown) {
