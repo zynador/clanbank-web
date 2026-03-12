@@ -62,8 +62,33 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
         if (signedError || !signedData?.signedUrl) throw new Error("Signed URL fehlgeschlagen");
 
         const { createWorker } = await import("tesseract.js");
+
+        // Bild laden und ggf. hochskalieren (Desktop-Screenshots < 600px)
+        const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const el = new Image();
+          el.crossOrigin = "anonymous";
+          el.onload = () => resolve(el);
+          el.onerror = reject;
+          el.src = signedData.signedUrl;
+        });
+
+        let recognizeTarget: string = signedData.signedUrl;
+
+        if (img.naturalWidth < 600) {
+          // 3x Upscaling für kleine Desktop-Screenshots
+          const scale = 3;
+          const canvas = document.createElement("canvas");
+          canvas.width = img.naturalWidth * scale;
+          canvas.height = img.naturalHeight * scale;
+          const ctx = canvas.getContext("2d")!;
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          recognizeTarget = canvas.toDataURL("image/png");
+          console.log("=== UPSCALING 3x:", img.naturalWidth, "→", canvas.width);
+        }
+
         const worker = await createWorker("eng");
-        const { data } = await worker.recognize(signedData.signedUrl);
+        const { data } = await worker.recognize(recognizeTarget);
         await worker.terminate();
 
         if (cancelled) return;
