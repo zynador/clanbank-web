@@ -1,4 +1,5 @@
 "use client";
+
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -61,7 +62,6 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
 
         if (signedError || !signedData?.signedUrl) throw new Error("Signed URL fehlgeschlagen");
 
-        // Bild laden und ggf. hochskalieren
         const img = await new Promise<HTMLImageElement>((resolve, reject) => {
           const el = new Image();
           el.crossOrigin = "anonymous";
@@ -71,7 +71,6 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
         });
 
         let recognizeTarget: string = signedData.signedUrl;
-
         if (img.naturalWidth < 600) {
           const scale = 3;
           const canvas = document.createElement("canvas");
@@ -81,7 +80,6 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
           ctx.imageSmoothingEnabled = false;
           ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
           recognizeTarget = canvas.toDataURL("image/png");
-          console.log("=== UPSCALING 3x:", img.naturalWidth, "→", canvas.width);
         }
 
         const { createWorker } = await import("tesseract.js");
@@ -92,7 +90,10 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
         if (cancelled) return;
 
         const fullText = data.text;
-        if (!hasValidDeposit(fullText)) { setStatus("no_recipient"); return; }
+        if (!hasValidDeposit(fullText)) {
+          setStatus("no_recipient");
+          return;
+        }
 
         const imageWidth = data.words.length > 0
           ? Math.max(...data.words.map(w => w.bbox.x1))
@@ -101,8 +102,7 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
           ? Math.max(...data.words.map(w => w.bbox.y1))
           : 1600;
 
-        // Benachbarte Wörter zusammenfügen: "6,81" + "M" → "6,81M"
-        type MergedWord = { text: string; x: number; y: number; };
+        type MergedWord = { text: string; x: number; y: number };
         const words = data.words;
         const merged: MergedWord[] = [];
 
@@ -121,7 +121,6 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
           }
         }
 
-        // Y-Positionen der "senden an" Zeilen
         const sendenAnYPositions = data.words
           .filter(w => w.text.toLowerCase() === "senden")
           .map(w => w.bbox.y0);
@@ -129,9 +128,9 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
         const firstSendenAnY = sendenAnYPositions.length > 0
           ? Math.min(...sendenAnYPositions)
           : imageHeight * 0.35;
+
         const dataAreaStart = firstSendenAnY * 0.8;
 
-        // Dynamische Spaltenberechnung basierend auf Wert-Positionen
         const valueXPositions = merged
           .filter(w => {
             const v = parseValue(w.text);
@@ -156,23 +155,14 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
           return Math.min(Math.max(Math.floor((x - colOffset) / colWidth), 0), 4);
         }
 
-        console.log("=== BILDGRÖSSE:", imageWidth, "x", imageHeight);
-        console.log("=== SENDEN AN Y:", sendenAnYPositions);
-        console.log("=== DATENBEREICH AB Y:", dataAreaStart);
-        console.log("=== COL OFFSET:", colOffset, "COL WIDTH:", colWidth);
-
         const totals = [0, 0, 0, 0, 0];
-
         for (const w of merged) {
           const value = parseValue(w.text);
           if (!value || value < 1000) continue;
           if (w.y < dataAreaStart) continue;
-
           const isUnderSendenAn = sendenAnYPositions.some(y => w.y > y);
           if (!isUnderSendenAn) continue;
-
           const col = getCol(w.x);
-          console.log(`=== ZUORDNUNG: ${w.text} → ${RESOURCES[col]} (Spalte ${col}, x=${w.x})`);
           totals[col] += value;
         }
 
@@ -184,15 +174,15 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
           Diamond: totals[4] > 0 ? String(totals[4]) : "",
         };
 
-        console.log("=== RESULT:", result);
-
         const hasAny = RESOURCES.some(r => result[r] !== "");
-        if (!hasAny) { setStatus("error"); return; }
+        if (!hasAny) {
+          setStatus("error");
+          return;
+        }
 
         setSuggestion(result);
         setStatus("done");
-      } catch (e) {
-        console.error("OCR Fehler:", e);
+      } catch {
         if (!cancelled) setStatus("error");
       }
     }
@@ -202,7 +192,10 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
   }, [imageUrl]);
 
   function handleConfirm() {
-    if (suggestion) { onResult(suggestion); setConfirmed(true); }
+    if (suggestion) {
+      onResult(suggestion);
+      setConfirmed(true);
+    }
   }
 
   if (status === "idle") return null;
