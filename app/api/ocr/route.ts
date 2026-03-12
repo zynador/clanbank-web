@@ -12,24 +12,36 @@ export async function POST(req: NextRequest) {
     const contentType = imgRes.headers.get("content-type") || "image/jpeg";
 
     const prompt = `Du analysierst einen Screenshot aus dem Spiel "The Grand Mafia".
-Das Bild zeigt einen Ressourcen-Transport-Bericht mit mehreren Einträgen.
 
-WICHTIGE REGELN:
-- Jeder Eintrag hat einen grünen Header "Ressourcen senden an: [Name]"
-- Darunter stehen IMMER genau 5 Icons in fester Reihenfolge von links nach rechts: Cash, Arms, Cargo, Metal, Diamond
-- Unter jedem Icon steht entweder ein Wert ODER "-" (= 0)
-- Pro Zeile können alle 5, nur eine, oder mehrere Ressourcen einen Wert haben
-- "5 M" oder "5,0 M" = 5000000, "500 K" oder "500,0 K" = 500000, "-" = 0
-- Kleine Zahlen ohne Suffix wie "4" bedeuten einfach 4 (NICHT 4 Millionen!)
+Das Bild zeigt einen Ressourcen-Transport-Bericht. Jeder Eintrag hat:
+- Einen grünen Header: "Ressourcen senden an: [Name]"
+- Darunter eine Zeile mit genau 5 Icons von LINKS nach RECHTS:
+  Position 1 (ganz links): Cash (Geldscheine)
+  Position 2: Arms (Munition/Patronen)
+  Position 3: Cargo (Holzkiste)
+  Position 4: Metal (Silberbarren)
+  Position 5 (ganz rechts): Diamond (Edelstein)
+- Unter jedem Icon steht ein Wert oder "-"
 
-DEINE AUFGABE:
-1. Finde ALLE Einträge mit Empfänger "Bam bamm" (orangefarbener Text im grünen Header)
-2. Für jeden Bam-bamm-Eintrag: lies den Wert unter JEDEM der 5 Icons einzeln ab (Position 1=Cash, 2=Arms, 3=Cargo, 4=Metal, 5=Diamond)
-3. Summiere alle Werte pro Ressource über alle Bam-bamm-Einträge
-4. Ignoriere Einträge an andere Empfänger vollständig
-5. Ignoriere Einträge mit "sind von" vollständig (= eingehende Transfers)
+WICHTIG: Jede Zeile kann einen Wert an EINER ANDEREN Position haben!
+Beispiel: Zeile 1 hat Wert unter Position 5 (=Diamond), Zeile 2 unter Position 4 (=Metal), usw.
 
-Antworte NUR mit diesem JSON, kein Markdown, keine Backticks, keine Erklärung:
+Zahlenformat: "7,25 M" = 7250000, "500 K" = 500000, "1,5 M" = 1500000, "-" = 0
+
+AUFGABE:
+Gehe jede Zeile mit "Bam bamm" als Empfänger durch.
+Ignoriere "sind von"-Einträge und Einträge mit anderen Empfängern.
+
+Für jede Bam-bamm-Zeile bestimme:
+- Welcher Wert steht unter Icon an Position 1 (Cash)?
+- Welcher Wert steht unter Icon an Position 2 (Arms)?
+- Welcher Wert steht unter Icon an Position 3 (Cargo)?
+- Welcher Wert steht unter Icon an Position 4 (Metal)?
+- Welcher Wert steht unter Icon an Position 5 (Diamond)?
+
+Summiere alle Werte pro Ressource über alle Bam-bamm-Zeilen.
+
+Antworte NUR mit diesem JSON, kein Markdown, keine Backticks:
 {"Cash":0,"Arms":0,"Cargo":0,"Metal":0,"Diamond":0}`;
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
