@@ -19,16 +19,14 @@ const RESOURCES = ["Cash", "Arms", "Cargo", "Metal", "Diamond"] as const;
 
 function parseValue(raw: string): number | null {
   const cleaned = raw.replace(/\s/g, "").replace(/,/g, ".").toUpperCase();
-  // T→7 Korrektur (bekannter OCR-Fehler)
   const fixed = cleaned.replace(/^T(\d)/, "7$1");
-  const match = fixed.match(/^(\d+(?:\.\d+)?)\s*([KMB]?)$/);
+  const match = fixed.match(/^(\d+(?:\.\d+)?)([KMB]?)$/);
   if (!match) return null;
   const num = parseFloat(match[1]);
   const suffix = match[2];
   if (suffix === "K") return Math.round(num * 1_000);
   if (suffix === "M") return Math.round(num * 1_000_000);
   if (suffix === "B") return Math.round(num * 1_000_000_000);
-  // Plausibilitätsprüfung: Rohzahl ohne Suffix muss < 100 sein (sonst Komma verschluckt)
   if (num > 100) return null;
   return Math.round(num);
 }
@@ -72,72 +70,57 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
         if (cancelled) return;
 
         const fullText = data.text;
-        console.log("=== OCR RAW TEXT ===\n", fullText);
+        if (!hasValidDeposit(fullText)) { setStatus("no_recipient"); return; }
 
-        if (!hasValidDeposit(fullText)) {
-          setStatus("no_recipient");
-          return;
-        }
-
-        // Bildbreite ermitteln für Spaltenberechnung
         const imageWidth = data.words.length > 0
           ? Math.max(...data.words.map(w => w.bbox.x1))
           : 720;
         const colWidth = imageWidth / 5;
 
-        console.log("=== BILDBREITE:", imageWidth, "SPALTENBREITE:", colWidth);
+        // Benachbarte Wörter zusammenfügen: "6,81" + "M" → "6,81M"
+        type MergedWord = { text: string; x: number; y: number; };
+        const words = data.words;
+        const merged: MergedWord[] = [];
 
-        // Alle Wörter die wie Ressourcenwerte aussehen (Zahl + K/M oder nur Zahl)
-        const valueWords = data.words.filter(w => {
-          const t = w.text.trim();
-          return /^\d[\d.,]*\s*[KkMm]?$/.test(t) && t !== "-";
-        });
+        for (let i = 0; i < words.length; i++) {
+          const w = words[i];
+          const next = words[i + 1];
+          const isNumber = /^\d[\d.,]*$/.test(w.text.trim());
+          const nextIsSuffix = next && /^[KkMmBb]$/.test(next.text.trim());
+          const nextIsClose = next && (next.bbox.x0 - w.bbox.x1) < 60;
 
-        console.log("=== ALLE WÖRTER:", data.words.map(w => ({
-  text: w.text,
-  x: w.bbox.x0,
-  y: w.bbox.y0,
-})));
-console.log("=== WERT-WÖRTER:", valueWords.map(w => ({
-  text: w.text,
-  x: w.bbox.x0,
-  y: w.bbox.y0,
-  spalte: Math.floor(w.bbox.x0 / colWidth),
-  parsedValue: parseValue(w.text)
-})));
+          if (isNumber && nextIsSuffix && nextIsClose) {
+            // Zusammenfügen
+            merged.push({ text: w.text.trim() + next.text.trim(), x: w.bbox.x0, y: w.bbox.y0 });
+            i++; // nächstes Wort überspringen
+          } else {
+            merged.push({ text: w.text.trim(), x: w.bbox.x0, y: w.bbox.y0 });
+          }
+        }
 
-        // Nur Wörter in Zeilen nach "senden an" berücksichtigen
-        // Wir suchen "senden an" Zeilen und schauen welche Wörter darunter liegen
-        const sendenAnWords = data.words.filter(w =>
-          w.text.toLowerCase().includes("senden") ||
-          w.text.toLowerCase().includes("an")
-        );
+        console.log("=== MERGED WORDS MIT WERT:", merged.filter(w => parseValue(w.text) !== null).map(w => ({
+          text: w.text, value: parseValue(w.text), x: w.x, y: w.y, spalte: Math.floor(w.x / colWidth)
+        })));
 
-        const sendenAnYPositions = sendenAnWords
-          .filter((w, i, arr) => {
-            // Gruppe von "senden" + "an" Wörter
-            return w.text.toLowerCase() === "senden" ||
-              (arr[i-1]?.text.toLowerCase() === "senden" && w.text.toLowerCase() === "an");
-          })
+        // Y-Positionen der "senden an" Zeilen
+        const sendenAnYPositions = data.words
+          .filter(w => w.text.toLowerCase() === "senden")
           .map(w => w.bbox.y0);
 
-        console.log("=== SENDEN AN Y-POSITIONEN:", sendenAnYPositions);
+        console.log("=== SENDEN AN Y:", sendenAnYPositions);
 
-        // Totals pro Ressource (Spalte)
         const totals = [0, 0, 0, 0, 0];
 
-        for (const word of valueWords) {
-          const value = parseValue(word.text);
-          if (!value || value < 100) continue; // Unter 100 ignorieren (Datum etc.)
+        for (const w of merged) {
+          const value = parseValue(w.text);
+          if (!value || value < 1000) continue;
 
-          // Spalte bestimmen (0=Cash, 1=Arms, 2=Cargo, 3=Metal, 4=Diamond)
-          const col = Math.min(Math.floor(word.bbox.x0 / colWidth), 4);
-
-          // Prüfen ob dieses Wort unter einer "senden an" Zeile liegt
-          const isUnderSendenAn = sendenAnYPositions.some(y => word.bbox.y0 > y);
+          // Muss unter einer "senden an" Zeile liegen
+          const isUnderSendenAn = sendenAnYPositions.some(y => w.y > y);
           if (!isUnderSendenAn) continue;
 
-          console.log(`=== WERT: ${word.text} → Spalte ${col} (${RESOURCES[col]}), y=${word.bbox.y0}`);
+          const col = Math.min(Math.floor(w.x / colWidth), 4);
+          console.log(`=== ZUORDNUNG: ${w.text} → ${RESOURCES[col]} (Spalte ${col}, x=${w.x})`);
           totals[col] += value;
         }
 
