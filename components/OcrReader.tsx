@@ -115,6 +115,10 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
 
         console.log("=== BILDGRÖSSE:", imageWidth, "x", imageHeight);
         console.log("=== DATENBEREICH AB Y:", dataAreaStart);
+        console.log("=== MERGED MIT WERT:", merged.filter(w => {
+          const v = parseValue(w.text);
+          return v !== null;
+        }).map(w => ({ text: w.text, value: parseValue(w.text), x: w.x, y: w.y })));
 
         const totals = [0, 0, 0, 0, 0];
 
