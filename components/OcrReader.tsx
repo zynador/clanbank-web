@@ -93,12 +93,18 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
           return /^\d[\d.,]*\s*[KkMm]?$/.test(t) && t !== "-";
         });
 
-        console.log("=== WERT-WÖRTER:", valueWords.map(w => ({
-          text: w.text,
-          x: w.bbox.x0,
-          y: w.bbox.y0,
-          spalte: Math.floor(w.bbox.x0 / colWidth)
-        })));
+        console.log("=== ALLE WÖRTER:", data.words.map(w => ({
+  text: w.text,
+  x: w.bbox.x0,
+  y: w.bbox.y0,
+})));
+console.log("=== WERT-WÖRTER:", valueWords.map(w => ({
+  text: w.text,
+  x: w.bbox.x0,
+  y: w.bbox.y0,
+  spalte: Math.floor(w.bbox.x0 / colWidth),
+  parsedValue: parseValue(w.text)
+})));
 
         // Nur Wörter in Zeilen nach "senden an" berücksichtigen
         // Wir suchen "senden an" Zeilen und schauen welche Wörter darunter liegen
