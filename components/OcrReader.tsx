@@ -17,7 +17,6 @@ type Props = {
 };
 
 const RESOURCES = ["Cash", "Arms", "Cargo", "Metal", "Diamond"] as const;
-const BAM_BAMM = "bam bamm";
 
 function parseValue(raw: string): number | null {
   const cleaned = raw.replace(/\s/g, "").replace(/,/g, ".").toUpperCase();
@@ -30,6 +29,28 @@ function parseValue(raw: string): number | null {
   if (suffix === "M") return Math.round(num * 1_000_000);
   if (num > 100) return null;
   return Math.round(num);
+}
+
+// Prüft ob ein Wort ein Header-Anker ist (senden-Varianten ODER "bam")
+function isHeaderAnchor(text: string): boolean {
+  const t = text.toLowerCase().trim();
+  // "senden" und häufige OCR-Fehler davon
+  if (/^s[ae]n[dt][ae]n$/.test(t)) return true;
+  // "bam" als direkter Anker (robust erkannt)
+  if (t === "bam") return true;
+  return false;
+}
+
+// Prüft ob eine Header-Zeile auf Bam bamm zeigt
+function lineIsBamBamm(lineText: string): boolean {
+  const t = lineText.toLowerCase();
+  return t.includes("bam");
+}
+
+// Prüft ob eine Header-Zeile eine "sind von"-Zeile ist (ignorieren)
+function lineIsSindVon(lineText: string): boolean {
+  const t = lineText.toLowerCase();
+  return t.includes("sind") && t.includes("von");
 }
 
 type StatusType = "idle" | "loading" | "done" | "error" | "no_recipient";
@@ -90,38 +111,58 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
         if (cancelled) return;
 
         const words = data.words;
-        const imageHeight = words.length > 0 ? Math.max(...words.map((w) => w.bbox.y1)) : 1600;
-        const imageWidth = words.length > 0 ? Math.max(...words.map((w) => w.bbox.x1)) : 720;
+        const imageHeight =
+          words.length > 0
+            ? Math.max(...words.map((w) => w.bbox.y1))
+            : 1600;
+        const imageWidth =
+          words.length > 0
+            ? Math.max(...words.map((w) => w.bbox.x1))
+            : 720;
 
         // SCHRITT 1: Header-Zeilen erkennen
+        // Anker: "senden"-Varianten oder "bam" — robust gegen OCR-Fehler
         type Header = { y: number; isBamBamm: boolean; nextY: number };
 
-        const sendenWords = words.filter((w) => w.text.toLowerCase() === "senden");
+        const anchorWords = words.filter((w) => isHeaderAnchor(w.text));
 
-        if (sendenWords.length === 0) {
+        // Dedupliziere: mehrere Anker in derselben Zeile → nur einer
+        const tolerance = Math.max(25, (imageHeight / 1600) * 25);
+        const seenY: number[] = [];
+        const uniqueAnchors = anchorWords.filter((w) => {
+          const isDup = seenY.some((y) => Math.abs(y - w.bbox.y0) < tolerance);
+          if (!isDup) seenY.push(w.bbox.y0);
+          return !isDup;
+        });
+
+        if (uniqueAnchors.length === 0) {
           setStatus("no_recipient");
           return;
         }
 
+        // Sortiere nach Y-Position
+        uniqueAnchors.sort((a, b) => a.bbox.y0 - b.bbox.y0);
+
         const headers: Header[] = [];
-        const tolerance = Math.max(30, (imageHeight / 1600) * 30);
 
-        for (let i = 0; i < sendenWords.length; i++) {
-          const sw = sendenWords[i];
-          const headerY = sw.bbox.y0;
+        for (let i = 0; i < uniqueAnchors.length; i++) {
+          const anchor = uniqueAnchors[i];
+          const headerY = anchor.bbox.y0;
 
-          const lineWords = words
+          // Alle Wörter in dieser Header-Zeile (±tolerance px)
+          const lineText = words
             .filter((w) => Math.abs(w.bbox.y0 - headerY) < tolerance)
-            .map((w) => w.text.toLowerCase())
+            .map((w) => w.text)
             .join(" ");
 
-          const isBamBamm =
-            lineWords.includes(BAM_BAMM) ||
-            (lineWords.includes("bam") && lineWords.includes("bamm"));
+          // "sind von"-Zeilen komplett ignorieren
+          if (lineIsSindVon(lineText)) continue;
+
+          const isBamBamm = lineIsBamBamm(lineText);
 
           const nextY =
-            i + 1 < sendenWords.length
-              ? sendenWords[i + 1].bbox.y0
+            i + 1 < uniqueAnchors.length
+              ? uniqueAnchors[i + 1].bbox.y0
               : imageHeight;
 
           headers.push({ y: headerY, isBamBamm, nextY });
@@ -145,10 +186,18 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
           const nextIsClose = next && next.bbox.x0 - w.bbox.x1 < 60;
 
           if (isNumber && nextIsSuffix && nextIsClose) {
-            merged.push({ text: w.text.trim() + next.text.trim(), x: w.bbox.x0, y: w.bbox.y0 });
+            merged.push({
+              text: w.text.trim() + next.text.trim(),
+              x: w.bbox.x0,
+              y: w.bbox.y0,
+            });
             i++;
           } else {
-            merged.push({ text: w.text.trim(), x: w.bbox.x0, y: w.bbox.y0 });
+            merged.push({
+              text: w.text.trim(),
+              x: w.bbox.x0,
+              y: w.bbox.y0,
+            });
           }
         }
 
@@ -177,7 +226,10 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
         }
 
         function getCol(x: number): number {
-          return Math.min(Math.max(Math.floor((x - colOffset) / colWidth), 0), 4);
+          return Math.min(
+            Math.max(Math.floor((x - colOffset) / colWidth), 0),
+            4
+          );
         }
 
         // SCHRITT 4: Nur Werte aus Bam-bamm-Zeilen summieren
@@ -186,7 +238,9 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
         for (const w of merged) {
           const value = parseValue(w.text);
           if (!value || value < 1000) continue;
-          const inBamArea = bamHeaders.some((h) => w.y > h.y && w.y < h.nextY);
+          const inBamArea = bamHeaders.some(
+            (h) => w.y > h.y && w.y < h.nextY
+          );
           if (!inBamArea) continue;
           const col = getCol(w.x);
           totals[col] += value;
@@ -215,7 +269,9 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
     }
 
     runOcr();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [imageUrl]);
 
   function handleConfirm() {
