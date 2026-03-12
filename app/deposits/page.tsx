@@ -114,7 +114,7 @@ function DepositsContent() {
     });
     if (err) { setError(err.message); }
     else {
-      setSuccess("Einzahlung gespeichert! Wartet auf Offizier-Genehmigung.");
+      setSuccess("Einzahlung gespeichert!");
       setFormAmounts({ Cash: "", Arms: "", Cargo: "", Metal: "", Diamond: "" });
       setNote("");
       setScreenshotUrl(null);
