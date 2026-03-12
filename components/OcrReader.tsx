@@ -38,7 +38,6 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
 
     async function runOcr() {
       try {
-        // Signed URL holen (5 Minuten gültig)
         const { data: signedData, error: signedError } = await supabase.storage
           .from("screenshots")
           .createSignedUrl(imageUrl!, 300);
@@ -46,12 +45,10 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
         if (signedError || !signedData?.signedUrl)
           throw new Error("Signed URL fehlgeschlagen: " + signedError?.message);
 
-        const signedUrl = signedData.signedUrl;
-
         const res = await fetch("/api/ocr", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imageUrl: signedUrl }),
+          body: JSON.stringify({ imageUrl: signedData.signedUrl }),
         });
 
         const json = await res.json();
@@ -61,7 +58,6 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
         }
 
         if (json.error) throw new Error(json.error);
-
         if (cancelled) return;
 
         const raw = json.result as Record<string, number>;
@@ -154,8 +150,3 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
     </div>
   );
 }
-```
-
-Der einzige echte Fix ist in Zeile:
-```
-throw new Error("API Fehler: " + (json.error ?? res.status));
