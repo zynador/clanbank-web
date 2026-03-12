@@ -44,22 +44,25 @@ function extractAmounts(rawText: string): OcrResult | null {
     const line = lines[i];
     if (!line.toLowerCase().includes("senden an")) continue;
 
-    const valueLine = lines[i + 1] || "";
-    const tokens = valueLine
-      .split(/\s{2,}|\t/)
-      .map(t => t.trim())
-      .filter(t => t.length > 0);
+    // Alle Zahlen mit K/M/B Suffix in dieser Zeile finden
+    const numMatches = [...line.matchAll(/(\d[\d.,]*\s*[KkMmBb]?)\s*(?=\s|$)/g)];
+    console.log("=== SENDEN AN ZEILE:", line);
+    console.log("=== GEFUNDENE ZAHLEN:", numMatches.map(m => m[1]));
 
-    console.log("=== VALUE LINE:", valueLine);
-    console.log("=== TOKENS:", tokens);
+    for (const match of numMatches) {
+      const value = parseValue(match[1]);
+      if (!value || value <= 0) continue;
 
-    for (let j = 0; j < Math.min(tokens.length, 5); j++) {
-      const token = tokens[j];
-      if (token === "-" || token === "") continue;
-      const value = parseValue(token);
-      if (value && value > 0) {
-        totals[RESOURCES[j]] += value;
-        foundAny = true;
+      // Ressource anhand der Position im Text bestimmen
+      // Wir sammeln alle Werte und ordnen sie später zu
+      foundAny = true;
+
+      // Einfachste Heuristik: ersten unbesetzten Slot füllen
+      for (const res of RESOURCES) {
+        if (totals[res] === 0) {
+          totals[res] = value;
+          break;
+        }
       }
     }
   }
