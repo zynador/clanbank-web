@@ -15,6 +15,8 @@ type Props = {
   onResult: (amounts: OcrResult) => void;
 };
 
+const RESOURCES = ["Cash", "Arms", "Cargo", "Metal", "Diamond"] as const;
+
 function parseValue(raw: string): number | null {
   const cleaned = raw.replace(/\s/g, "").replace(/,/g, ".").toUpperCase();
   const match = cleaned.match(/^(\d+(?:\.\d+)?)\s*([KMB]?)$/);
@@ -27,45 +29,50 @@ function parseValue(raw: string): number | null {
   return Math.round(num);
 }
 
-function fixOcrText(text: string): string {
-  return text
-    .replace(/\bT(\d)/g, "7$1")
-    .replace(/[=:]/g, "")
-    .replace(/\|/g, "1");
-}
-
-function detectResource(line: string): keyof OcrResult | null {
-  const l = line.toLowerCase();
-  if (l.includes("cash")) return "Cash";
-  if (l.includes("arms") || l.includes("waffe")) return "Arms";
-  if (l.includes("cargo") || l.includes("kargo")) return "Cargo";
-  if (l.includes("metal") || l.includes("metall")) return "Metal";
-  if (l.includes("diamond") || l.includes("diamant")) return "Diamond";
-  return null;
-}
-
-function hasBamBamm(text: string): boolean {
-  const n = text.toLowerCase().replace(/\s+/g, " ");
-  return n.includes("bam bamm") || n.includes("bambamm") || n.includes("bam bam");
+// Prüft ob "senden an" vorkommt und "sind von" nicht
+function hasValidDeposit(text: string): boolean {
+  const n = text.toLowerCase();
+  return n.includes("senden an") && !n.includes("sind von");
 }
 
 function extractAmounts(rawText: string): OcrResult | null {
-  if (!hasBamBamm(rawText)) return null;
-  const result: OcrResult = { Cash: "", Arms: "", Cargo: "", Metal: "", Diamond: "" };
-  let found = false;
-  const lines = fixOcrText(rawText).split("\n");
-  for (const line of lines) {
-    const resource = detectResource(line);
-    if (!resource) continue;
-    const numMatch = line.match(/(\d[\d.,]*\s*[KkMmBb]?)/);
-    if (!numMatch) continue;
-    const value = parseValue(numMatch[1]);
-    if (value && value > 0) {
-      result[resource] = String(value);
-      found = true;
+  const lines = rawText.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+  const totals: Record<string, number> = { Cash: 0, Arms: 0, Cargo: 0, Metal: 0, Diamond: 0 };
+  let foundAny = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line.toLowerCase().includes("senden an")) continue;
+
+    const valueLine = lines[i + 1] || "";
+    const tokens = valueLine
+      .split(/\s{2,}|\t/)
+      .map(t => t.trim())
+      .filter(t => t.length > 0);
+
+    console.log("=== VALUE LINE:", valueLine);
+    console.log("=== TOKENS:", tokens);
+
+    for (let j = 0; j < Math.min(tokens.length, 5); j++) {
+      const token = tokens[j];
+      if (token === "-" || token === "") continue;
+      const value = parseValue(token);
+      if (value && value > 0) {
+        totals[RESOURCES[j]] += value;
+        foundAny = true;
+      }
     }
   }
-  return found ? result : null;
+
+  if (!foundAny) return null;
+
+  return {
+    Cash: totals.Cash > 0 ? String(totals.Cash) : "",
+    Arms: totals.Arms > 0 ? String(totals.Arms) : "",
+    Cargo: totals.Cargo > 0 ? String(totals.Cargo) : "",
+    Metal: totals.Metal > 0 ? String(totals.Metal) : "",
+    Diamond: totals.Diamond > 0 ? String(totals.Diamond) : "",
+  };
 }
 
 export default function OcrReader({ imageUrl, onResult }: Props) {
@@ -88,16 +95,12 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
 
     async function runOcr() {
       try {
-        // Pfad → Signed URL via Supabase
         const { data: signedData, error: signedError } = await supabase.storage
           .from("screenshots")
           .createSignedUrl(imageUrl!, 60);
 
         if (signedError || !signedData?.signedUrl) throw new Error("Signed URL fehlgeschlagen");
 
-        console.log("=== SIGNED URL:", signedData.signedUrl);
-
-        // Tesseract direkt mit URL
         const { createWorker } = await import("tesseract.js");
         const worker = await createWorker("eng");
         const { data } = await worker.recognize(signedData.signedUrl);
@@ -106,15 +109,21 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
         if (cancelled) return;
 
         const text = data.text;
-        console.log("=== OCR RAW TEXT ===", text);
-        console.log("=== HAT BAM BAMM:", hasBamBamm(text));
+        console.log("=== OCR RAW TEXT ===\n", text);
+        console.log("=== HAT GÜLTIGE EINZAHLUNG:", hasValidDeposit(text));
 
-        if (!hasBamBamm(text)) { setStatus("no_recipient"); return; }
+        if (!hasValidDeposit(text)) {
+          setStatus("no_recipient");
+          return;
+        }
 
         const amounts = extractAmounts(text);
         console.log("=== AMOUNTS:", amounts);
 
-        if (!amounts) { setStatus("error"); return; }
+        if (!amounts) {
+          setStatus("error");
+          return;
+        }
 
         setSuggestion(amounts);
         setStatus("done");
@@ -144,7 +153,7 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
       )}
       {status === "no_recipient" && (
         <p className="text-yellow-400 text-xs">
-          ⚠️ Kein gültiger Empfänger erkannt (erwartet: „Bam bamm"). Bitte manuell eintragen.
+          ⚠️ Kein gültiger Empfänger erkannt. Bitte manuell eintragen.
         </p>
       )}
       {status === "error" && (
@@ -156,7 +165,7 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
         <>
           <p className="text-teal-400 font-medium text-xs uppercase tracking-wide">✓ Erkannte Werte</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {(["Cash", "Arms", "Cargo", "Metal", "Diamond"] as const).map((r) =>
+            {RESOURCES.map((r) =>
               suggestion[r] ? (
                 <div key={r} className="bg-[#161822] rounded px-3 py-2">
                   <span className="text-gray-500 text-xs">{r}</span>
