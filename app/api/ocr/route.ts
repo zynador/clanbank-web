@@ -13,36 +13,30 @@ export async function POST(req: NextRequest) {
 
     const prompt = `Du analysierst einen Screenshot aus dem Spiel "The Grand Mafia".
 
-Das Bild zeigt einen Ressourcen-Transport-Bericht. Jeder Eintrag hat:
-- Einen grünen Header: "Ressourcen senden an: [Name]"
-- Darunter eine Zeile mit genau 5 Icons von LINKS nach RECHTS:
-  Position 1 (ganz links): Cash (Geldscheine)
-  Position 2: Arms (Munition/Patronen)
-  Position 3: Cargo (Holzkiste)
-  Position 4: Metal (Silberbarren)
-  Position 5 (ganz rechts): Diamond (Edelstein)
-- Unter jedem Icon steht ein Wert oder "-"
+Das Bild zeigt einen Ressourcen-Transport-Bericht mit mehreren Einträgen.
 
-WICHTIG: Jede Zeile kann einen Wert an EINER ANDEREN Position haben!
-Beispiel: Zeile 1 hat Wert unter Position 5 (=Diamond), Zeile 2 unter Position 4 (=Metal), usw.
+Jeder Eintrag besteht aus:
+1. Einem grünen Header: "Ressourcen senden an: [Name]"
+2. Einer Zeile mit 5 Icons von LINKS nach RECHTS:
+   - Icon 1 (ganz links): Geldscheine = CASH
+   - Icon 2: Patronen/Munition = ARMS
+   - Icon 3: Holzkiste = CARGO
+   - Icon 4: Silberbarren = METAL
+   - Icon 5 (ganz rechts): Edelstein/Diamant = DIAMOND
+3. Unter jedem Icon: ein Zahlenwert ODER "-" (= kein Wert)
 
-Zahlenformat: "7,25 M" = 7250000, "500 K" = 500000, "1,5 M" = 1500000, "-" = 0
+ZAHLENFORMAT: "7,25 M" = 7250000, "1,5 M" = 1500000, "500 K" = 500000, "-" = 0
 
-AUFGABE:
-Gehe jede Zeile mit "Bam bamm" als Empfänger durch.
-Ignoriere "sind von"-Einträge und Einträge mit anderen Empfängern.
+SCHRITT 1: Liste alle Einträge mit Empfänger "Bam bamm" auf.
+Für JEDEN Bam-bamm-Eintrag schreibe:
+Zeile X: Cash=[wert], Arms=[wert], Cargo=[wert], Metal=[wert], Diamond=[wert]
 
-Für jede Bam-bamm-Zeile bestimme:
-- Welcher Wert steht unter Icon an Position 1 (Cash)?
-- Welcher Wert steht unter Icon an Position 2 (Arms)?
-- Welcher Wert steht unter Icon an Position 3 (Cargo)?
-- Welcher Wert steht unter Icon an Position 4 (Metal)?
-- Welcher Wert steht unter Icon an Position 5 (Diamond)?
+SCHRITT 2: Summiere jeden Ressourcentyp über alle Zeilen.
 
-Summiere alle Werte pro Ressource über alle Bam-bamm-Zeilen.
+SCHRITT 3: Gib NUR dieses JSON aus (letzte Zeile deiner Antwort, kein Markdown):
+{"Cash":0,"Arms":0,"Cargo":0,"Metal":0,"Diamond":0}
 
-Antworte NUR mit diesem JSON, kein Markdown, keine Backticks:
-{"Cash":0,"Arms":0,"Cargo":0,"Metal":0,"Diamond":0}`;
+Ignoriere alle Einträge mit "sind von" und alle Einträge mit anderen Empfängern als "Bam bamm".`;
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -53,7 +47,7 @@ Antworte NUR mit diesem JSON, kein Markdown, keine Backticks:
       },
       body: JSON.stringify({
         model: "claude-haiku-4-5",
-        max_tokens: 200,
+        max_tokens: 1024,
         messages: [{
           role: "user",
           content: [
@@ -71,8 +65,11 @@ Antworte NUR mit diesem JSON, kein Markdown, keine Backticks:
 
     const data = await response.json();
     let text = data.content?.[0]?.text?.trim() ?? "";
-    text = text.replace(/^```[a-z]*\n?/i, "").replace(/```$/i, "").trim();
-    const parsed = JSON.parse(text);
+
+    // Letztes JSON-Objekt aus der Antwort extrahieren (nach dem Reasoning)
+    const jsonMatch = text.match(/\{[^{}]*"Cash"[^{}]*\}/);
+    if (!jsonMatch) throw new Error(`Kein JSON in Antwort: ${text.slice(0, 200)}`);
+    const parsed = JSON.parse(jsonMatch[0]);
     return NextResponse.json({ result: parsed });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Unbekannter Fehler";
