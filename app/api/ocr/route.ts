@@ -17,26 +17,32 @@ Das Bild zeigt einen Ressourcen-Transport-Bericht mit mehreren Einträgen.
 
 Jeder Eintrag besteht aus:
 1. Einem grünen Header: "Ressourcen senden an: [Name]"
-2. Einer Zeile mit 5 Icons von LINKS nach RECHTS:
-   - Icon 1 (ganz links): Geldscheine = CASH
-   - Icon 2: Patronen/Munition = ARMS
-   - Icon 3: Holzkiste = CARGO
-   - Icon 4: Silberbarren = METAL
-   - Icon 5 (ganz rechts): Edelstein/Diamant = DIAMOND
-3. Unter jedem Icon: ein Zahlenwert ODER "-" (= kein Wert)
+2. Genau 5 Ressourcen-Slots nebeneinander, von LINKS nach RECHTS in dieser festen Reihenfolge:
+   Slot 1 = CASH (Geldscheine-Icon, ganz links)
+   Slot 2 = ARMS (Patronen/Munitions-Icon)
+   Slot 3 = CARGO (braune Holzkisten-Icon, Mitte)
+   Slot 4 = METAL (Silberbarren-Icon, vierter von links)
+   Slot 5 = DIAMOND (Diamant/Edelstein-Icon, ganz rechts)
+3. Unter jedem Slot: ein Zahlenwert ODER "-"
 
-ZAHLENFORMAT: "7,25 M" = 7250000, "1,5 M" = 1500000, "500 K" = 500000, "-" = 0
+WICHTIG - Metal vs Diamond:
+- Slot 4 (METAL) ist der VIERTE Slot von links = zweiter von rechts
+- Slot 5 (DIAMOND) ist der FÜNFTE Slot = ganz rechts außen
+- Zähle die Slots immer von links nach rechts: 1, 2, 3, 4, 5
 
-SCHRITT 1: Liste alle Einträge mit Empfänger "Bam bamm" auf.
-Für JEDEN Bam-bamm-Eintrag schreibe:
-Zeile X: Cash=[wert], Arms=[wert], Cargo=[wert], Metal=[wert], Diamond=[wert]
+ZAHLENFORMAT: "7,25 M" = 7250000, "500 K" = 500000, "-" = 0
 
-SCHRITT 2: Summiere jeden Ressourcentyp über alle Zeilen.
+AUFGABE - gehe so vor:
+Schritt 1: Finde alle Einträge mit "Bam bamm" im grünen Header.
+Schritt 2: Für jeden Bam-bamm-Eintrag, zähle die 5 Slots von links nach rechts und notiere:
+  Zeile X: Slot1(Cash)=[wert], Slot2(Arms)=[wert], Slot3(Cargo)=[wert], Slot4(Metal)=[wert], Slot5(Diamond)=[wert]
+Schritt 3: Summiere alle Werte pro Ressource.
+Schritt 4: Ausgabe als JSON in der letzten Zeile.
 
-SCHRITT 3: Gib NUR dieses JSON aus (letzte Zeile deiner Antwort, kein Markdown):
-{"Cash":0,"Arms":0,"Cargo":0,"Metal":0,"Diamond":0}
+Ignoriere "sind von"-Einträge und alle anderen Empfänger.
 
-Ignoriere alle Einträge mit "sind von" und alle Einträge mit anderen Empfängern als "Bam bamm".`;
+Letzte Zeile der Antwort (nur JSON, kein Markdown):
+{"Cash":0,"Arms":0,"Cargo":0,"Metal":0,"Diamond":0}`;
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -64,12 +70,12 @@ Ignoriere alle Einträge mit "sind von" und alle Einträge mit anderen Empfänge
     }
 
     const data = await response.json();
-    let text = data.content?.[0]?.text?.trim() ?? "";
+    const text = data.content?.[0]?.text?.trim() ?? "";
 
     // Letztes JSON-Objekt aus der Antwort extrahieren (nach dem Reasoning)
-    const jsonMatch = text.match(/\{[^{}]*"Cash"[^{}]*\}/);
+    const jsonMatch = text.match(/\{[^{}]*"Cash"[^{}]*\}/g);
     if (!jsonMatch) throw new Error(`Kein JSON in Antwort: ${text.slice(0, 200)}`);
-    const parsed = JSON.parse(jsonMatch[0]);
+    const parsed = JSON.parse(jsonMatch[jsonMatch.length - 1]);
     return NextResponse.json({ result: parsed });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Unbekannter Fehler";
