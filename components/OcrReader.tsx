@@ -32,10 +32,10 @@ function parseValue(raw: string): number | null {
   return Math.round(num);
 }
 
+type StatusType = "idle" | "loading" | "done" | "error" | "no_recipient";
+
 export default function OcrReader({ imageUrl, onResult }: Props) {
-  const [status, setStatus] = useState
-    "idle" | "loading" | "done" | "error" | "no_recipient"
-  >("idle");
+  const [status, setStatus] = useState<StatusType>("idle");
   const [suggestion, setSuggestion] = useState<OcrResult | null>(null);
   const [confirmed, setConfirmed] = useState(false);
 
@@ -89,57 +89,36 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
 
         if (cancelled) return;
 
-        // --- SCHRITT 1: Header-Zeilen erkennen ---
-        // Suche alle Wörter "senden" und "sind" um Header-Typ zu bestimmen
-        type Header = {
-          y: number;
-          isBamBamm: boolean;
-          nextY: number;
-        };
-
         const words = data.words;
-        const imageHeight =
-          words.length > 0
-            ? Math.max(...words.map((w) => w.bbox.y1))
-            : 1600;
-        const imageWidth =
-          words.length > 0
-            ? Math.max(...words.map((w) => w.bbox.x1))
-            : 720;
+        const imageHeight = words.length > 0 ? Math.max(...words.map((w) => w.bbox.y1)) : 1600;
+        const imageWidth = words.length > 0 ? Math.max(...words.map((w) => w.bbox.x1)) : 720;
 
-        // Finde alle "senden an:" Header-Zeilen
-        // Ein Header ist erkennbar durch das Wort "senden" in einer Zeile
-        const sendenWords = words.filter(
-          (w) => w.text.toLowerCase() === "senden"
-        );
+        // SCHRITT 1: Header-Zeilen erkennen
+        type Header = { y: number; isBamBamm: boolean; nextY: number };
+
+        const sendenWords = words.filter((w) => w.text.toLowerCase() === "senden");
 
         if (sendenWords.length === 0) {
           setStatus("no_recipient");
           return;
         }
 
-        // Für jeden "senden"-Header: lies den Empfänger-Namen
-        // Der Name steht rechts vom "an:" in derselben Y-Zeile (±30px)
         const headers: Header[] = [];
+        const tolerance = Math.max(30, (imageHeight / 1600) * 30);
 
         for (let i = 0; i < sendenWords.length; i++) {
           const sw = sendenWords[i];
           const headerY = sw.bbox.y0;
-          const tolerance = Math.max(30, (imageHeight / 1600) * 30);
 
-          // Alle Wörter in dieser Header-Zeile sammeln
           const lineWords = words
-            .filter(
-              (w) =>
-                Math.abs(w.bbox.y0 - headerY) < tolerance
-            )
+            .filter((w) => Math.abs(w.bbox.y0 - headerY) < tolerance)
             .map((w) => w.text.toLowerCase())
             .join(" ");
 
-          const isBamBamm = lineWords.includes(BAM_BAMM) ||
+          const isBamBamm =
+            lineWords.includes(BAM_BAMM) ||
             (lineWords.includes("bam") && lineWords.includes("bamm"));
 
-          // nextY = Y-Start des nächsten Headers (oder Bildende)
           const nextY =
             i + 1 < sendenWords.length
               ? sendenWords[i + 1].bbox.y0
@@ -148,14 +127,13 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
           headers.push({ y: headerY, isBamBamm, nextY });
         }
 
-        // Prüfe ob mindestens ein Bam-bamm-Header vorhanden
         const bamHeaders = headers.filter((h) => h.isBamBamm);
         if (bamHeaders.length === 0) {
           setStatus("no_recipient");
           return;
         }
 
-        // --- SCHRITT 2: Wörter zusammenführen (Zahl + Suffix) ---
+        // SCHRITT 2: Wörter zusammenführen (Zahl + Suffix)
         type MergedWord = { text: string; x: number; y: number };
         const merged: MergedWord[] = [];
 
@@ -163,35 +141,22 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
           const w = words[i];
           const next = words[i + 1];
           const isNumber = /^\d[\d.,]*$/.test(w.text.trim());
-          const nextIsSuffix =
-            next && /^[KkMm]$/.test(next.text.trim());
-          const nextIsClose =
-            next && next.bbox.x0 - w.bbox.x1 < 60;
+          const nextIsSuffix = next && /^[KkMm]$/.test(next.text.trim());
+          const nextIsClose = next && next.bbox.x0 - w.bbox.x1 < 60;
 
           if (isNumber && nextIsSuffix && nextIsClose) {
-            merged.push({
-              text: w.text.trim() + next.text.trim(),
-              x: w.bbox.x0,
-              y: w.bbox.y0,
-            });
+            merged.push({ text: w.text.trim() + next.text.trim(), x: w.bbox.x0, y: w.bbox.y0 });
             i++;
           } else {
-            merged.push({
-              text: w.text.trim(),
-              x: w.bbox.x0,
-              y: w.bbox.y0,
-            });
+            merged.push({ text: w.text.trim(), x: w.bbox.x0, y: w.bbox.y0 });
           }
         }
 
-        // --- SCHRITT 3: Spaltenberechnung ---
-        // Nur Werte aus Bam-bamm-Bereichen für Spaltenberechnung nutzen
+        // SCHRITT 3: Spaltenberechnung nur aus Bam-bamm-Bereichen
         const bamValueWords = merged.filter((w) => {
           const v = parseValue(w.text);
           if (!v || v < 1000) return false;
-          return bamHeaders.some(
-            (h) => w.y > h.y && w.y < h.nextY
-          );
+          return bamHeaders.some((h) => w.y > h.y && w.y < h.nextY);
         });
 
         let colWidth: number;
@@ -204,7 +169,6 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
           colOffset = minX - (maxX - minX) / 8;
           colWidth = (maxX - colOffset) / 4.5;
         } else if (bamValueWords.length === 1) {
-          // Nur ein Wert: Spalte anhand X-Position schätzen
           colOffset = 0;
           colWidth = imageWidth / 5;
         } else {
@@ -213,30 +177,22 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
         }
 
         function getCol(x: number): number {
-          return Math.min(
-            Math.max(Math.floor((x - colOffset) / colWidth), 0),
-            4
-          );
+          return Math.min(Math.max(Math.floor((x - colOffset) / colWidth), 0), 4);
         }
 
-        // --- SCHRITT 4: Nur Werte aus Bam-bamm-Zeilen summieren ---
+        // SCHRITT 4: Nur Werte aus Bam-bamm-Zeilen summieren
         const totals = [0, 0, 0, 0, 0];
 
         for (const w of merged) {
           const value = parseValue(w.text);
           if (!value || value < 1000) continue;
-
-          // Prüfe ob dieses Wort in einem Bam-bamm-Bereich liegt
-          const inBamArea = bamHeaders.some(
-            (h) => w.y > h.y && w.y < h.nextY
-          );
+          const inBamArea = bamHeaders.some((h) => w.y > h.y && w.y < h.nextY);
           if (!inBamArea) continue;
-
           const col = getCol(w.x);
           totals[col] += value;
         }
 
-        // --- SCHRITT 5: Ergebnis zusammenstellen ---
+        // SCHRITT 5: Ergebnis
         const result: OcrResult = {
           Cash: totals[0] > 0 ? String(totals[0]) : "",
           Arms: totals[1] > 0 ? String(totals[1]) : "",
@@ -259,9 +215,7 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
     }
 
     runOcr();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [imageUrl]);
 
   function handleConfirm() {
