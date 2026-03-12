@@ -31,40 +31,21 @@ function parseValue(raw: string): number | null {
   return Math.round(num);
 }
 
-// Prüft ob ein Wort ein Header-Anker ist (senden-Varianten ODER "bam")
-function isHeaderAnchor(text: string): boolean {
-  const t = text.toLowerCase().trim();
-  // "senden" und häufige OCR-Fehler davon
-  if (/^s[ae]n[dt][ae]n$/.test(t)) return true;
-  // "bam" als direkter Anker (robust erkannt)
-  if (t === "bam") return true;
-  return false;
-}
-
-// Prüft ob eine Header-Zeile auf Bam bamm zeigt
-function lineIsBamBamm(lineText: string): boolean {
-  const t = lineText.toLowerCase();
-  return t.includes("bam");
-}
-
-// Prüft ob eine Header-Zeile eine "sind von"-Zeile ist (ignorieren)
-function lineIsSindVon(lineText: string): boolean {
-  const t = lineText.toLowerCase();
-  return t.includes("sind") && t.includes("von");
-}
-
 type StatusType = "idle" | "loading" | "done" | "error" | "no_recipient";
 
 export default function OcrReader({ imageUrl, onResult }: Props) {
   const [status, setStatus] = useState<StatusType>("idle");
   const [suggestion, setSuggestion] = useState<OcrResult | null>(null);
   const [confirmed, setConfirmed] = useState(false);
+  const [debugWords, setDebugWords] = useState<string[]>([]);
+  const [showDebug, setShowDebug] = useState(false);
 
   useEffect(() => {
     if (!imageUrl) {
       setStatus("idle");
       setSuggestion(null);
       setConfirmed(false);
+      setDebugWords([]);
       return;
     }
 
@@ -72,6 +53,7 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
     setStatus("loading");
     setSuggestion(null);
     setConfirmed(false);
+    setDebugWords([]);
 
     async function runOcr() {
       try {
@@ -111,23 +93,24 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
         if (cancelled) return;
 
         const words = data.words;
-        const imageHeight =
-          words.length > 0
-            ? Math.max(...words.map((w) => w.bbox.y1))
-            : 1600;
-        const imageWidth =
-          words.length > 0
-            ? Math.max(...words.map((w) => w.bbox.x1))
-            : 720;
 
-        // SCHRITT 1: Header-Zeilen erkennen
-        // Anker: "senden"-Varianten oder "bam" — robust gegen OCR-Fehler
+        // DEBUG: alle erkannten Wörter speichern
+        setDebugWords(words.map((w) => `"${w.text}" (y=${w.bbox.y0})`));
+
+        const imageHeight = words.length > 0 ? Math.max(...words.map((w) => w.bbox.y1)) : 1600;
+        const imageWidth = words.length > 0 ? Math.max(...words.map((w) => w.bbox.x1)) : 720;
+
+        // Header-Erkennung: suche "bam" oder "senden"-Varianten
+        const tolerance = Math.max(25, (imageHeight / 1600) * 25);
+
         type Header = { y: number; isBamBamm: boolean; nextY: number };
 
-        const anchorWords = words.filter((w) => isHeaderAnchor(w.text));
+        const anchorWords = words.filter((w) => {
+          const t = w.text.toLowerCase().trim();
+          return t === "bam" || /^s[ae]n[dt][ae]n$/.test(t);
+        });
 
-        // Dedupliziere: mehrere Anker in derselben Zeile → nur einer
-        const tolerance = Math.max(25, (imageHeight / 1600) * 25);
+        // Dedupliziere nach Y
         const seenY: number[] = [];
         const uniqueAnchors = anchorWords.filter((w) => {
           const isDup = seenY.some((y) => Math.abs(y - w.bbox.y0) < tolerance);
@@ -135,12 +118,6 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
           return !isDup;
         });
 
-        if (uniqueAnchors.length === 0) {
-          setStatus("no_recipient");
-          return;
-        }
-
-        // Sortiere nach Y-Position
         uniqueAnchors.sort((a, b) => a.bbox.y0 - b.bbox.y0);
 
         const headers: Header[] = [];
@@ -149,16 +126,15 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
           const anchor = uniqueAnchors[i];
           const headerY = anchor.bbox.y0;
 
-          // Alle Wörter in dieser Header-Zeile (±tolerance px)
           const lineText = words
             .filter((w) => Math.abs(w.bbox.y0 - headerY) < tolerance)
-            .map((w) => w.text)
+            .map((w) => w.text.toLowerCase())
             .join(" ");
 
-          // "sind von"-Zeilen komplett ignorieren
-          if (lineIsSindVon(lineText)) continue;
+          // "sind von" ignorieren
+          if (lineText.includes("sind") && lineText.includes("von")) continue;
 
-          const isBamBamm = lineIsBamBamm(lineText);
+          const isBamBamm = lineText.includes("bam");
 
           const nextY =
             i + 1 < uniqueAnchors.length
@@ -174,7 +150,7 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
           return;
         }
 
-        // SCHRITT 2: Wörter zusammenführen (Zahl + Suffix)
+        // Wörter zusammenführen
         type MergedWord = { text: string; x: number; y: number };
         const merged: MergedWord[] = [];
 
@@ -186,22 +162,13 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
           const nextIsClose = next && next.bbox.x0 - w.bbox.x1 < 60;
 
           if (isNumber && nextIsSuffix && nextIsClose) {
-            merged.push({
-              text: w.text.trim() + next.text.trim(),
-              x: w.bbox.x0,
-              y: w.bbox.y0,
-            });
+            merged.push({ text: w.text.trim() + next.text.trim(), x: w.bbox.x0, y: w.bbox.y0 });
             i++;
           } else {
-            merged.push({
-              text: w.text.trim(),
-              x: w.bbox.x0,
-              y: w.bbox.y0,
-            });
+            merged.push({ text: w.text.trim(), x: w.bbox.x0, y: w.bbox.y0 });
           }
         }
 
-        // SCHRITT 3: Spaltenberechnung nur aus Bam-bamm-Bereichen
         const bamValueWords = merged.filter((w) => {
           const v = parseValue(w.text);
           if (!v || v < 1000) return false;
@@ -226,27 +193,19 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
         }
 
         function getCol(x: number): number {
-          return Math.min(
-            Math.max(Math.floor((x - colOffset) / colWidth), 0),
-            4
-          );
+          return Math.min(Math.max(Math.floor((x - colOffset) / colWidth), 0), 4);
         }
 
-        // SCHRITT 4: Nur Werte aus Bam-bamm-Zeilen summieren
         const totals = [0, 0, 0, 0, 0];
-
         for (const w of merged) {
           const value = parseValue(w.text);
           if (!value || value < 1000) continue;
-          const inBamArea = bamHeaders.some(
-            (h) => w.y > h.y && w.y < h.nextY
-          );
+          const inBamArea = bamHeaders.some((h) => w.y > h.y && w.y < h.nextY);
           if (!inBamArea) continue;
           const col = getCol(w.x);
           totals[col] += value;
         }
 
-        // SCHRITT 5: Ergebnis
         const result: OcrResult = {
           Cash: totals[0] > 0 ? String(totals[0]) : "",
           Arms: totals[1] > 0 ? String(totals[1]) : "",
@@ -269,9 +228,7 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
     }
 
     runOcr();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [imageUrl]);
 
   function handleConfirm() {
@@ -338,6 +295,25 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
         <p className="text-gray-500 text-xs">
           ✓ Werte wurden ins Formular übernommen.
         </p>
+      )}
+
+      {/* DEBUG: Erkannte Wörter */}
+      {debugWords.length > 0 && (
+        <div className="border-t border-gray-800 pt-2">
+          <button
+            onClick={() => setShowDebug(!showDebug)}
+            className="text-gray-600 text-xs hover:text-gray-400"
+          >
+            🔍 Debug: {debugWords.length} Wörter erkannt
+          </button>
+          {showDebug && (
+            <div className="mt-2 max-h-40 overflow-y-auto bg-[#0a0a0f] rounded p-2">
+              {debugWords.map((w, i) => (
+                <div key={i} className="text-gray-500 text-xs font-mono">{w}</div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
