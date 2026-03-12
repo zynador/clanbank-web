@@ -26,7 +26,6 @@ function parseValue(raw: string): number | null {
   const suffix = match[2];
   if (suffix === "K") return Math.round(num * 1_000);
   if (suffix === "M") return Math.round(num * 1_000_000);
-  // Kein B (Milliarden) – kommt im Spiel nicht vor
   if (num > 100) return null;
   return Math.round(num);
 }
@@ -80,7 +79,6 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
           : 1600;
         const colWidth = imageWidth / 5;
 
-        // Benachbarte Wörter zusammenfügen: "6,81" + "M" → "6,81M"
         type MergedWord = { text: string; x: number; y: number; };
         const words = data.words;
         const merged: MergedWord[] = [];
@@ -89,7 +87,7 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
           const w = words[i];
           const next = words[i + 1];
           const isNumber = /^\d[\d.,]*$/.test(w.text.trim());
-          const nextIsSuffix = next && /^[KkMmBb]$/.test(next.text.trim());
+          const nextIsSuffix = next && /^[KkMm]$/.test(next.text.trim());
           const nextIsClose = next && (next.bbox.x0 - w.bbox.x1) < 60;
 
           if (isNumber && nextIsSuffix && nextIsClose) {
@@ -100,25 +98,21 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
           }
         }
 
-        // Y-Positionen der "senden an" Zeilen
         const sendenAnYPositions = data.words
           .filter(w => w.text.toLowerCase() === "senden")
           .map(w => w.bbox.y0);
 
-        console.log("=== SENDEN AN Y:", sendenAnYPositions);
-
-        // Datenbereich: oberhalb erster "senden an" Zeile abschneiden
         const firstSendenAnY = sendenAnYPositions.length > 0
           ? Math.min(...sendenAnYPositions)
           : imageHeight * 0.35;
         const dataAreaStart = firstSendenAnY * 0.8;
 
         console.log("=== BILDGRÖSSE:", imageWidth, "x", imageHeight);
+        console.log("=== SENDEN AN Y:", sendenAnYPositions);
         console.log("=== DATENBEREICH AB Y:", dataAreaStart);
         console.log("=== ALLE MERGED:", merged.map(w => ({ text: w.text, x: w.x, y: w.y })));
-          const v = parseValue(w.text);
-          return v !== null;
-        }).map(w => ({ text: w.text, value: parseValue(w.text), x: w.x, y: w.y })));
+        const mergedMitWert = merged.filter(w => parseValue(w.text) !== null);
+        console.log("=== MERGED MIT WERT:", mergedMitWert.map(w => ({ text: w.text, value: parseValue(w.text), x: w.x, y: w.y })));
 
         const totals = [0, 0, 0, 0, 0];
 
@@ -126,10 +120,8 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
           const value = parseValue(w.text);
           if (!value || value < 1000) continue;
 
-          // Muss im Datenbereich liegen
           if (w.y < dataAreaStart) continue;
 
-          // Muss unter einer "senden an" Zeile liegen
           const isUnderSendenAn = sendenAnYPositions.some(y => w.y > y);
           if (!isUnderSendenAn) continue;
 
