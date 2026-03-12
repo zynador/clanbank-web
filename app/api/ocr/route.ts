@@ -14,14 +14,22 @@ export async function POST(req: NextRequest) {
     const contentType = imgRes.headers.get("content-type") || "image/jpeg";
 
     const prompt = `Du analysierst einen Screenshot aus dem Spiel "The Grand Mafia".
-Das Bild zeigt eine Ressourcentransaktionsliste.
-Finde alle Einträge die an "Bam bamm" gesendet wurden (Empfängername im grünen/orangenen Header).
-Ignoriere Einträge mit "sind von" (eingehende Transfers).
-Ignoriere Einträge an andere Empfänger.
-Summiere die gesendeten Mengen pro Ressourcentyp: Cash, Arms, Cargo, Metal, Diamond.
-Antworte NUR mit diesem JSON-Objekt, kein Markdown, keine Backticks, keine Erklärung:
-{"Cash":0,"Arms":0,"Cargo":0,"Metal":0,"Diamond":0}
-Nur ganze Zahlen. 0 wenn nicht vorhanden.`;
+Das Bild zeigt einen Ressourcen-Transport-Bericht mit mehreren Einträgen.
+
+Jeder Eintrag hat einen grünen Header mit "Ressourcen senden an: [Name]".
+Darunter stehen 5 Ressourcen-Spalten mit Icons: Cash, Arms, Cargo, Metal, Diamond.
+Werte wie "5 M" bedeuten 5.000.000. "500 K" bedeutet 500.000. "-" bedeutet 0.
+
+Deine Aufgabe:
+1. Finde ALLE Einträge wo der Empfänger "Bam bamm" ist
+2. Summiere die Werte pro Ressource über ALLE Bam-bamm-Einträge
+3. Ignoriere Einträge an andere Empfänger
+4. Ignoriere Einträge mit "sind von" (eingehende Transfers)
+
+Gib die Summen als ganze Zahlen zurück (5M = 5000000).
+
+Antworte NUR mit diesem JSON, kein Markdown, keine Backticks, keine Erklärung:
+{"Cash":0,"Arms":0,"Cargo":0,"Metal":0,"Diamond":0}`;
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
