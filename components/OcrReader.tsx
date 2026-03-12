@@ -75,6 +75,9 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
         const imageWidth = data.words.length > 0
           ? Math.max(...data.words.map(w => w.bbox.x1))
           : 720;
+        const imageHeight = data.words.length > 0
+          ? Math.max(...data.words.map(w => w.bbox.y1))
+          : 1600;
         const colWidth = imageWidth / 5;
 
         // Benachbarte Wörter zusammenfügen: "6,81" + "M" → "6,81M"
@@ -90,17 +93,12 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
           const nextIsClose = next && (next.bbox.x0 - w.bbox.x1) < 60;
 
           if (isNumber && nextIsSuffix && nextIsClose) {
-            // Zusammenfügen
             merged.push({ text: w.text.trim() + next.text.trim(), x: w.bbox.x0, y: w.bbox.y0 });
-            i++; // nächstes Wort überspringen
+            i++;
           } else {
             merged.push({ text: w.text.trim(), x: w.bbox.x0, y: w.bbox.y0 });
           }
         }
-
-        console.log("=== MERGED WORDS MIT WERT:", merged.filter(w => parseValue(w.text) !== null).map(w => ({
-          text: w.text, value: parseValue(w.text), x: w.x, y: w.y, spalte: Math.floor(w.x / colWidth)
-        })));
 
         // Y-Positionen der "senden an" Zeilen
         const sendenAnYPositions = data.words
@@ -109,11 +107,23 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
 
         console.log("=== SENDEN AN Y:", sendenAnYPositions);
 
+        // Datenbereich: oberhalb erster "senden an" Zeile abschneiden
+        const firstSendenAnY = sendenAnYPositions.length > 0
+          ? Math.min(...sendenAnYPositions)
+          : imageHeight * 0.35;
+        const dataAreaStart = firstSendenAnY * 0.8;
+
+        console.log("=== BILDGRÖSSE:", imageWidth, "x", imageHeight);
+        console.log("=== DATENBEREICH AB Y:", dataAreaStart);
+
         const totals = [0, 0, 0, 0, 0];
 
         for (const w of merged) {
           const value = parseValue(w.text);
           if (!value || value < 1000) continue;
+
+          // Muss im Datenbereich liegen
+          if (w.y < dataAreaStart) continue;
 
           // Muss unter einer "senden an" Zeile liegen
           const isUnderSendenAn = sendenAnYPositions.some(y => w.y > y);
