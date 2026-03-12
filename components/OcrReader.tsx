@@ -17,6 +17,7 @@ type Props = {
 };
 
 const RESOURCES = ["Cash", "Arms", "Cargo", "Metal", "Diamond"] as const;
+const BAM_BAMM = "bam bamm";
 
 function parseValue(raw: string): number | null {
   const cleaned = raw.replace(/\s/g, "").replace(/,/g, ".").toUpperCase();
@@ -31,13 +32,10 @@ function parseValue(raw: string): number | null {
   return Math.round(num);
 }
 
-function hasValidDeposit(text: string): boolean {
-  const n = text.toLowerCase();
-  return n.includes("senden an") && !n.includes("sind von");
-}
-
 export default function OcrReader({ imageUrl, onResult }: Props) {
-  const [status, setStatus] = useState<"idle" | "loading" | "done" | "error" | "no_recipient">("idle");
+  const [status, setStatus] = useState
+    "idle" | "loading" | "done" | "error" | "no_recipient"
+  >("idle");
   const [suggestion, setSuggestion] = useState<OcrResult | null>(null);
   const [confirmed, setConfirmed] = useState(false);
 
@@ -56,11 +54,13 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
 
     async function runOcr() {
       try {
-        const { data: signedData, error: signedError } = await supabase.storage
-          .from("screenshots")
-          .createSignedUrl(imageUrl!, 60);
+        const { data: signedData, error: signedError } =
+          await supabase.storage
+            .from("screenshots")
+            .createSignedUrl(imageUrl!, 60);
 
-        if (signedError || !signedData?.signedUrl) throw new Error("Signed URL fehlgeschlagen");
+        if (signedError || !signedData?.signedUrl)
+          throw new Error("Signed URL fehlgeschlagen");
 
         const img = await new Promise<HTMLImageElement>((resolve, reject) => {
           const el = new Image();
@@ -89,83 +89,154 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
 
         if (cancelled) return;
 
-        const fullText = data.text;
-        if (!hasValidDeposit(fullText)) {
+        // --- SCHRITT 1: Header-Zeilen erkennen ---
+        // Suche alle Wörter "senden" und "sind" um Header-Typ zu bestimmen
+        type Header = {
+          y: number;
+          isBamBamm: boolean;
+          nextY: number;
+        };
+
+        const words = data.words;
+        const imageHeight =
+          words.length > 0
+            ? Math.max(...words.map((w) => w.bbox.y1))
+            : 1600;
+        const imageWidth =
+          words.length > 0
+            ? Math.max(...words.map((w) => w.bbox.x1))
+            : 720;
+
+        // Finde alle "senden an:" Header-Zeilen
+        // Ein Header ist erkennbar durch das Wort "senden" in einer Zeile
+        const sendenWords = words.filter(
+          (w) => w.text.toLowerCase() === "senden"
+        );
+
+        if (sendenWords.length === 0) {
           setStatus("no_recipient");
           return;
         }
 
-        const imageWidth = data.words.length > 0
-          ? Math.max(...data.words.map(w => w.bbox.x1))
-          : 720;
-        const imageHeight = data.words.length > 0
-          ? Math.max(...data.words.map(w => w.bbox.y1))
-          : 1600;
+        // Für jeden "senden"-Header: lies den Empfänger-Namen
+        // Der Name steht rechts vom "an:" in derselben Y-Zeile (±30px)
+        const headers: Header[] = [];
 
+        for (let i = 0; i < sendenWords.length; i++) {
+          const sw = sendenWords[i];
+          const headerY = sw.bbox.y0;
+          const tolerance = Math.max(30, (imageHeight / 1600) * 30);
+
+          // Alle Wörter in dieser Header-Zeile sammeln
+          const lineWords = words
+            .filter(
+              (w) =>
+                Math.abs(w.bbox.y0 - headerY) < tolerance
+            )
+            .map((w) => w.text.toLowerCase())
+            .join(" ");
+
+          const isBamBamm = lineWords.includes(BAM_BAMM) ||
+            (lineWords.includes("bam") && lineWords.includes("bamm"));
+
+          // nextY = Y-Start des nächsten Headers (oder Bildende)
+          const nextY =
+            i + 1 < sendenWords.length
+              ? sendenWords[i + 1].bbox.y0
+              : imageHeight;
+
+          headers.push({ y: headerY, isBamBamm, nextY });
+        }
+
+        // Prüfe ob mindestens ein Bam-bamm-Header vorhanden
+        const bamHeaders = headers.filter((h) => h.isBamBamm);
+        if (bamHeaders.length === 0) {
+          setStatus("no_recipient");
+          return;
+        }
+
+        // --- SCHRITT 2: Wörter zusammenführen (Zahl + Suffix) ---
         type MergedWord = { text: string; x: number; y: number };
-        const words = data.words;
         const merged: MergedWord[] = [];
 
         for (let i = 0; i < words.length; i++) {
           const w = words[i];
           const next = words[i + 1];
           const isNumber = /^\d[\d.,]*$/.test(w.text.trim());
-          const nextIsSuffix = next && /^[KkMm]$/.test(next.text.trim());
-          const nextIsClose = next && (next.bbox.x0 - w.bbox.x1) < 60;
+          const nextIsSuffix =
+            next && /^[KkMm]$/.test(next.text.trim());
+          const nextIsClose =
+            next && next.bbox.x0 - w.bbox.x1 < 60;
 
           if (isNumber && nextIsSuffix && nextIsClose) {
-            merged.push({ text: w.text.trim() + next.text.trim(), x: w.bbox.x0, y: w.bbox.y0 });
+            merged.push({
+              text: w.text.trim() + next.text.trim(),
+              x: w.bbox.x0,
+              y: w.bbox.y0,
+            });
             i++;
           } else {
-            merged.push({ text: w.text.trim(), x: w.bbox.x0, y: w.bbox.y0 });
+            merged.push({
+              text: w.text.trim(),
+              x: w.bbox.x0,
+              y: w.bbox.y0,
+            });
           }
         }
 
-        const sendenAnYPositions = data.words
-          .filter(w => w.text.toLowerCase() === "senden")
-          .map(w => w.bbox.y0);
-
-        const firstSendenAnY = sendenAnYPositions.length > 0
-          ? Math.min(...sendenAnYPositions)
-          : imageHeight * 0.35;
-
-        const dataAreaStart = firstSendenAnY * 0.8;
-
-        const valueXPositions = merged
-          .filter(w => {
-            const v = parseValue(w.text);
-            return v !== null && v >= 1000 && w.y >= dataAreaStart;
-          })
-          .map(w => w.x);
+        // --- SCHRITT 3: Spaltenberechnung ---
+        // Nur Werte aus Bam-bamm-Bereichen für Spaltenberechnung nutzen
+        const bamValueWords = merged.filter((w) => {
+          const v = parseValue(w.text);
+          if (!v || v < 1000) return false;
+          return bamHeaders.some(
+            (h) => w.y > h.y && w.y < h.nextY
+          );
+        });
 
         let colWidth: number;
         let colOffset: number;
 
-        if (valueXPositions.length >= 2) {
-          const minX = Math.min(...valueXPositions);
-          const maxX = Math.max(...valueXPositions);
+        if (bamValueWords.length >= 2) {
+          const xPositions = bamValueWords.map((w) => w.x);
+          const minX = Math.min(...xPositions);
+          const maxX = Math.max(...xPositions);
           colOffset = minX - (maxX - minX) / 8;
           colWidth = (maxX - colOffset) / 4.5;
-        } else {
+        } else if (bamValueWords.length === 1) {
+          // Nur ein Wert: Spalte anhand X-Position schätzen
           colOffset = 0;
           colWidth = imageWidth / 5;
+        } else {
+          setStatus("error");
+          return;
         }
 
         function getCol(x: number): number {
-          return Math.min(Math.max(Math.floor((x - colOffset) / colWidth), 0), 4);
+          return Math.min(
+            Math.max(Math.floor((x - colOffset) / colWidth), 0),
+            4
+          );
         }
 
+        // --- SCHRITT 4: Nur Werte aus Bam-bamm-Zeilen summieren ---
         const totals = [0, 0, 0, 0, 0];
+
         for (const w of merged) {
           const value = parseValue(w.text);
           if (!value || value < 1000) continue;
-          if (w.y < dataAreaStart) continue;
-          const isUnderSendenAn = sendenAnYPositions.some(y => w.y > y);
-          if (!isUnderSendenAn) continue;
+
+          // Prüfe ob dieses Wort in einem Bam-bamm-Bereich liegt
+          const inBamArea = bamHeaders.some(
+            (h) => w.y > h.y && w.y < h.nextY
+          );
+          if (!inBamArea) continue;
+
           const col = getCol(w.x);
           totals[col] += value;
         }
 
+        // --- SCHRITT 5: Ergebnis zusammenstellen ---
         const result: OcrResult = {
           Cash: totals[0] > 0 ? String(totals[0]) : "",
           Arms: totals[1] > 0 ? String(totals[1]) : "",
@@ -174,7 +245,7 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
           Diamond: totals[4] > 0 ? String(totals[4]) : "",
         };
 
-        const hasAny = RESOURCES.some(r => result[r] !== "");
+        const hasAny = RESOURCES.some((r) => result[r] !== "");
         if (!hasAny) {
           setStatus("error");
           return;
@@ -188,7 +259,9 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
     }
 
     runOcr();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [imageUrl]);
 
   function handleConfirm() {
@@ -220,7 +293,9 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
       )}
       {status === "done" && suggestion && !confirmed && (
         <>
-          <p className="text-teal-400 font-medium text-xs uppercase tracking-wide">✓ Erkannte Werte</p>
+          <p className="text-teal-400 font-medium text-xs uppercase tracking-wide">
+            ✓ Erkannte Werte
+          </p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {RESOURCES.map((r) =>
               suggestion[r] ? (
@@ -250,7 +325,9 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
         </>
       )}
       {confirmed && (
-        <p className="text-gray-500 text-xs">✓ Werte wurden ins Formular übernommen.</p>
+        <p className="text-gray-500 text-xs">
+          ✓ Werte wurden ins Formular übernommen.
+        </p>
       )}
     </div>
   );
