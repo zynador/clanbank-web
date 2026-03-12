@@ -19,63 +19,23 @@ const RESOURCES = ["Cash", "Arms", "Cargo", "Metal", "Diamond"] as const;
 
 function parseValue(raw: string): number | null {
   const cleaned = raw.replace(/\s/g, "").replace(/,/g, ".").toUpperCase();
-  const match = cleaned.match(/^(\d+(?:\.\d+)?)\s*([KMB]?)$/);
+  // T→7 Korrektur (bekannter OCR-Fehler)
+  const fixed = cleaned.replace(/^T(\d)/, "7$1");
+  const match = fixed.match(/^(\d+(?:\.\d+)?)\s*([KMB]?)$/);
   if (!match) return null;
   const num = parseFloat(match[1]);
   const suffix = match[2];
   if (suffix === "K") return Math.round(num * 1_000);
   if (suffix === "M") return Math.round(num * 1_000_000);
   if (suffix === "B") return Math.round(num * 1_000_000_000);
+  // Plausibilitätsprüfung: Rohzahl ohne Suffix muss < 100 sein (sonst Komma verschluckt)
+  if (num > 100) return null;
   return Math.round(num);
 }
 
-// Prüft ob "senden an" vorkommt und "sind von" nicht
 function hasValidDeposit(text: string): boolean {
   const n = text.toLowerCase();
   return n.includes("senden an") && !n.includes("sind von");
-}
-
-function extractAmounts(rawText: string): OcrResult | null {
-  const lines = rawText.split("\n").map(l => l.trim()).filter(l => l.length > 0);
-  const totals: Record<string, number> = { Cash: 0, Arms: 0, Cargo: 0, Metal: 0, Diamond: 0 };
-  let foundAny = false;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (!line.toLowerCase().includes("senden an")) continue;
-
-    // Alle Zahlen mit K/M/B Suffix in dieser Zeile finden
-    const numMatches = [...line.matchAll(/(\d[\d.,]*\s*[KkMmBb]?)\s*(?=\s|$)/g)];
-    console.log("=== SENDEN AN ZEILE:", line);
-    console.log("=== GEFUNDENE ZAHLEN:", numMatches.map(m => m[1]));
-
-    for (const match of numMatches) {
-      const value = parseValue(match[1]);
-      if (!value || value <= 0) continue;
-
-      // Ressource anhand der Position im Text bestimmen
-      // Wir sammeln alle Werte und ordnen sie später zu
-      foundAny = true;
-
-      // Einfachste Heuristik: ersten unbesetzten Slot füllen
-      for (const res of RESOURCES) {
-        if (totals[res] === 0) {
-          totals[res] = value;
-          break;
-        }
-      }
-    }
-  }
-
-  if (!foundAny) return null;
-
-  return {
-    Cash: totals.Cash > 0 ? String(totals.Cash) : "",
-    Arms: totals.Arms > 0 ? String(totals.Arms) : "",
-    Cargo: totals.Cargo > 0 ? String(totals.Cargo) : "",
-    Metal: totals.Metal > 0 ? String(totals.Metal) : "",
-    Diamond: totals.Diamond > 0 ? String(totals.Diamond) : "",
-  };
 }
 
 export default function OcrReader({ imageUrl, onResult }: Props) {
@@ -111,24 +71,84 @@ export default function OcrReader({ imageUrl, onResult }: Props) {
 
         if (cancelled) return;
 
-        const text = data.text;
-        console.log("=== OCR RAW TEXT ===\n", text);
-        console.log("=== HAT GÜLTIGE EINZAHLUNG:", hasValidDeposit(text));
+        const fullText = data.text;
+        console.log("=== OCR RAW TEXT ===\n", fullText);
 
-        if (!hasValidDeposit(text)) {
+        if (!hasValidDeposit(fullText)) {
           setStatus("no_recipient");
           return;
         }
 
-        const amounts = extractAmounts(text);
-        console.log("=== AMOUNTS:", amounts);
+        // Bildbreite ermitteln für Spaltenberechnung
+        const imageWidth = data.words.length > 0
+          ? Math.max(...data.words.map(w => w.bbox.x1))
+          : 720;
+        const colWidth = imageWidth / 5;
 
-        if (!amounts) {
-          setStatus("error");
-          return;
+        console.log("=== BILDBREITE:", imageWidth, "SPALTENBREITE:", colWidth);
+
+        // Alle Wörter die wie Ressourcenwerte aussehen (Zahl + K/M oder nur Zahl)
+        const valueWords = data.words.filter(w => {
+          const t = w.text.trim();
+          return /^\d[\d.,]*\s*[KkMm]?$/.test(t) && t !== "-";
+        });
+
+        console.log("=== WERT-WÖRTER:", valueWords.map(w => ({
+          text: w.text,
+          x: w.bbox.x0,
+          y: w.bbox.y0,
+          spalte: Math.floor(w.bbox.x0 / colWidth)
+        })));
+
+        // Nur Wörter in Zeilen nach "senden an" berücksichtigen
+        // Wir suchen "senden an" Zeilen und schauen welche Wörter darunter liegen
+        const sendenAnWords = data.words.filter(w =>
+          w.text.toLowerCase().includes("senden") ||
+          w.text.toLowerCase().includes("an")
+        );
+
+        const sendenAnYPositions = sendenAnWords
+          .filter((w, i, arr) => {
+            // Gruppe von "senden" + "an" Wörter
+            return w.text.toLowerCase() === "senden" ||
+              (arr[i-1]?.text.toLowerCase() === "senden" && w.text.toLowerCase() === "an");
+          })
+          .map(w => w.bbox.y0);
+
+        console.log("=== SENDEN AN Y-POSITIONEN:", sendenAnYPositions);
+
+        // Totals pro Ressource (Spalte)
+        const totals = [0, 0, 0, 0, 0];
+
+        for (const word of valueWords) {
+          const value = parseValue(word.text);
+          if (!value || value < 100) continue; // Unter 100 ignorieren (Datum etc.)
+
+          // Spalte bestimmen (0=Cash, 1=Arms, 2=Cargo, 3=Metal, 4=Diamond)
+          const col = Math.min(Math.floor(word.bbox.x0 / colWidth), 4);
+
+          // Prüfen ob dieses Wort unter einer "senden an" Zeile liegt
+          const isUnderSendenAn = sendenAnYPositions.some(y => word.bbox.y0 > y);
+          if (!isUnderSendenAn) continue;
+
+          console.log(`=== WERT: ${word.text} → Spalte ${col} (${RESOURCES[col]}), y=${word.bbox.y0}`);
+          totals[col] += value;
         }
 
-        setSuggestion(amounts);
+        const result: OcrResult = {
+          Cash: totals[0] > 0 ? String(totals[0]) : "",
+          Arms: totals[1] > 0 ? String(totals[1]) : "",
+          Cargo: totals[2] > 0 ? String(totals[2]) : "",
+          Metal: totals[3] > 0 ? String(totals[3]) : "",
+          Diamond: totals[4] > 0 ? String(totals[4]) : "",
+        };
+
+        console.log("=== RESULT:", result);
+
+        const hasAny = RESOURCES.some(r => result[r] !== "");
+        if (!hasAny) { setStatus("error"); return; }
+
+        setSuggestion(result);
         setStatus("done");
       } catch (e) {
         console.error("OCR Fehler:", e);
