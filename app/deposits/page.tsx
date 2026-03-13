@@ -72,6 +72,7 @@ function DepositsContent() {
   const [note, setNote] = useState("");
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [isManualMode, setIsManualMode] = useState(false);
   const isOfficerOrAdmin = profile?.role === "admin" || profile?.role === "offizier";
 
   function handleOcrResult(amounts: Record<string, string>) {
@@ -86,6 +87,7 @@ function DepositsContent() {
 
   function handleOcrManual() {
     setFormAmounts({ Cash: "", Arms: "", Cargo: "", Metal: "", Diamond: "" });
+    setIsManualMode(true);
   }
 
   const fetchDeposits = useCallback(async () => {
@@ -120,6 +122,7 @@ function DepositsContent() {
       input_diamond: parseFloat(formAmounts.Diamond) || 0,
       input_note: note || null,
       input_screenshot_url: screenshotUrl,
+      input_manual: isManualMode,
     });
     if (err) { setError(err.message); }
     else {
@@ -127,6 +130,7 @@ function DepositsContent() {
       setFormAmounts({ Cash: "", Arms: "", Cargo: "", Metal: "", Diamond: "" });
       setNote("");
       setScreenshotUrl(null);
+      setIsManualMode(false);
       fetchDeposits();
     }
     setSubmitting(false);
