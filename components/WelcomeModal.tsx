@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, ChevronRight, ChevronLeft, Globe } from 'lucide-react'
 
 type Role = 'admin' | 'offizier' | 'mitglied'
 type Lang = 'de' | 'en'
@@ -202,14 +201,14 @@ export default function WelcomeModal({ role, isOpen, onClose }: WelcomeModalProp
               onClick={() => setLang(l => l === 'de' ? 'en' : 'de')}
               className="flex items-center gap-1 text-xs text-gray-400 hover:text-teal-400 transition-colors px-2 py-1 rounded border border-gray-600 hover:border-teal-600"
             >
-              <Globe size={12} />
-              {lang === 'de' ? 'EN' : 'DE'}
+              🌐 {lang === 'de' ? 'EN' : 'DE'}
             </button>
             <button
               onClick={handleClose}
-              className="text-gray-500 hover:text-white transition-colors p-1 ml-1"
+              className="text-gray-500 hover:text-white transition-colors p-1 text-lg leading-none ml-1"
+              aria-label="Schließen"
             >
-              <X size={18} />
+              ✕
             </button>
           </div>
         </div>
@@ -249,8 +248,7 @@ export default function WelcomeModal({ role, isOpen, onClose }: WelcomeModalProp
             disabled={step === 0}
             className="flex items-center gap-1 text-sm text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           >
-            <ChevronLeft size={16} />
-            {lang === 'de' ? 'Zurück' : 'Back'}
+            ← {lang === 'de' ? 'Zurück' : 'Back'}
           </button>
 
           <span className="text-xs text-gray-600">
@@ -262,8 +260,7 @@ export default function WelcomeModal({ role, isOpen, onClose }: WelcomeModalProp
               onClick={() => setStep(s => s + 1)}
               className="flex items-center gap-1 text-sm text-teal-400 hover:text-teal-300 transition-colors font-medium"
             >
-              {lang === 'de' ? 'Weiter' : 'Next'}
-              <ChevronRight size={16} />
+              {lang === 'de' ? 'Weiter' : 'Next'} →
             </button>
           ) : (
             <button
