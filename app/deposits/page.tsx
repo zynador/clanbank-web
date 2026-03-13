@@ -334,7 +334,7 @@ function DepositsContent() {
                 {lang === 'de' ? 'KI-Erkennung' : 'AI Recognition'}
                 <InfoTooltip de={t.tip_ocr.de} en={t.tip_ocr.en} lang={lang} position="bottom" />
               </span>
-              <OcrReader imageUrl={screenshotUrl} onResult={handleOcrResult} onManual={handleOcrManual} />
+              <OcrReader imageUrl={screenshotUrl} onResult={handleOcrResult} onManual={handleOcrManual} lang={lang} />
             </div>
             {isManualMode && screenshotUrl && (
               <p className="text-xs text-yellow-500/80 mt-2 flex items-center gap-1">
