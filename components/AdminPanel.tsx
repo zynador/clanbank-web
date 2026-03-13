@@ -327,12 +327,9 @@ export default function AdminPanel() {
           </div>
         )}
       </div>
-      {/* Starter-Mitglieder */}
+     {/* Starter-Mitglieder */}
       <StarterMembersPanel lang={lang} />
 
-    </div>
-  )
-}
     </div>
   )
 }
