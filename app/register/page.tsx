@@ -7,7 +7,13 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import Logo from "@/components/Logo";
 
-type Step = "code" | "details" | "success";
+type Step = "code" | "details" | "claim" | "success";
+
+interface StarterMember {
+  id: string
+  ingame_name: string
+  display_name: string | null
+}
 
 export default function RegisterPage() {
   const { signUp, session, loading } = useAuth();
@@ -29,6 +35,10 @@ export default function RegisterPage() {
 
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Schritt 3: Starter-Mitglied Claim
+  const [starterMembers, setStarterMembers] = useState<StarterMember[]>([])
+  const [selectedStarterId, setSelectedStarterId] = useState<string>("")
+  const [claimDone, setClaimDone] = useState(false)
 
   // Redirect if already logged in
   useEffect(() => {
@@ -102,13 +112,40 @@ export default function RegisterPage() {
       return;
     }
 
-    setStep("success");
-    setTimeout(() => {
-      router.replace("/dashboard");
-    }, 2000);
+   // Starter-Mitglieder für Claim-Schritt laden
+    const { data: starters } = await supabase
+      .from("starter_members")
+      .select("id, ingame_name, display_name")
+      .eq("status", "unclaimed")
+      .order("ingame_name")
+    setStarterMembers((starters as StarterMember[]) || [])
+    setStep("claim")
   }
 
-  if (loading) {
+  async function handleClaim() {
+    if (!selectedStarterId) return
+    setSubmitting(true)
+    setError(null)
+    const { data, error: rpcError } = await supabase.rpc("claim_starter_profile", {
+      starter_id: selectedStarterId,
+    })
+    setSubmitting(false)
+    if (rpcError || !data?.success) {
+      setError(rpcError?.message || data?.message || "Fehler beim Einreichen.")
+      return
+    }
+    setClaimDone(true)
+    setStep("success")
+  }
+
+  // Redirect nach Erfolg
+  useEffect(() => {
+    if (step === "success") {
+      const t = setTimeout(() => router.replace("/dashboard"), 2500)
+      return () => clearTimeout(t)
+    }
+  }, [step, router])
+
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-950">
         <div className="flex flex-col items-center gap-3">
@@ -119,6 +156,8 @@ export default function RegisterPage() {
     );
   }
 
+  if (loading) {
+    
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-950 px-4">
       <div className="w-full max-w-sm space-y-8">
@@ -312,6 +351,66 @@ export default function RegisterPage() {
           </form>
         )}
 
+        {/* Schritt 3: Starter-Mitglied Claim */}
+        {step === "claim" && (
+          <div className="space-y-5">
+            <div className="bg-teal-900/20 border border-teal-800/50 rounded-lg p-3 text-center">
+              <p className="text-sm text-teal-300">Registrierung erfolgreich ✓</p>
+            </div>
+
+            <div className="text-center space-y-1">
+              <h2 className="text-lg font-semibold text-gray-100">
+                Bist du bereits Clan-Mitglied?
+              </h2>
+              <p className="text-sm text-gray-400">
+                Wähle deinen Namen aus der Clan-Liste, falls du bereits eingetragen bist.
+              </p>
+            </div>
+
+            {error && (
+              <div className="bg-red-900/30 border border-red-800 text-red-300 text-sm rounded-lg p-3">
+                {error}
+              </div>
+            )}
+
+            {starterMembers.length > 0 ? (
+              <div className="space-y-3">
+                <select
+                  value={selectedStarterId}
+                  onChange={(e) => { setSelectedStarterId(e.target.value); setError(null) }}
+                  className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                >
+                  <option value="">— Ich bin nicht in der Liste —</option>
+                  {starterMembers.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.ingame_name}{m.display_name && m.display_name !== m.ingame_name ? ` (${m.display_name})` : ""}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={handleClaim}
+                  disabled={!selectedStarterId || submitting}
+                  className="w-full py-2 px-4 bg-teal-600 hover:bg-teal-500 disabled:bg-teal-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
+                >
+                  {submitting ? "Einreichen..." : "Zuordnung beantragen"}
+                </button>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 text-center">
+                Keine offenen Einträge in der Clan-Liste vorhanden.
+              </p>
+            )}
+
+            <button
+              onClick={() => setStep("success")}
+              disabled={submitting}
+              className="w-full py-2 px-4 bg-gray-800 hover:bg-gray-700 text-gray-400 text-sm rounded-lg transition-colors"
+            >
+              Überspringen – ich bin neu im Clan
+            </button>
+          </div>
+        )}
+
         {/* Success */}
         {step === "success" && (
           <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 text-center space-y-4">
@@ -319,9 +418,15 @@ export default function RegisterPage() {
             <h2 className="text-lg font-semibold text-gray-100">
               Willkommen in der Clanbank!
             </h2>
-            <p className="text-sm text-gray-400">
-              Dein Konto wurde erstellt. Du wirst gleich weitergeleitet...
-            </p>
+            {claimDone ? (
+              <p className="text-sm text-amber-400">
+                Zuordnung eingereicht – wartet auf Admin-Bestätigung. Du wirst weitergeleitet...
+              </p>
+            ) : (
+              <p className="text-sm text-gray-400">
+                Dein Konto wurde erstellt. Du wirst gleich weitergeleitet...
+              </p>
+            )}
           </div>
         )}
       </div>
