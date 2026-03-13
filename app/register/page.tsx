@@ -35,6 +35,7 @@ export default function RegisterPage() {
 
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
   // Schritt 3: Starter-Mitglied Claim
   const [starterMembers, setStarterMembers] = useState<StarterMember[]>([])
   const [selectedStarterId, setSelectedStarterId] = useState<string>("")
@@ -97,7 +98,7 @@ export default function RegisterPage() {
 
     setSubmitting(true);
 
-    const { error } = await signUp({
+    const { error: signUpError } = await signUp({
       username,
       password,
       displayName: displayName || username,
@@ -107,12 +108,12 @@ export default function RegisterPage() {
 
     setSubmitting(false);
 
-    if (error) {
-      setError(error);
+    if (signUpError) {
+      setError(signUpError);
       return;
     }
 
-   // Starter-Mitglieder für Claim-Schritt laden
+    // Starter-Mitglieder für Claim-Schritt laden
     const { data: starters } = await supabase
       .from("starter_members")
       .select("id, ingame_name, display_name")
@@ -122,6 +123,7 @@ export default function RegisterPage() {
     setStep("claim")
   }
 
+  // Step 3: Claim starter profile
   async function handleClaim() {
     if (!selectedStarterId) return
     setSubmitting(true)
@@ -146,6 +148,7 @@ export default function RegisterPage() {
     }
   }, [step, router])
 
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-950">
         <div className="flex flex-col items-center gap-3">
@@ -156,11 +159,10 @@ export default function RegisterPage() {
     );
   }
 
-  if (loading) {
-    
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-950 px-4">
       <div className="w-full max-w-sm space-y-8">
+
         {/* Logo */}
         <div className="flex justify-center">
           <Logo variant="large" />
@@ -183,10 +185,7 @@ export default function RegisterPage() {
             )}
 
             <div>
-              <label
-                htmlFor="inviteCode"
-                className="block text-sm font-medium text-gray-300 mb-1"
-              >
+              <label htmlFor="inviteCode" className="block text-sm font-medium text-gray-300 mb-1">
                 Einladungscode
               </label>
               <input
@@ -211,10 +210,7 @@ export default function RegisterPage() {
 
             <p className="text-center text-sm text-gray-500">
               Bereits registriert?{" "}
-              <Link
-                href="/login"
-                className="text-teal-400 hover:text-teal-300 transition-colors"
-              >
+              <Link href="/login" className="text-teal-400 hover:text-teal-300 transition-colors">
                 Anmelden
               </Link>
             </p>
@@ -237,10 +233,7 @@ export default function RegisterPage() {
             )}
 
             <div>
-              <label
-                htmlFor="username"
-                className="block text-sm font-medium text-gray-300 mb-1"
-              >
+              <label htmlFor="username" className="block text-sm font-medium text-gray-300 mb-1">
                 Benutzername *
               </label>
               <input
@@ -257,10 +250,7 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <label
-                htmlFor="displayName"
-                className="block text-sm font-medium text-gray-300 mb-1"
-              >
+              <label htmlFor="displayName" className="block text-sm font-medium text-gray-300 mb-1">
                 Anzeigename
               </label>
               <input
@@ -274,10 +264,7 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <label
-                htmlFor="ingameName"
-                className="block text-sm font-medium text-gray-300 mb-1"
-              >
+              <label htmlFor="ingameName" className="block text-sm font-medium text-gray-300 mb-1">
                 Ingame-Name
               </label>
               <input
@@ -291,10 +278,7 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <label
-                htmlFor="password"
-                className="block text-sm font-medium text-gray-300 mb-1"
-              >
+              <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-1">
                 Passwort *
               </label>
               <input
@@ -311,10 +295,7 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <label
-                htmlFor="passwordConfirm"
-                className="block text-sm font-medium text-gray-300 mb-1"
-              >
+              <label htmlFor="passwordConfirm" className="block text-sm font-medium text-gray-300 mb-1">
                 Passwort wiederholen *
               </label>
               <input
@@ -332,10 +313,7 @@ export default function RegisterPage() {
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={() => {
-                  setStep("code");
-                  setError(null);
-                }}
+                onClick={() => { setStep("code"); setError(null); }}
                 className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors"
               >
                 Zurück
@@ -351,7 +329,7 @@ export default function RegisterPage() {
           </form>
         )}
 
-        {/* Schritt 3: Starter-Mitglied Claim */}
+        {/* Step 3: Starter-Mitglied Claim */}
         {step === "claim" && (
           <div className="space-y-5">
             <div className="bg-teal-900/20 border border-teal-800/50 rounded-lg p-3 text-center">
@@ -377,13 +355,16 @@ export default function RegisterPage() {
               <div className="space-y-3">
                 <select
                   value={selectedStarterId}
-                  onChange={(e) => { setSelectedStarterId(e.target.value); setError(null) }}
+                  onChange={(e) => { setSelectedStarterId(e.target.value); setError(null); }}
                   className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
                 >
                   <option value="">— Ich bin nicht in der Liste —</option>
                   {starterMembers.map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.ingame_name}{m.display_name && m.display_name !== m.ingame_name ? ` (${m.display_name})` : ""}
+                      {m.ingame_name}
+                      {m.display_name && m.display_name !== m.ingame_name
+                        ? " (" + m.display_name + ")"
+                        : ""}
                     </option>
                   ))}
                 </select>
@@ -429,6 +410,7 @@ export default function RegisterPage() {
             )}
           </div>
         )}
+
       </div>
     </div>
   );
