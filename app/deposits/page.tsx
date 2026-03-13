@@ -66,14 +66,18 @@ function DepositsContent() {
 
   const isOfficerOrAdmin = profile?.role === "admin" || profile?.role === "offizier";
   function handleOcrResult(amounts: Record<string, string>) {
-  setFormAmounts((prev) => ({
-    Cash: amounts.Cash || prev.Cash,
-    Arms: amounts.Arms || prev.Arms,
-    Cargo: amounts.Cargo || prev.Cargo,
-    Metal: amounts.Metal || prev.Metal,
-    Diamond: amounts.Diamond || prev.Diamond,
-  }));
-}
+    setFormAmounts((prev) => ({
+      Cash: amounts.Cash || prev.Cash,
+      Arms: amounts.Arms || prev.Arms,
+      Cargo: amounts.Cargo || prev.Cargo,
+      Metal: amounts.Metal || prev.Metal,
+      Diamond: amounts.Diamond || prev.Diamond,
+    }));
+  }
+
+  function handleOcrManual() {
+    setFormAmounts({ Cash: "", Arms: "", Cargo: "", Metal: "", Diamond: "" });
+  }
 
   const fetchDeposits = useCallback(async () => {
     if (!profile) return;
@@ -234,7 +238,7 @@ function DepositsContent() {
                 }}
               />
             )}
-            <OcrReader imageUrl={screenshotUrl} onResult={handleOcrResult} />
+            <OcrReader imageUrl={screenshotUrl} onResult={handleOcrResult} onManual={handleOcrManual} />
           </div>
           <button
             onClick={handleSubmit}
