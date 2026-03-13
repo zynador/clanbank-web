@@ -117,7 +117,7 @@ function DashboardContent() {
         </div>
 
         {/* Tab-Navigation */}
-        <div className="max-w-6xl mx-auto px-4 flex gap-1 overflow-x-auto">
+        <div className="max-w-6xl mx-auto px-4 flex gap-1 flex-wrap overflow-visible">
           <TabButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')}>
             Dashboard
             <InfoTooltip de={t.tip_dashboard.de} en={t.tip_dashboard.en} lang={lang} position="bottom" />
