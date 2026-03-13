@@ -178,36 +178,54 @@ export default function AdminPanel() {
           {t.code_title[lang]}
           <InfoTooltip de={t.tip_code.de} en={t.tip_code.en} lang={lang} position="bottom" />
         </h3>
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="inline-flex items-center gap-1">
-            <button
-              onClick={handleGenerateCode}
-              disabled={generatingCode}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
-            >
-              {generatingCode ? t.generating[lang] : t.generate[lang]}
-            </button>
-            <InfoTooltip de={t.tip_generate.de} en={t.tip_generate.en} lang={lang} position="bottom" />
-          </span>
+      {/* Dauerhafter MAFIA2026 Code */}
+<div className="flex items-center gap-2 mb-4">
+  <span className="text-xs text-zinc-400">
+    {lang === 'de' ? 'Aktiver Clan-Code:' : 'Active clan code:'}
+  </span>
+  <code className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-emerald-400 font-mono text-lg tracking-widest">
+    MAFIA2026
+  </code>
+  <button
+    onClick={() => {
+      navigator.clipboard.writeText('MAFIA2026')
+      setFeedback({ type: 'success', text: t.copied[lang] })
+    }}
+    className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 text-sm rounded-lg transition-colors"
+  >
+    📋 {t.copy[lang]}
+  </button>
+</div>
 
-          {inviteCode && (
-            <div className="flex items-center gap-2">
-              <code className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-emerald-400 font-mono text-lg tracking-widest">
-                {inviteCode}
-              </code>
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(inviteCode)
-                  setFeedback({ type: 'success', text: t.copied[lang] })
-                }}
-                className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm rounded-lg transition-colors"
-              >
-                {t.copy[lang]}
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
+<div className="flex flex-wrap items-center gap-3">
+  <span className="inline-flex items-center gap-1">
+    <button
+      onClick={handleGenerateCode}
+      disabled={generatingCode}
+      className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-zinc-300 text-sm font-medium rounded-lg transition-colors"
+    >
+      {generatingCode ? t.generating[lang] : t.generate[lang]}
+    </button>
+    <InfoTooltip de={t.tip_generate.de} en={t.tip_generate.en} lang={lang} position="bottom" />
+  </span>
+
+  {inviteCode && (
+    <div className="flex items-center gap-2">
+      <code className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-emerald-400 font-mono text-lg tracking-widest">
+        {inviteCode}
+      </code>
+      <button
+        onClick={() => {
+          navigator.clipboard.writeText(inviteCode)
+          setFeedback({ type: 'success', text: t.copied[lang] })
+        }}
+        className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm rounded-lg transition-colors"
+      >
+        {t.copy[lang]}
+      </button>
+    </div>
+  )}
+</div>
 
       {/* Mitgliederliste */}
       <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl overflow-hidden">
