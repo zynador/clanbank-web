@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import InfoTooltip from '@/components/InfoTooltip'
+import StarterMembersPanel from '@/components/StarterMembersPanel'
 
 type Lang = 'de' | 'en'
 type UserRole = 'admin' | 'offizier' | 'mitglied'
@@ -326,6 +327,12 @@ export default function AdminPanel() {
           </div>
         )}
       </div>
+      {/* Starter-Mitglieder */}
+      <StarterMembersPanel lang={lang} />
+
+    </div>
+  )
+}
     </div>
   )
 }
