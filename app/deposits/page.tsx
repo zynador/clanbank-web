@@ -72,7 +72,7 @@ function DepositsContent() {
   const [note, setNote] = useState("");
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [isManualMode, setIsManualMode] = useState(false);
+  const [isManualMode, setIsManualMode] = useState(true);
   const isOfficerOrAdmin = profile?.role === "admin" || profile?.role === "offizier";
 
   function handleOcrResult(amounts: Record<string, string>) {
@@ -83,6 +83,7 @@ function DepositsContent() {
       Metal: amounts.Metal || prev.Metal,
       Diamond: amounts.Diamond || prev.Diamond,
     }));
+    setIsManualMode(false);
   }
 
   function handleOcrManual() {
