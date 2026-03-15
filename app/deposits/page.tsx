@@ -110,6 +110,7 @@ function DepositsContent() {
   })
   const [note, setNote] = useState('')
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null)
+  const [screenshotHash, setScreenshotHash] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [isManualMode, setIsManualMode] = useState(true)
   const isOfficerOrAdmin = profile?.role === 'admin' || profile?.role === 'offizier'
@@ -171,6 +172,7 @@ function DepositsContent() {
       input_note: note || null,
       input_screenshot_url: screenshotUrl,
       input_manual: isManualMode,
+      input_screenshot_hash: screenshotHash,
     })
     if (err) {
       setError(err.message)
@@ -179,6 +181,7 @@ function DepositsContent() {
       setFormAmounts({ Cash: '', Arms: '', Cargo: '', Metal: '', Diamond: '' })
       setNote('')
       setScreenshotUrl(null)
+      setScreenshotHash(null)
       setIsManualMode(false)
       fetchDeposits()
     }
@@ -326,7 +329,11 @@ function DepositsContent() {
               <ScreenshotUpload
                 clanId={profile.clan_id}
                 existingUrl={screenshotUrl}
-                onUploadComplete={(url) => setScreenshotUrl(url)}
+                isOfficerOrAdmin={isOfficerOrAdmin}
+                onUploadComplete={(url, hash) => {
+                  setScreenshotUrl(url)
+                  if (hash) setScreenshotHash(hash)
+                }}
               />
             )}
             <div className="mt-2">
