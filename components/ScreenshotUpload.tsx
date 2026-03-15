@@ -84,6 +84,7 @@ export default function ScreenshotUpload({
       return;
     }
     if (isDuplicate) {
+      await supabase.rpc('log_duplicate_attempt', { p_hash: hash })
       setError(
         isOfficerOrAdmin
           ? "⚠️ Duplikat erkannt: Dieser Screenshot wurde bereits für eine andere Einzahlung verwendet. Möglicher Betrugsversuch."
