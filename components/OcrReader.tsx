@@ -11,11 +11,20 @@ type OcrResult = {
   Diamond: string;
 };
 
+type OcrTransfer = {
+  timestamp: string;
+  Cash: number;
+  Arms: number;
+  Cargo: number;
+  Metal: number;
+  Diamond: number;
+};
+
 type Lang = "de" | "en";
 
 type Props = {
   imageUrl: string | null;
-  onResult: (amounts: OcrResult) => void;
+  onResult: (amounts: OcrResult, gameTimestamps: string[]) => void;
   onManual: () => void;
   lang?: Lang;
 };
@@ -25,16 +34,19 @@ type StatusType = "idle" | "loading" | "done" | "error";
 
 export default function OcrReader({ imageUrl, onResult, onManual, lang = "de" }: Props) {
   const [status, setStatus] = useState<StatusType>("idle");
-  const [suggestion, setSuggestion] = useState<OcrResult | null>(null);
+  const [newTransfers, setNewTransfers] = useState<OcrTransfer[]>([]);
+  const [knownTransfers, setKnownTransfers] = useState<OcrTransfer[]>([]);
   const [decision, setDecision] = useState<"none" | "accepted" | "manual">("none");
 
   const t = {
-    analyzing:   { de: "Screenshot wird analysiert...",       en: "Analyzing screenshot..." },
-    error:       { de: "✕ Erkennung fehlgeschlagen – bitte manuell eintragen.", en: "✕ Recognition failed – please enter manually." },
-    recognized:  { de: "✓ Erkannte Werte",                    en: "✓ Recognized values" },
-    accept:      { de: "Werte übernehmen",                    en: "Use values" },
-    manual:      { de: "Manuell eingeben",                    en: "Enter manually" },
-    warning:     {
+    analyzing:     { de: "Screenshot wird analysiert...",       en: "Analyzing screenshot..." },
+    error:         { de: "✕ Erkennung fehlgeschlagen – bitte manuell eintragen.", en: "✕ Recognition failed – please enter manually." },
+    recognized:    { de: "✓ Neue Transfers",                    en: "✓ New transfers" },
+    already_known: { de: "Bereits erfasst",                     en: "Already recorded" },
+    accept:        { de: "Werte übernehmen",                    en: "Use values" },
+    manual:        { de: "Manuell eingeben",                    en: "Enter manually" },
+    no_new:        { de: "Alle Transfers in diesem Screenshot wurden bereits erfasst.", en: "All transfers in this screenshot have already been recorded." },
+    warning: {
       de: "⚠️ Manuelle Eingabe nur verwenden, wenn die erkannten Werte nicht zum Screenshot passen. Manuell eingegebene Einzahlungen werden von einem Offizier geprüft, bevor sie in die Statistik zählen.",
       en: "⚠️ Only use manual entry if the recognized values don't match the screenshot. Manually entered deposits will be reviewed by an officer before counting in statistics.",
     },
@@ -45,23 +57,27 @@ export default function OcrReader({ imageUrl, onResult, onManual, lang = "de" }:
   useEffect(() => {
     if (!imageUrl) {
       setStatus("idle");
-      setSuggestion(null);
+      setNewTransfers([]);
+      setKnownTransfers([]);
       setDecision("none");
       return;
     }
     let cancelled = false;
     setStatus("loading");
-    setSuggestion(null);
+    setNewTransfers([]);
+    setKnownTransfers([]);
     setDecision("none");
 
     async function runOcr() {
       try {
+        // 1. Signed URL für OCR
         const { data: signedData, error: signedError } = await supabase.storage
           .from("screenshots")
           .createSignedUrl(imageUrl!, 300);
         if (signedError || !signedData?.signedUrl)
           throw new Error("Signed URL fehlgeschlagen: " + signedError?.message);
 
+        // 2. OCR aufrufen → Array von Einzeltransfers
         const res = await fetch("/api/ocr", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -72,31 +88,71 @@ export default function OcrReader({ imageUrl, onResult, onManual, lang = "de" }:
         if (json.error) throw new Error(json.error);
         if (cancelled) return;
 
-        const raw = json.result as Record<string, number>;
-        const result: OcrResult = {
-          Cash:    raw.Cash    > 0 ? String(raw.Cash)    : "",
-          Arms:    raw.Arms    > 0 ? String(raw.Arms)    : "",
-          Cargo:   raw.Cargo   > 0 ? String(raw.Cargo)   : "",
-          Metal:   raw.Metal   > 0 ? String(raw.Metal)   : "",
-          Diamond: raw.Diamond > 0 ? String(raw.Diamond) : "",
-        };
-        const hasAny = RESOURCES.some((r) => result[r] !== "");
-        if (!hasAny) { setStatus("error"); return; }
-        setSuggestion(result);
+        const transfers = json.result as OcrTransfer[];
+        if (!Array.isArray(transfers) || transfers.length === 0) {
+          setStatus("error");
+          return;
+        }
+
+        // 3. Bekannte Timestamps aus DB laden
+        const { data: knownData } = await supabase.rpc("get_known_timestamps");
+        const knownSet = new Set<string>((knownData as string[]) ?? []);
+
+        // 4. Transfers in neu / bereits erfasst aufteilen
+        const newT: OcrTransfer[] = [];
+        const knownT: OcrTransfer[] = [];
+        for (const transfer of transfers) {
+          if (knownSet.has(transfer.timestamp)) {
+            knownT.push(transfer);
+          } else {
+            newT.push(transfer);
+          }
+        }
+
+        if (cancelled) return;
+        setNewTransfers(newT);
+        setKnownTransfers(knownT);
         setStatus("done");
       } catch {
         if (!cancelled) setStatus("error");
       }
     }
+
     runOcr();
     return () => { cancelled = true; };
   }, [imageUrl]);
 
-  function handleAccept() {
-    if (suggestion) {
-      onResult(suggestion);
-      setDecision("accepted");
+  function sumTransfers(transfers: OcrTransfer[]): OcrResult {
+    const sums = { Cash: 0, Arms: 0, Cargo: 0, Metal: 0, Diamond: 0 };
+    for (const tr of transfers) {
+      sums.Cash    += tr.Cash;
+      sums.Arms    += tr.Arms;
+      sums.Cargo   += tr.Cargo;
+      sums.Metal   += tr.Metal;
+      sums.Diamond += tr.Diamond;
     }
+    return {
+      Cash:    sums.Cash    > 0 ? String(sums.Cash)    : "",
+      Arms:    sums.Arms    > 0 ? String(sums.Arms)    : "",
+      Cargo:   sums.Cargo   > 0 ? String(sums.Cargo)   : "",
+      Metal:   sums.Metal   > 0 ? String(sums.Metal)   : "",
+      Diamond: sums.Diamond > 0 ? String(sums.Diamond) : "",
+    };
+  }
+
+  function formatTransferRow(transfer: OcrTransfer): string {
+    const parts = RESOURCES
+      .filter((r) => transfer[r] > 0)
+      .map((r) => `${r} ${Number(transfer[r]).toLocaleString("de-DE")}`);
+    return parts.length > 0 ? parts.join(" · ") : "–";
+  }
+
+  function handleAccept() {
+    if (newTransfers.length === 0) return;
+    const result = sumTransfers(newTransfers);
+    const timestamps = newTransfers.map((tr) => tr.timestamp);
+    onResult(result, timestamps);
+    setDecision("accepted");
   }
 
   function handleManual() {
@@ -105,6 +161,8 @@ export default function OcrReader({ imageUrl, onResult, onManual, lang = "de" }:
   }
 
   if (status === "idle") return null;
+
+  const allAlreadyKnown = status === "done" && newTransfers.length === 0;
 
   return (
     <div className="mt-3 rounded-lg border border-gray-700 bg-[#0f1117] p-4 text-sm space-y-3">
@@ -120,27 +178,52 @@ export default function OcrReader({ imageUrl, onResult, onManual, lang = "de" }:
         <p className="text-red-400 text-xs">{t.error[lang]}</p>
       )}
 
-      {status === "done" && suggestion && decision === "none" && (
+      {status === "done" && decision === "none" && (
         <>
-          <p className="text-teal-400 font-medium text-xs uppercase tracking-wide">
-            {t.recognized[lang]}
-          </p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {RESOURCES.map((r) =>
-              suggestion[r] ? (
-                <div key={r} className="bg-[#161822] rounded px-3 py-2">
-                  <span className="text-gray-500 text-xs">{r}</span>
-                  <p className="text-white text-sm font-medium">
-                    {Number(suggestion[r]).toLocaleString("de-DE")}
-                  </p>
-                </div>
-              ) : null
-            )}
-          </div>
+          {/* Neue Transfers */}
+          {newTransfers.length > 0 && (
+            <>
+              <p className="text-teal-400 font-medium text-xs uppercase tracking-wide">
+                {t.recognized[lang]}
+              </p>
+              <div className="space-y-1">
+                {newTransfers.map((transfer, i) => (
+                  <div key={i} className="bg-[#161822] rounded px-3 py-2 flex justify-between items-center gap-4">
+                    <span className="text-gray-400 text-xs shrink-0">{transfer.timestamp}</span>
+                    <span className="text-white text-xs font-medium text-right">{formatTransferRow(transfer)}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* Bereits erfasste Transfers */}
+          {knownTransfers.length > 0 && (
+            <>
+              <p className="text-gray-600 font-medium text-xs uppercase tracking-wide mt-2">
+                {t.already_known[lang]}
+              </p>
+              <div className="space-y-1">
+                {knownTransfers.map((transfer, i) => (
+                  <div key={i} className="bg-[#0d0f14] rounded px-3 py-2 flex justify-between items-center gap-4 opacity-40">
+                    <span className="text-gray-500 text-xs line-through shrink-0">{transfer.timestamp}</span>
+                    <span className="text-gray-500 text-xs line-through text-right">{formatTransferRow(transfer)}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* Hinweis: alle bereits erfasst */}
+          {allAlreadyKnown && (
+            <p className="text-yellow-500 text-xs">{t.no_new[lang]}</p>
+          )}
+
           <div className="flex gap-2 pt-1">
             <button
               onClick={handleAccept}
-              className="flex-1 bg-teal-600 hover:bg-teal-500 text-white rounded-lg py-2 text-sm font-medium transition-colors"
+              disabled={newTransfers.length === 0}
+              className="flex-1 bg-teal-600 hover:bg-teal-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg py-2 text-sm font-medium transition-colors"
             >
               {t.accept[lang]}
             </button>
