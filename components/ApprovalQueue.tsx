@@ -65,6 +65,7 @@ export default function ApprovalQueue() {
   const [rejectingKey, setRejectingKey] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
   const [actionKey, setActionKey] = useState<string | null>(null)
+  const [groupErrors, setGroupErrors] = useState<Record<string, string>>({})
 
   // Sprache aus localStorage
   useEffect(() => {
@@ -98,8 +99,14 @@ export default function ApprovalQueue() {
 
   const handleApproveGroup = async (group: DepositGroup) => {
     setActionKey(group.key)
+    setGroupErrors(prev => { const n = {...prev}; delete n[group.key]; return n })
     for (const dep of group.deposits) {
-      await supabase.rpc('approve_deposit', { input_deposit_id: dep.id })
+      const { data } = await supabase.rpc('approve_deposit', { input_deposit_id: dep.id })
+      if (data && data.success === false) {
+        setGroupErrors(prev => ({ ...prev, [group.key]: data.message }))
+        setActionKey(null)
+        return
+      }
     }
     setActionKey(null)
     loadPending()
@@ -107,11 +114,17 @@ export default function ApprovalQueue() {
 
   const handleRejectGroup = async (group: DepositGroup) => {
     setActionKey(group.key)
+    setGroupErrors(prev => { const n = {...prev}; delete n[group.key]; return n })
     for (const dep of group.deposits) {
-      await supabase.rpc('reject_deposit', {
+      const { data } = await supabase.rpc('reject_deposit', {
         input_deposit_id: dep.id,
         input_reason: rejectReason.trim() || null,
       })
+      if (data && data.success === false) {
+        setGroupErrors(prev => ({ ...prev, [group.key]: data.message }))
+        setActionKey(null)
+        return
+      }
     }
     setActionKey(null)
     setRejectingKey(null)
@@ -227,6 +240,13 @@ export default function ApprovalQueue() {
               </span>
             ) : (
               <span className="text-xs text-red-400/70">{t.no_screenshot[lang]}</span>
+            )}
+
+            {/* Fehlermeldung */}
+            {groupErrors[group.key] && (
+              <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded px-3 py-2">
+                ⚠ {groupErrors[group.key]}
+              </p>
             )}
 
             {/* Ablehnen-Formular */}
