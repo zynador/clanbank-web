@@ -2,30 +2,29 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
+import { supabase } from '@/lib/supabaseClient'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import Dashboard from '@/components/Dashboard'
 import AdminPanel from '@/components/AdminPanel'
 import ApprovalQueue from '@/components/ApprovalQueue'
 import SuggestionBox from '@/components/SuggestionBox'
+import SecurityAlerts from '@/components/SecurityAlerts'
 import Logo from '@/components/Logo'
 import WelcomeModal from '@/components/WelcomeModal'
 import HelpButton from '@/components/HelpButton'
 import InfoTooltip from '@/components/InfoTooltip'
 
 export default function DashboardPage() {
-  return (
-    <ProtectedRoute>
-      <DashboardContent />
-    </ProtectedRoute>
-  )
+  return <ProtectedRoute><DashboardContent /></ProtectedRoute>
 }
 
 function DashboardContent() {
   const { profile, signOut } = useAuth()
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'freigabe' | 'vorschlaege' | 'verwaltung'>('dashboard')
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'freigabe' | 'warnungen' | 'vorschlaege' | 'verwaltung'>('dashboard')
   const [showWelcome, setShowWelcome] = useState(false)
   const [lang, setLang] = useState<'de' | 'en'>('de')
+  const [alertsCount, setAlertsCount] = useState(0)
   const isOfficerOrAdmin = profile?.role === 'admin' || profile?.role === 'offizier'
   const role = (profile?.role as 'admin' | 'offizier' | 'mitglied') ?? 'mitglied'
 
@@ -44,6 +43,13 @@ function DashboardContent() {
     } catch {}
   }, [profile?.role])
 
+  useEffect(() => {
+    if (!isOfficerOrAdmin) return
+    supabase.rpc('get_security_alerts_count').then(({ data }) => {
+      if (typeof data === 'number') setAlertsCount(data)
+    })
+  }, [isOfficerOrAdmin])
+
   function toggleLang() {
     const next = lang === 'de' ? 'en' : 'de'
     setLang(next)
@@ -51,11 +57,12 @@ function DashboardContent() {
   }
 
   const t = {
-    deposits:      { de: 'Einzahlungen',  en: 'Deposits' },
-    approvals:     { de: 'Freigaben',     en: 'Approvals' },
-    suggestions:   { de: 'Vorschläge',    en: 'Suggestions' },
-    management:    { de: 'Verwaltung',    en: 'Management' },
-    logout:        { de: 'Abmelden',      en: 'Sign out' },
+    deposits:      { de: 'Einzahlungen', en: 'Deposits' },
+    approvals:     { de: 'Freigaben',    en: 'Approvals' },
+    warnings:      { de: 'Warnungen',    en: 'Warnings' },
+    suggestions:   { de: 'Vorschläge',   en: 'Suggestions' },
+    management:    { de: 'Verwaltung',   en: 'Management' },
+    logout:        { de: 'Abmelden',     en: 'Sign out' },
     pendingTitle:  { de: '⏳ Ausstehende Freigaben', en: '⏳ Pending Approvals' },
     tip_dashboard: {
       de: 'Zeigt Gesamtstatistiken und die Rangliste aller Clan-Mitglieder. Nur genehmigte Einzahlungen zählen.',
@@ -68,6 +75,10 @@ function DashboardContent() {
     tip_approvals: {
       de: 'Manuelle Einzahlungen warten hier auf Prüfung. Als Offizier kannst du sie genehmigen oder ablehnen.',
       en: 'Manual deposits wait here for review. As an Officer you can approve or reject them.',
+    },
+    tip_warnings: {
+      de: 'Duplikat-Versuche werden hier gemeldet. Zeigt wer versucht hat, einen bereits verwendeten Screenshot einzureichen.',
+      en: 'Duplicate attempts are reported here. Shows who tried to submit an already-used screenshot.',
     },
     tip_suggestions: {
       de: 'Ideen und Verbesserungsvorschläge für den Clan einreichen. Offiziere können antworten.',
@@ -112,7 +123,6 @@ function DashboardContent() {
           </div>
         </div>
 
-        {/* Tab-Navigation */}
         <div className="max-w-6xl mx-auto px-4 flex gap-1 flex-wrap overflow-visible">
           <TabButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')}>
             Dashboard
@@ -126,6 +136,19 @@ function DashboardContent() {
             <TabButton active={activeTab === 'freigabe'} onClick={() => setActiveTab('freigabe')}>
               {t.approvals[lang]}
               <InfoTooltip de={t.tip_approvals.de} en={t.tip_approvals.en} lang={lang} position="bottom" />
+            </TabButton>
+          )}
+          {isOfficerOrAdmin && (
+            <TabButton active={activeTab === 'warnungen'} onClick={() => setActiveTab('warnungen')}>
+              <span className="flex items-center gap-1.5">
+                {t.warnings[lang]}
+                {alertsCount > 0 && (
+                  <span className="bg-red-900/60 text-red-400 border border-red-800 text-[10px] font-medium rounded-full px-1.5 py-0.5 leading-none">
+                    {alertsCount}
+                  </span>
+                )}
+              </span>
+              <InfoTooltip de={t.tip_warnings.de} en={t.tip_warnings.en} lang={lang} position="bottom" />
             </TabButton>
           )}
           <TabButton active={activeTab === 'vorschlaege'} onClick={() => setActiveTab('vorschlaege')}>
@@ -147,6 +170,14 @@ function DashboardContent() {
           <section className="bg-[#161822] border border-gray-800 rounded-xl p-6">
             <h2 className="text-base font-medium text-gray-300 mb-4">{t.pendingTitle[lang]}</h2>
             <ApprovalQueue />
+          </section>
+        )}
+        {activeTab === 'warnungen' && isOfficerOrAdmin && (
+          <section className="bg-[#161822] border border-gray-800 rounded-xl p-6">
+            <SecurityAlerts
+              lang={lang}
+              onCountChange={(n) => setAlertsCount(n)}
+            />
           </section>
         )}
         {activeTab === 'vorschlaege' && <SuggestionBox lang={lang} />}
