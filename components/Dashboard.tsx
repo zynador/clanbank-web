@@ -12,7 +12,7 @@ interface DepositRow {
   resource_type: ResourceType;
   amount: number;
   created_at: string;
-  profiles: { display_name: string; ingame_name: string } | null;
+  profiles: { display_name: string; ingame_name: string; username: string } | null;
 }
 
 interface PlayerTotal {
@@ -182,7 +182,7 @@ export default function Dashboard() {
       let query = supabase
         .from("deposits")
         .select(
-          "id, user_id, resource_type, amount, created_at, profiles!deposits_user_id_fkey(display_name, ingame_name)"
+          "id, user_id, resource_type, amount, created_at, profiles!deposits_user_id_fkey(display_name, ingame_name, username)"
         )
         .is("deleted_at", null)
         .eq("status", "approved")
@@ -226,6 +226,7 @@ export default function Dashboard() {
       const profile = d.profiles as {
         display_name: string;
         ingame_name: string;
+        username: string;
       } | null;
       const byResource = {
         Cash: 0,
@@ -237,8 +238,8 @@ export default function Dashboard() {
       byResource[d.resource_type] = Number(d.amount);
       playerMap.set(d.user_id, {
         user_id: d.user_id,
-        display_name: profile?.display_name || "Unbekannt",
-        ingame_name: profile?.ingame_name || "—",
+        display_name: profile?.display_name || profile?.username || "Unbekannt",
+        ingame_name: profile?.ingame_name || profile?.username || "Unbekannt",
         total: Number(d.amount),
         byResource,
       });
@@ -434,14 +435,9 @@ export default function Dashboard() {
                             <RankBadge rank={i + 1} />
                           </td>
                           <td className="px-4 py-3">
-                            <div>
-                              <span className="text-sm font-medium text-zinc-200">
-                                {player.ingame_name}
-                              </span>
-                              <span className="text-xs text-zinc-500 ml-2">
-                                ({player.display_name})
-                              </span>
-                            </div>
+                            <span className="text-sm font-medium text-zinc-200">
+                              {player.ingame_name}
+                            </span>
                           </td>
                           {RESOURCES.map((r) => (
                             <td key={r} className="text-right px-4 py-3">
@@ -478,14 +474,9 @@ export default function Dashboard() {
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
                           <RankBadge rank={i + 1} />
-                          <div>
-                            <span className="text-sm font-medium text-zinc-200">
-                              {player.ingame_name}
-                            </span>
-                            <span className="text-xs text-zinc-500 block">
-                              {player.display_name}
-                            </span>
-                          </div>
+                          <span className="text-sm font-medium text-zinc-200">
+                            {player.ingame_name}
+                          </span>
                         </div>
                         <span className="text-sm font-bold text-zinc-100">
                           {formatNumber(player.total)}
