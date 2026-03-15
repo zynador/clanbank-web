@@ -113,6 +113,7 @@ function DepositsContent() {
   const [screenshotHash, setScreenshotHash] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [isManualMode, setIsManualMode] = useState(true)
+  const [gameTimestamps, setGameTimestamps] = useState<string[]>([])
   const isOfficerOrAdmin = profile?.role === 'admin' || profile?.role === 'offizier'
 
   // Sprache aus localStorage laden
@@ -123,7 +124,7 @@ function DepositsContent() {
     } catch {}
   }, [])
 
-  function handleOcrResult(amounts: Record<string, string>) {
+  function handleOcrResult(amounts: Record<string, string>, timestamps: string[]) {
     setFormAmounts((prev) => ({
       Cash: amounts.Cash || prev.Cash,
       Arms: amounts.Arms || prev.Arms,
@@ -131,14 +132,15 @@ function DepositsContent() {
       Metal: amounts.Metal || prev.Metal,
       Diamond: amounts.Diamond || prev.Diamond,
     }))
+    setGameTimestamps(timestamps)
     setIsManualMode(false)
   }
 
   function handleOcrManual() {
     setFormAmounts({ Cash: '', Arms: '', Cargo: '', Metal: '', Diamond: '' })
+    setGameTimestamps([])
     setIsManualMode(true)
   }
-
   const fetchDeposits = useCallback(async () => {
     if (!profile) return
     setLoading(true)
@@ -164,15 +166,15 @@ function DepositsContent() {
     setSubmitting(true)
     setError(null)
     const { error: err } = await supabase.rpc('create_bulk_deposit', {
-      input_cash: parseFloat(formAmounts.Cash) || 0,
-      input_arms: parseFloat(formAmounts.Arms) || 0,
-      input_cargo: parseFloat(formAmounts.Cargo) || 0,
-      input_metal: parseFloat(formAmounts.Metal) || 0,
-      input_diamond: parseFloat(formAmounts.Diamond) || 0,
-      input_note: note || null,
-      input_screenshot_url: screenshotUrl,
-      input_manual: isManualMode,
-      input_screenshot_hash: screenshotHash,
+      p_cash: parseFloat(formAmounts.Cash) || 0,
+      p_arms: parseFloat(formAmounts.Arms) || 0,
+      p_cargo: parseFloat(formAmounts.Cargo) || 0,
+      p_metal: parseFloat(formAmounts.Metal) || 0,
+      p_diamond: parseFloat(formAmounts.Diamond) || 0,
+      p_screenshot_url: screenshotUrl,
+      p_screenshot_hash: screenshotHash,
+      p_input_manual: isManualMode,
+      p_game_timestamps: gameTimestamps,
     })
     if (err) {
       setError(err.message)
@@ -183,6 +185,7 @@ function DepositsContent() {
       setScreenshotUrl(null)
       setScreenshotHash(null)
       setIsManualMode(false)
+      setGameTimestamps([])
       fetchDeposits()
     }
     setSubmitting(false)
