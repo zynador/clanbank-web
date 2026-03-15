@@ -175,6 +175,7 @@ function DepositsContent() {
       p_screenshot_hash: screenshotHash,
       p_input_manual: isManualMode,
       p_game_timestamps: gameTimestamps,
+      p_note: note || null,
     })
     if (err) {
       setError(err.message)
