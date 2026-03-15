@@ -32,6 +32,10 @@ type Props = {
 const RESOURCES = ["Cash", "Arms", "Cargo", "Metal", "Diamond"] as const;
 type StatusType = "idle" | "loading" | "done" | "error";
 
+function fingerprint(t: OcrTransfer): string {
+  return `${t.timestamp}|${t.Cash}|${t.Arms}|${t.Cargo}|${t.Metal}|${t.Diamond}`;
+}
+
 export default function OcrReader({ imageUrl, onResult, onManual, lang = "de" }: Props) {
   const [status, setStatus] = useState<StatusType>("idle");
   const [newTransfers, setNewTransfers] = useState<OcrTransfer[]>([]);
@@ -94,19 +98,31 @@ export default function OcrReader({ imageUrl, onResult, onManual, lang = "de" }:
           return;
         }
 
-        // 3. Bekannte Timestamps aus DB laden
+        // 3. Bekannte Fingerprints aus DB laden (mit Duplikaten)
         const { data: knownData } = await supabase.rpc("get_known_timestamps");
-        const knownSet = new Set<string>((knownData as string[]) ?? []);
+        const knownList = (knownData as string[]) ?? [];
 
-        // 4. Transfers in neu / bereits erfasst aufteilen
+        // Häufigkeiten der bekannten Fingerprints zählen
+        const knownCount = new Map<string, number>();
+        for (const fp of knownList) {
+          knownCount.set(fp, (knownCount.get(fp) ?? 0) + 1);
+        }
+
+        // 4. Transfers in neu / bereits erfasst aufteilen (Häufigkeitsvergleich)
         const newT: OcrTransfer[] = [];
         const knownT: OcrTransfer[] = [];
+        const seenCount = new Map<string, number>();
+
         for (const transfer of transfers) {
-          if (knownSet.has(transfer.timestamp)) {
+          const fp = fingerprint(transfer);
+          const seen = seenCount.get(fp) ?? 0;
+          const known = knownCount.get(fp) ?? 0;
+          if (seen < known) {
             knownT.push(transfer);
           } else {
             newT.push(transfer);
           }
+          seenCount.set(fp, seen + 1);
         }
 
         if (cancelled) return;
@@ -150,7 +166,7 @@ export default function OcrReader({ imageUrl, onResult, onManual, lang = "de" }:
   function handleAccept() {
     if (newTransfers.length === 0) return;
     const result = sumTransfers(newTransfers);
-    const timestamps = newTransfers.map((tr) => tr.timestamp);
+    const timestamps = newTransfers.map((tr) => fingerprint(tr));
     onResult(result, timestamps);
     setDecision("accepted");
   }
@@ -180,7 +196,6 @@ export default function OcrReader({ imageUrl, onResult, onManual, lang = "de" }:
 
       {status === "done" && decision === "none" && (
         <>
-          {/* Neue Transfers */}
           {newTransfers.length > 0 && (
             <>
               <p className="text-teal-400 font-medium text-xs uppercase tracking-wide">
@@ -197,7 +212,6 @@ export default function OcrReader({ imageUrl, onResult, onManual, lang = "de" }:
             </>
           )}
 
-          {/* Bereits erfasste Transfers */}
           {knownTransfers.length > 0 && (
             <>
               <p className="text-gray-600 font-medium text-xs uppercase tracking-wide mt-2">
@@ -214,7 +228,6 @@ export default function OcrReader({ imageUrl, onResult, onManual, lang = "de" }:
             </>
           )}
 
-          {/* Hinweis: alle bereits erfasst */}
           {allAlreadyKnown && (
             <p className="text-yellow-500 text-xs">{t.no_new[lang]}</p>
           )}
