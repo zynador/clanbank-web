@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { useExemptions } from "@/hooks/useExemptions";
+import ExemptionBadge from "@/components/ExemptionBadge";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type ResourceType = "Cash" | "Arms" | "Cargo" | "Metal" | "Diamond";
@@ -172,6 +174,8 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<"ranking" | "resources">(
     "ranking"
   );
+
+  const { getExemptionForUser } = useExemptions();
 
   // ─── Fetch deposits ──────────────────────────────────────────────────────
   const fetchDeposits = useCallback(async () => {
@@ -435,9 +439,14 @@ export default function Dashboard() {
                             <RankBadge rank={i + 1} />
                           </td>
                           <td className="px-4 py-3">
-                            <span className="text-sm font-medium text-zinc-200">
-                              {player.ingame_name}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-zinc-200">
+                                {player.ingame_name}
+                              </span>
+                              <ExemptionBadge
+                                exemption={getExemptionForUser(player.user_id)}
+                              />
+                            </div>
                           </td>
                           {RESOURCES.map((r) => (
                             <td key={r} className="text-right px-4 py-3">
@@ -477,6 +486,9 @@ export default function Dashboard() {
                           <span className="text-sm font-medium text-zinc-200">
                             {player.ingame_name}
                           </span>
+                          <ExemptionBadge
+                            exemption={getExemptionForUser(player.user_id)}
+                          />
                         </div>
                         <span className="text-sm font-bold text-zinc-100">
                           {formatNumber(player.total)}
