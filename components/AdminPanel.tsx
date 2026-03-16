@@ -4,6 +4,9 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import InfoTooltip from '@/components/InfoTooltip'
 import StarterMembersPanel from '@/components/StarterMembersPanel'
+import ExemptionModal from '@/components/ExemptionModal'
+import ExemptionBadge from '@/components/ExemptionBadge'
+import { useExemptions } from '@/hooks/useExemptions'
 
 type Lang = 'de' | 'en'
 type UserRole = 'admin' | 'offizier' | 'mitglied'
@@ -29,6 +32,8 @@ export default function AdminPanel() {
   const [inviteCode, setInviteCode] = useState<string | null>(null)
   const [generatingCode, setGeneratingCode] = useState(false)
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [exemptionTarget, setExemptionTarget] = useState<{ id: string; ingameName: string } | null>(null)
+  const { getExemptionForUser, refresh: refreshExemptions } = useExemptions()
 
   useEffect(() => {
     try {
@@ -310,8 +315,15 @@ export default function AdminPanel() {
                       <span className={`text-xs px-2 py-0.5 rounded-full border ${roleBadgeStyles[member.role]}`}>
                         {roleLabels[member.role]}
                       </span>
+                      <ExemptionBadge exemption={getExemptionForUser(member.id)} />
                     </div>
-                    <span className="inline-flex items-center gap-1">
+                    <span className="inline-flex items-center gap-2">
+                      <button
+                        onClick={() => setExemptionTarget({ id: member.id, ingameName: member.ingame_name || member.display_name })}
+                        className="text-xs text-amber-500 hover:text-amber-300 transition-colors"
+                      >
+                        {getExemptionForUser(member.id) ? '✏️ Ausnahme' : '+ Ausnahme'}
+                      </button>
                       <button
                         onClick={() => startEdit(member)}
                         className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
@@ -327,8 +339,20 @@ export default function AdminPanel() {
           </div>
         )}
       </div>
-     {/* Starter-Mitglieder */}
+    {/* Starter-Mitglieder */}
       <StarterMembersPanel lang={lang} />
+
+      {/* Ausnahme-Modal */}
+      {exemptionTarget && (
+        <ExemptionModal
+          userId={exemptionTarget.id}
+          ingameName={exemptionTarget.ingameName}
+          onClose={() => {
+            setExemptionTarget(null)
+            refreshExemptions()
+          }}
+        />
+      )}
 
     </div>
   )
