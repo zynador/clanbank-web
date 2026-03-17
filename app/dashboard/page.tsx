@@ -10,6 +10,7 @@ import ApprovalQueue from '@/components/ApprovalQueue'
 import SuggestionBox from '@/components/SuggestionBox'
 import SecurityAlerts from '@/components/SecurityAlerts'
 import RankingTab from '@/components/RankingTab'
+import BacklogWidget from '@/components/BacklogWidget'
 import Logo from '@/components/Logo'
 import WelcomeModal from '@/components/WelcomeModal'
 import HelpButton from '@/components/HelpButton'
@@ -175,7 +176,12 @@ function DashboardContent() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-6">
-        {activeTab === 'dashboard' && <Dashboard />}
+        {activeTab === 'dashboard' && (
+          <>
+            <BacklogWidget lang={lang} currentUserId={profile?.id} />
+            <Dashboard />
+          </>
+        )}
         {activeTab === 'ranking' && (
           <section className="bg-[#161822] border border-gray-800 rounded-xl p-6">
             <RankingTab lang={lang} />
