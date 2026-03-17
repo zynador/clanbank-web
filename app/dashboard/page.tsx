@@ -10,6 +10,7 @@ import ApprovalQueue from '@/components/ApprovalQueue'
 import SuggestionBox from '@/components/SuggestionBox'
 import SecurityAlerts from '@/components/SecurityAlerts'
 import RankingTab from '@/components/RankingTab'
+import DepositsTab from '@/components/DepositsTab'
 import BacklogWidget from '@/components/BacklogWidget'
 import Logo from '@/components/Logo'
 import WelcomeModal from '@/components/WelcomeModal'
@@ -23,7 +24,7 @@ export default function DashboardPage() {
 function DashboardContent() {
   const { profile, signOut } = useAuth()
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'ranking' | 'freigabe' | 'warnungen' | 'vorschlaege' | 'verwaltung'>('dashboard')
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'ranking' | 'deposits' | 'freigabe' | 'warnungen' | 'vorschlaege' | 'verwaltung'>('dashboard')
   const [showWelcome, setShowWelcome] = useState(false)
   const [lang, setLang] = useState<'de' | 'en'>('de')
   const [alertsCount, setAlertsCount] = useState(0)
@@ -139,7 +140,7 @@ function DashboardContent() {
             {t.ranking[lang]}
             <InfoTooltip de={t.tip_ranking.de} en={t.tip_ranking.en} lang={lang} position="bottom" />
           </TabButton>
-          <TabButton active={false} onClick={() => router.push('/deposits')}>
+          <TabButton active={activeTab === 'deposits'} onClick={() => setActiveTab('deposits')}>
             {t.deposits[lang]}
             <InfoTooltip de={t.tip_deposits.de} en={t.tip_deposits.en} lang={lang} position="bottom" />
           </TabButton>
@@ -187,6 +188,7 @@ function DashboardContent() {
             <RankingTab lang={lang} />
           </section>
         )}
+        {activeTab === 'deposits' && <DepositsTab lang={lang} />}
         {activeTab === 'freigabe' && isOfficerOrAdmin && (
           <section className="bg-[#161822] border border-gray-800 rounded-xl p-6">
             <h2 className="text-base font-medium text-gray-300 mb-4">{t.pendingTitle[lang]}</h2>
