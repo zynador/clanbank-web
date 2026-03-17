@@ -9,6 +9,7 @@ import AdminPanel from '@/components/AdminPanel'
 import ApprovalQueue from '@/components/ApprovalQueue'
 import SuggestionBox from '@/components/SuggestionBox'
 import SecurityAlerts from '@/components/SecurityAlerts'
+import RankingTab from '@/components/RankingTab'
 import Logo from '@/components/Logo'
 import WelcomeModal from '@/components/WelcomeModal'
 import HelpButton from '@/components/HelpButton'
@@ -21,7 +22,7 @@ export default function DashboardPage() {
 function DashboardContent() {
   const { profile, signOut } = useAuth()
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'freigabe' | 'warnungen' | 'vorschlaege' | 'verwaltung'>('dashboard')
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'ranking' | 'freigabe' | 'warnungen' | 'vorschlaege' | 'verwaltung'>('dashboard')
   const [showWelcome, setShowWelcome] = useState(false)
   const [lang, setLang] = useState<'de' | 'en'>('de')
   const [alertsCount, setAlertsCount] = useState(0)
@@ -38,7 +39,7 @@ function DashboardContent() {
   useEffect(() => {
     if (!profile?.role) return
     try {
-      const seen = localStorage.getItem(`clanbank_welcome_seen_v2_${profile.role}`)
+      const seen = localStorage.getItem('clanbank_welcome_seen_v2_' + profile.role)
       if (!seen) setShowWelcome(true)
     } catch {}
   }, [profile?.role])
@@ -58,6 +59,7 @@ function DashboardContent() {
 
   const t = {
     deposits:      { de: 'Einzahlungen', en: 'Deposits' },
+    ranking:       { de: 'Ranking',      en: 'Ranking' },
     approvals:     { de: 'Freigaben',    en: 'Approvals' },
     warnings:      { de: 'Warnungen',    en: 'Warnings' },
     suggestions:   { de: 'Vorschläge',   en: 'Suggestions' },
@@ -65,8 +67,12 @@ function DashboardContent() {
     logout:        { de: 'Abmelden',     en: 'Sign out' },
     pendingTitle:  { de: '⏳ Ausstehende Freigaben', en: '⏳ Pending Approvals' },
     tip_dashboard: {
-      de: 'Zeigt Gesamtstatistiken und die Rangliste aller Clan-Mitglieder. Nur genehmigte Einzahlungen zählen.',
-      en: 'Shows overall statistics and the ranking of all clan members. Only approved deposits count.',
+      de: 'Zeigt Gesamtstatistiken deiner Einzahlungen.',
+      en: 'Shows overall statistics of your deposits.',
+    },
+    tip_ranking: {
+      de: 'Rangliste aller Clan-Mitglieder mit individuellem Schwellwert und Auszahlungsberechtigung.',
+      en: 'Ranking of all clan members with individual threshold and payout eligibility.',
     },
     tip_deposits: {
       de: 'Hier kannst du neue Einzahlungen erfassen. Screenshot hochladen → KI erkennt Werte → bestätigen.',
@@ -77,16 +83,16 @@ function DashboardContent() {
       en: 'Manual deposits wait here for review. As an Officer you can approve or reject them.',
     },
     tip_warnings: {
-      de: 'Duplikat-Versuche werden hier gemeldet. Zeigt wer versucht hat, einen bereits verwendeten Screenshot einzureichen.',
-      en: 'Duplicate attempts are reported here. Shows who tried to submit an already-used screenshot.',
+      de: 'Duplikat-Versuche werden hier gemeldet.',
+      en: 'Duplicate attempts are reported here.',
     },
     tip_suggestions: {
-      de: 'Ideen und Verbesserungsvorschläge für den Clan einreichen. Offiziere können antworten.',
-      en: 'Submit ideas and improvement suggestions for the clan. Officers can respond.',
+      de: 'Ideen und Verbesserungsvorschläge für den Clan einreichen.',
+      en: 'Submit ideas and improvement suggestions for the clan.',
     },
     tip_management: {
-      de: 'Spieler-Rollen vergeben, Ingame-Namen aktualisieren und Clan-Daten verwalten.',
-      en: 'Assign player roles, update in-game names and manage clan data.',
+      de: 'Spieler-Rollen vergeben, Ingame-Namen und Start-KW verwalten.',
+      en: 'Assign player roles, manage in-game names and start weeks.',
     },
   }
 
@@ -128,6 +134,10 @@ function DashboardContent() {
             Dashboard
             <InfoTooltip de={t.tip_dashboard.de} en={t.tip_dashboard.en} lang={lang} position="bottom" />
           </TabButton>
+          <TabButton active={activeTab === 'ranking'} onClick={() => setActiveTab('ranking')}>
+            {t.ranking[lang]}
+            <InfoTooltip de={t.tip_ranking.de} en={t.tip_ranking.en} lang={lang} position="bottom" />
+          </TabButton>
           <TabButton active={false} onClick={() => router.push('/deposits')}>
             {t.deposits[lang]}
             <InfoTooltip de={t.tip_deposits.de} en={t.tip_deposits.en} lang={lang} position="bottom" />
@@ -166,6 +176,11 @@ function DashboardContent() {
 
       <main className="max-w-6xl mx-auto px-4 py-6">
         {activeTab === 'dashboard' && <Dashboard />}
+        {activeTab === 'ranking' && (
+          <section className="bg-[#161822] border border-gray-800 rounded-xl p-6">
+            <RankingTab lang={lang} />
+          </section>
+        )}
         {activeTab === 'freigabe' && isOfficerOrAdmin && (
           <section className="bg-[#161822] border border-gray-800 rounded-xl p-6">
             <h2 className="text-base font-medium text-gray-300 mb-4">{t.pendingTitle[lang]}</h2>
@@ -200,9 +215,7 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`flex items-center px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-        active ? 'border-teal-500 text-teal-400' : 'border-transparent text-gray-500 hover:text-gray-300'
-      }`}
+      className={'flex items-center px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ' + (active ? 'border-teal-500 text-teal-400' : 'border-transparent text-gray-500 hover:text-gray-300')}
     >
       {children}
     </button>
