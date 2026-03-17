@@ -18,6 +18,8 @@ interface MemberRow {
   ingame_name: string
   role: UserRole
   created_at: string
+  start_kw: number
+  start_year: number
 }
 
 export default function AdminPanel() {
@@ -29,6 +31,8 @@ export default function AdminPanel() {
   const [editRole, setEditRole] = useState<UserRole>('mitglied')
   const [editIngame, setEditIngame] = useState('')
   const [originalIngame, setOriginalIngame] = useState('')
+  const [editStartKw, setEditStartKw] = useState<number>(2)
+  const [editStartYear, setEditStartYear] = useState<number>(2026)
   const [inviteCode, setInviteCode] = useState<string | null>(null)
   const [generatingCode, setGeneratingCode] = useState(false)
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
@@ -55,7 +59,7 @@ export default function AdminPanel() {
     setLoading(true)
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, username, display_name, ingame_name, role, created_at')
+      .select('id, username, display_name, ingame_name, role, created_at, start_kw, start_year')
       .order('created_at', { ascending: true })
     if (error) {
       setFeedback({ type: 'error', text: lang === 'de' ? 'Fehler beim Laden der Mitglieder.' : 'Error loading members.' })
@@ -77,18 +81,31 @@ export default function AdminPanel() {
       const { error } = await supabase.from('profiles').update(updates).eq('id', memberId)
       if (error) {
         setFeedback({ type: 'error', text: 'Fehler: ' + error.message })
-      } else {
-        if (trimmedIngame !== originalIngame && originalIngame) {
-          await supabase.from('name_history').insert({
-            user_id: memberId,
-            old_ingame_name: originalIngame,
-            new_ingame_name: trimmedIngame,
-          })
-        }
-        setFeedback({ type: 'success', text: lang === 'de' ? 'Mitglied aktualisiert.' : 'Member updated.' })
-        setEditingId(null)
-        fetchMembers()
+        setSaving(false)
+        return
       }
+      if (trimmedIngame !== originalIngame && originalIngame) {
+        await supabase.from('name_history').insert({
+          user_id: memberId,
+          old_ingame_name: originalIngame,
+          new_ingame_name: trimmedIngame,
+        })
+      }
+
+      const { data: kwData } = await supabase.rpc('set_member_start_kw', {
+        p_user_id: memberId,
+        p_start_kw: editStartKw,
+        p_start_year: editStartYear,
+      })
+      if (kwData && !kwData.success) {
+        setFeedback({ type: 'error', text: kwData.message })
+        setSaving(false)
+        return
+      }
+
+      setFeedback({ type: 'success', text: lang === 'de' ? 'Mitglied aktualisiert.' : 'Member updated.' })
+      setEditingId(null)
+      fetchMembers()
     } catch {
       setFeedback({ type: 'error', text: lang === 'de' ? 'Verbindungsfehler beim Speichern.' : 'Connection error while saving.' })
     }
@@ -111,6 +128,8 @@ export default function AdminPanel() {
     setEditRole(member.role)
     setEditIngame(member.ingame_name || '')
     setOriginalIngame(member.ingame_name || '')
+    setEditStartKw(member.start_kw ?? 2)
+    setEditStartYear(member.start_year ?? 2026)
   }
 
   const roleLabels: Record<UserRole, string> = {
@@ -142,28 +161,38 @@ export default function AdminPanel() {
     },
     members_title: { de: 'Mitglieder', en: 'Members' },
     tip_members: {
-      de: 'Hier kannst du Rollen vergeben und Ingame-Namen aktualisieren. Namensänderungen werden automatisch in der Historie gespeichert.',
-      en: 'Here you can assign roles and update in-game names. Name changes are automatically saved in the history.',
+      de: 'Hier kannst du Rollen vergeben, Ingame-Namen aktualisieren und die Start-KW für den persönlichen Schwellwert setzen.',
+      en: 'Here you can assign roles, update in-game names and set the start week for the personal threshold.',
     },
     edit:     { de: 'Bearbeiten', en: 'Edit' },
     tip_edit: {
-      de: 'Ingame-Namen und Rolle dieses Spielers ändern. Alter Name wird automatisch protokolliert.',
-      en: "Change this player's in-game name and role. Old name is automatically logged.",
+      de: 'Ingame-Namen, Rolle und Start-KW dieses Spielers ändern.',
+      en: "Change this player's in-game name, role and start week.",
     },
     ingame:   { de: 'Ingame-Name', en: 'In-game Name' },
     tip_ingame: {
-      de: 'Der aktuelle Spielername im Spiel. Bei Änderung wird der alte Name automatisch in der Namenshistorie gespeichert — Einzahlungen bleiben korrekt zugeordnet.',
-      en: 'The current player name in the game. When changed, the old name is automatically saved in name history — deposits remain correctly assigned.',
+      de: 'Der aktuelle Spielername im Spiel. Bei Änderung wird der alte Name automatisch in der Namenshistorie gespeichert.',
+      en: 'The current player name in the game. When changed, the old name is automatically saved in name history.',
     },
     role:     { de: 'Rolle', en: 'Role' },
     tip_role: {
       de: 'Mitglied: nur eigene Einzahlungen. Offizier: sieht alle Einzahlungen + Freigabe-Queue. Admin: voller Zugriff inkl. Verwaltung.',
       en: 'Member: own deposits only. Officer: sees all deposits + approval queue. Admin: full access including management.',
     },
+    start_kw: { de: 'Start-KW', en: 'Start week' },
+    tip_start_kw: {
+      de: 'Kalenderwoche ab der dieser Spieler Einzahlungen schuldet. Bestimmt den persönlichen Schwellwert im Ranking. Beispiel: KW 2 = seit Bankgründung dabei.',
+      en: 'Calendar week from which this player owes deposits. Determines the personal threshold in the ranking. Example: week 2 = member since bank founding.',
+    },
+    start_year: { de: 'Jahr', en: 'Year' },
     save:    { de: 'Speichern', en: 'Save' },
     saving:  { de: 'Speichern...', en: 'Saving...' },
     cancel:  { de: 'Abbrechen', en: 'Cancel' },
   }
+
+  const currentYear = new Date().getFullYear()
+  const kwOptions = Array.from({ length: 53 }, (_, i) => i + 1)
+  const yearOptions = [currentYear - 1, currentYear, currentYear + 1]
 
   return (
     <div className="space-y-6">
@@ -186,7 +215,6 @@ export default function AdminPanel() {
           <InfoTooltip de={t.tip_code.de} en={t.tip_code.en} lang={lang} position="bottom" />
         </h3>
 
-        {/* Dauerhafter MAFIA2026 Code */}
         <div className="flex items-center gap-3 mb-4">
           <span className="text-xs text-zinc-400">{t.active_code[lang]}</span>
           <code className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-emerald-400 font-mono text-lg tracking-widest">
@@ -203,7 +231,6 @@ export default function AdminPanel() {
           </button>
         </div>
 
-        {/* Notfall: neuen Code generieren */}
         <div className="flex flex-wrap items-center gap-3">
           <span className="inline-flex items-center gap-1">
             <button
@@ -284,6 +311,45 @@ export default function AdminPanel() {
                           <option value="admin">Admin</option>
                         </select>
                       </label>
+
+                      {/* Start-KW */}
+                      <label className="text-sm text-zinc-400 flex items-center gap-1">
+                        {t.start_kw[lang]}
+                        <InfoTooltip de={t.tip_start_kw.de} en={t.tip_start_kw.en} lang={lang} position="bottom" />
+                        :
+                        <select
+                          value={editStartKw}
+                          onChange={(e) => setEditStartKw(Number(e.target.value))}
+                          className="ml-2 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-blue-500"
+                        >
+                          {kwOptions.map(kw => (
+                            <option key={kw} value={kw}>KW {kw}</option>
+                          ))}
+                        </select>
+                      </label>
+
+                      {/* Start-Jahr */}
+                      <label className="text-sm text-zinc-400 flex items-center gap-1">
+                        {t.start_year[lang]}:
+                        <select
+                          value={editStartYear}
+                          onChange={(e) => setEditStartYear(Number(e.target.value))}
+                          className="ml-2 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-blue-500"
+                        >
+                          {yearOptions.map(y => (
+                            <option key={y} value={y}>{y}</option>
+                          ))}
+                        </select>
+                      </label>
+
+                    </div>
+
+                    {/* Schwellwert-Vorschau */}
+                    <div className="text-xs text-zinc-500 bg-zinc-800/40 rounded-lg px-3 py-2">
+                      {lang === 'de'
+                        ? 'Schwellwert-Vorschau: ab KW ' + editStartKw + ' / ' + editStartYear + ' — aktuell KW 13 / 2026'
+                        : 'Threshold preview: from week ' + editStartKw + ' / ' + editStartYear + ' — current week 13 / 2026'
+                      }
                     </div>
 
                     <div className="flex gap-2">
@@ -311,6 +377,9 @@ export default function AdminPanel() {
                           {member.ingame_name || member.display_name}
                         </span>
                         <span className="text-xs text-zinc-500 ml-2">@{member.username}</span>
+                        <span className="text-xs text-zinc-600 ml-2">
+                          KW {member.start_kw}/{member.start_year}
+                        </span>
                       </div>
                       <span className={`text-xs px-2 py-0.5 rounded-full border ${roleBadgeStyles[member.role]}`}>
                         {roleLabels[member.role]}
@@ -339,7 +408,8 @@ export default function AdminPanel() {
           </div>
         )}
       </div>
-    {/* Starter-Mitglieder */}
+
+      {/* Starter-Mitglieder */}
       <StarterMembersPanel lang={lang} />
 
       {/* Ausnahme-Modal */}
