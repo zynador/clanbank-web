@@ -26,6 +26,10 @@ export default function BacklogWidget({ lang, currentUserId }: Props) {
   const [items, setItems] = useState<(RankingRow & { pct: number })[]>([])
   const [loading, setLoading] = useState(true)
 
+  const t = lang === 'de'
+    ? { title: 'Rückstand', critical: 'kritisch', empty: 'Alle Mitglieder im Plan ✓' }
+    : { title: 'Backlog', critical: 'critical', empty: 'All members on track ✓' }
+
   useEffect(() => {
     async function load() {
       const now = new Date()
@@ -45,17 +49,17 @@ export default function BacklogWidget({ lang, currentUserId }: Props) {
       if (rankRes.error || !rankRes.data) { setLoading(false); return }
 
       const exemptSet = new Set<string>(
-        ((exemptRes.data as { user_id: string }[]) || []).map((e) => e.user_id)
+        ((exemptRes.data as { user_id: string }[]) || []).map(e => e.user_id)
       )
 
       const filtered = (rankRes.data as RankingRow[])
-        .filter((r) => !exemptSet.has(r.user_id))
-        .filter((r) => r.threshold_per_res > 0)
-        .map((r) => ({
+        .filter(r => !exemptSet.has(r.user_id))
+        .filter(r => r.threshold_per_res > 0)
+        .map(r => ({
           ...r,
           pct: Math.min(100, Math.round((r.total_deposit / (r.threshold_per_res * 5)) * 100)),
         }))
-        .filter((r) => r.pct < 100)
+        .filter(r => r.pct < 100)
         .sort((a, b) => a.pct - b.pct)
 
       setItems(filtered)
@@ -66,63 +70,106 @@ export default function BacklogWidget({ lang, currentUserId }: Props) {
 
   if (loading) return null
 
-  const redCount = items.filter((r) => r.pct < 60).length
-  const title = lang === 'de' ? 'Rückstand (Laufzeit)' : 'Backlog (overall)'
-  const emptyText = lang === 'de' ? '✓ Alle Mitglieder im Plan' : '✓ All members on track'
+  const redCount = items.filter(r => r.pct < 60).length
+
+  const dot = (pct: number) => (
+    <span style={{
+      display: 'inline-block',
+      width: 8,
+      height: 8,
+      borderRadius: '50%',
+      flexShrink: 0,
+      background: pct < 60 ? '#E24B4A' : '#EF9F27',
+    }} />
+  )
+
+  const badge = (text: string, red: boolean) => (
+    <span style={{
+      fontSize: 12,
+      fontWeight: 500,
+      padding: '2px 8px',
+      borderRadius: 99,
+      background: red ? '#FCEBEB' : '#FAEEDA',
+      color: red ? '#A32D2D' : '#854F0B',
+    }}>{text}</span>
+  )
 
   if (items.length === 0) {
     return (
-      <div className="bg-[#161822] border border-gray-800 rounded-xl p-4 mb-6 text-sm text-gray-400">
-        {emptyText}
+      <div style={{
+        background: 'var(--color-background-secondary)',
+        borderRadius: 'var(--border-radius-lg)',
+        border: '0.5px solid var(--color-border-tertiary)',
+        padding: '12px 16px',
+        fontSize: 14,
+        color: 'var(--color-text-secondary)',
+        marginBottom: '1rem',
+      }}>
+        {t.empty}
       </div>
     )
   }
 
   return (
-    <div className="bg-[#161822] border border-gray-800 rounded-xl p-5 mb-6">
-      <div className="flex items-center gap-2 mb-3">
-        <span className="text-sm font-medium text-gray-300 flex-1">{title}</span>
-        {redCount > 0 && (
-          <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-red-900/40 text-red-400 border border-red-800">
-            {redCount} {lang === 'de' ? 'kritisch' : 'critical'}
-          </span>
-        )}
-        <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-yellow-900/30 text-yellow-500 border border-yellow-800/50">
-          {items.length} {lang === 'de' ? 'Spieler' : 'players'}
+    <div style={{
+      background: 'var(--color-background-primary)',
+      borderRadius: 'var(--border-radius-lg)',
+      border: '0.5px solid var(--color-border-tertiary)',
+      padding: '12px 16px',
+      marginBottom: '1rem',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)', flex: 1 }}>
+          {t.title}
         </span>
+        {redCount > 0 && badge(redCount + ' ' + t.critical, true)}
+        {badge(items.length + (lang === 'de' ? ' Spieler' : ' players'), false)}
       </div>
 
-      <div className="flex flex-col">
-        {items.map((r) => (
-          <div
-            key={r.user_id}
-            className="flex items-center gap-3 py-1.5 border-t border-gray-800 first:border-t-0"
-          >
-            <span
-              className="w-2 h-2 rounded-full flex-shrink-0"
-              style={{ background: r.pct < 60 ? '#E24B4A' : '#EF9F27' }}
-            />
-            <span className={'text-sm flex-1 ' + (r.user_id === currentUserId ? 'font-medium text-gray-200' : 'text-gray-400')}>
+      <div>
+        {items.map(r => (
+          <div key={r.user_id} style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '6px 0',
+            borderTop: '0.5px solid var(--color-border-tertiary)',
+          }}>
+            {dot(r.pct)}
+            <span style={{
+              fontSize: 14,
+              color: 'var(--color-text-primary)',
+              flex: 1,
+              fontWeight: r.user_id === currentUserId ? 500 : 400,
+            }}>
               {r.ingame_name}
               {r.user_id === currentUserId && (
-                <span className="ml-1.5 text-xs text-gray-600">
+                <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginLeft: 6 }}>
                   ({lang === 'de' ? 'du' : 'you'})
                 </span>
               )}
             </span>
-            <div className="flex-1 h-1.5 rounded-full bg-gray-800 overflow-hidden">
-              <div
-                className="h-full rounded-full"
-                style={{
-                  width: r.pct + '%',
-                  background: r.pct < 60 ? '#E24B4A' : '#EF9F27',
-                }}
-              />
+            <div style={{
+              flex: 1,
+              height: 4,
+              borderRadius: 2,
+              background: 'var(--color-background-secondary)',
+              overflow: 'hidden',
+            }}>
+              <div style={{
+                height: '100%',
+                borderRadius: 2,
+                width: r.pct + '%',
+                background: r.pct < 60 ? '#E24B4A' : '#EF9F27',
+              }} />
             </div>
-            <span
-              className="text-xs font-medium w-9 text-right"
-              style={{ color: r.pct < 60 ? '#f87171' : '#fbbf24' }}
-            >
+            <span style={{
+              fontSize: 13,
+              fontWeight: 500,
+              minWidth: 36,
+              textAlign: 'right',
+              color: r.pct < 60 ? '#A32D2D' : '#854F0B',
+            }}>
               {r.pct}%
             </span>
           </div>
@@ -131,25 +178,3 @@ export default function BacklogWidget({ lang, currentUserId }: Props) {
     </div>
   )
 }
-```
-
----
-
-### Datei 2 — `app/dashboard/page.tsx` — zwei `str_replace`
-
-**str_replace 1 — Import hinzufügen:**
-```
-old: import RankingTab from '@/components/RankingTab'
-new: import RankingTab from '@/components/RankingTab'
-import BacklogWidget from '@/components/BacklogWidget'
-```
-
-**str_replace 2 — Dashboard-Tab um Widget erweitern:**
-```
-old:         {activeTab === 'dashboard' && <Dashboard />}
-new:         {activeTab === 'dashboard' && (
-          <>
-            <BacklogWidget lang={lang} currentUserId={profile?.id} />
-            <Dashboard />
-          </>
-        )}
