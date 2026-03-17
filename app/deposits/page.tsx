@@ -9,6 +9,7 @@ import ScreenshotUpload from '@/components/ScreenshotUpload'
 import ScreenshotThumb from '@/components/ScreenshotThumb'
 import OcrReader from '@/components/OcrReader'
 import InfoTooltip from '@/components/InfoTooltip'
+import Header from '@/components/Header'
 
 type DepositStatus = 'pending' | 'approved' | 'rejected'
 type Lang = 'de' | 'en'
@@ -261,19 +262,7 @@ function DepositsContent() {
 
   return (
     <div className="min-h-screen bg-[#0f1117] text-gray-100">
-      <header className="border-b border-gray-800 bg-[#161822] sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
-          <button
-            onClick={() => router.push('/dashboard')}
-            className="text-teal-400 hover:text-teal-300 text-sm"
-          >
-            {t.back[lang]}
-          </button>
-          <span className="text-sm text-gray-400">
-            {profile?.ingame_name || profile?.username}
-          </span>
-        </div>
-      </header>
+      <Header lang={lang} />
 
       <main className="max-w-4xl mx-auto px-4 py-6 space-y-6">
         {error && (
