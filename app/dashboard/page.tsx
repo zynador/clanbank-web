@@ -12,6 +12,8 @@ import SecurityAlerts from '@/components/SecurityAlerts'
 import RankingTab from '@/components/RankingTab'
 import DepositsTab from '@/components/DepositsTab'
 import BacklogWidget from '@/components/BacklogWidget'
+import BattleReportUpload from '@/components/BattleReportUpload'
+import PayoutCalculation from '@/components/PayoutCalculation'
 import Logo from '@/components/Logo'
 import WelcomeModal from '@/components/WelcomeModal'
 import HelpButton from '@/components/HelpButton'
@@ -24,13 +26,16 @@ export default function DashboardPage() {
 function DashboardContent() {
   const { profile, signOut } = useAuth()
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'ranking' | 'deposits' | 'freigabe' | 'warnungen' | 'vorschlaege' | 'verwaltung'>('dashboard')
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'ranking' | 'deposits' | 'auszahlungen' | 'freigabe' | 'warnungen' | 'vorschlaege' | 'verwaltung'>('dashboard')
   const [showWelcome, setShowWelcome] = useState(false)
   const [lang, setLang] = useState<'de' | 'en'>('de')
   const [alertsCount, setAlertsCount] = useState(0)
   const [pendingClaimsCount, setPendingClaimsCount] = useState(0)
+  const [isRaidleiter, setIsRaidleiter] = useState(false)
+  const [lastBattleReportId, setLastBattleReportId] = useState<string | null>(null)
   const isOfficerOrAdmin = profile?.role === 'admin' || profile?.role === 'offizier'
   const role = (profile?.role as 'admin' | 'offizier' | 'mitglied') ?? 'mitglied'
+  const canSeeAuszahlungen = isOfficerOrAdmin || isRaidleiter
 
   useEffect(() => {
     try {
@@ -46,6 +51,18 @@ function DashboardContent() {
       if (!seen) setShowWelcome(true)
     } catch {}
   }, [profile?.role])
+
+  useEffect(() => {
+    if (!profile?.id) return
+    supabase
+      .from('profiles')
+      .select('is_raidleiter')
+      .eq('id', profile.id)
+      .single()
+      .then(({ data }) => {
+        if (data) setIsRaidleiter(!!(data as { is_raidleiter: boolean }).is_raidleiter)
+      })
+  }, [profile?.id])
 
   useEffect(() => {
     if (!isOfficerOrAdmin) return
@@ -72,21 +89,25 @@ function DashboardContent() {
   }
 
   const t = {
-    deposits: { de: 'Einzahlungen', en: 'Deposits' },
-    ranking: { de: 'Ranking', en: 'Ranking' },
-    approvals: { de: 'Freigaben', en: 'Approvals' },
-    warnings: { de: 'Warnungen', en: 'Warnings' },
+    deposits:    { de: 'Einzahlungen', en: 'Deposits' },
+    ranking:     { de: 'Ranking', en: 'Ranking' },
+    auszahlungen: { de: 'Auszahlungen', en: 'Payouts' },
+    approvals:   { de: 'Freigaben', en: 'Approvals' },
+    warnings:    { de: 'Warnungen', en: 'Warnings' },
     suggestions: { de: 'Vorschläge', en: 'Suggestions' },
-    management: { de: 'Verwaltung', en: 'Management' },
-    logout: { de: 'Abmelden', en: 'Sign out' },
+    management:  { de: 'Verwaltung', en: 'Management' },
+    logout:      { de: 'Abmelden', en: 'Sign out' },
     pendingTitle: { de: '⏳ Ausstehende Freigaben', en: '⏳ Pending Approvals' },
     tip_dashboard: { de: 'Zeigt Gesamtstatistiken deiner Einzahlungen.', en: 'Shows overall statistics of your deposits.' },
     tip_ranking: { de: 'Rangliste aller Clan-Mitglieder mit individuellem Schwellwert und Auszahlungsberechtigung.', en: 'Ranking of all clan members with individual threshold and payout eligibility.' },
     tip_deposits: { de: 'Hier kannst du neue Einzahlungen erfassen. Screenshot hochladen → KI erkennt Werte → bestätigen.', en: 'Here you can record new deposits. Upload screenshot → AI detects values → confirm.' },
+    tip_auszahlungen: { de: 'Kampfberichte hochladen, Verluste per OCR auslesen und Auszahlungen berechnen.', en: 'Upload battle reports, read casualties via OCR and calculate payouts.' },
     tip_approvals: { de: 'Manuelle Einzahlungen warten hier auf Prüfung. Als Offizier kannst du sie genehmigen oder ablehnen.', en: 'Manual deposits wait here for review. As an Officer you can approve or reject them.' },
     tip_warnings: { de: 'Duplikat-Versuche werden hier gemeldet.', en: 'Duplicate attempts are reported here.' },
     tip_suggestions: { de: 'Ideen und Verbesserungsvorschläge für den Clan einreichen.', en: 'Submit ideas and improvement suggestions for the clan.' },
     tip_management: { de: 'Spieler-Rollen vergeben, Ingame-Namen und Start-KW verwalten.', en: 'Assign player roles, manage in-game names and start weeks.' },
+    upload_title: { de: 'Kampfbericht hochladen', en: 'Upload Battle Report' },
+    payout_title: { de: 'Auszahlungsberechnung', en: 'Payout Calculation' },
   }
 
   return (
@@ -123,6 +144,12 @@ function DashboardContent() {
             {t.deposits[lang]}
             <InfoTooltip de={t.tip_deposits.de} en={t.tip_deposits.en} lang={lang} position="bottom" />
           </TabButton>
+          {canSeeAuszahlungen && (
+            <TabButton active={activeTab === 'auszahlungen'} onClick={() => setActiveTab('auszahlungen')}>
+              {'⚔️ ' + t.auszahlungen[lang]}
+              <InfoTooltip de={t.tip_auszahlungen.de} en={t.tip_auszahlungen.en} lang={lang} position="bottom" />
+            </TabButton>
+          )}
           {isOfficerOrAdmin && (
             <TabButton active={activeTab === 'freigabe'} onClick={() => setActiveTab('freigabe')}>
               {t.approvals[lang]}
@@ -174,6 +201,30 @@ function DashboardContent() {
           </section>
         )}
         {activeTab === 'deposits' && <DepositsTab lang={lang} />}
+        {activeTab === 'auszahlungen' && canSeeAuszahlungen && (
+          <div className="space-y-6">
+            <section className="bg-[#161822] border border-gray-800 rounded-xl p-6">
+              <h2 className="text-base font-medium text-gray-300 mb-4 flex items-center gap-2">
+                📋 {t.upload_title[lang]}
+                {isRaidleiter && !isOfficerOrAdmin && (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 border border-yellow-500/20">
+                    ⚔️ Raidleiter
+                  </span>
+                )}
+              </h2>
+              <BattleReportUpload
+                lang={lang}
+                onComplete={(id) => setLastBattleReportId(id)}
+              />
+            </section>
+            <section className="bg-[#161822] border border-gray-800 rounded-xl p-6">
+              <h2 className="text-base font-medium text-gray-300 mb-4">
+                💰 {t.payout_title[lang]}
+              </h2>
+              <PayoutCalculation lang={lang} />
+            </section>
+          </div>
+        )}
         {activeTab === 'freigabe' && isOfficerOrAdmin && (
           <section className="bg-[#161822] border border-gray-800 rounded-xl p-6">
             <h2 className="text-base font-medium text-gray-300 mb-4">{t.pendingTitle[lang]}</h2>
