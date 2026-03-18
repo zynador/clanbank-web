@@ -225,12 +225,15 @@ export default function StarterMembersPanel({ lang }: { lang: Lang }) {
                 <div key={claim.id} className="px-5 py-3 flex items-center justify-between gap-4">
                   <div className="text-sm">
                     <span className="font-medium text-zinc-200">{claim.ingame_name}</span>
-                    <span className="text-zinc-500 ml-2 text-xs">
-                      {lang === 'de' ? '← beansprucht von' : '← claimed by'}{' '}
-                      <span className="text-zinc-300">
-                        {claimer ? `@${claimer.username}` : '...'}
-                      </span>
-                    </span>
+              <span className="text-zinc-500 ml-2 text-xs">
+                {lang === 'de' ? '← Ingame-Name, zuordnen zu:' : '← ingame name, link to:'}{' '}
+                <span className="text-zinc-300">
+                  {claimer ? `@${claimer.username} (${claimer.ingame_name})` : '...'}
+                </span>
+              </span>
+              <span className="text-zinc-600 text-xs ml-2">
+                {lang === 'de' ? '— Bestätigen wenn korrekt' : '— Confirm if correct'}
+              </span>
                   </div>
                   <div className="flex gap-2 shrink-0">
                     <button
