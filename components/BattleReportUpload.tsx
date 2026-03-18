@@ -83,6 +83,7 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
   }
 
   async function handleCreateReport() {
+    console.log('handleCreateReport fired', { clan_id: profile?.clan_id, overviewUrl, overviewHash, battleDateStr })
     if (!profile?.clan_id || !overviewUrl || !overviewHash || !battleDateStr) {
       setFeedback({ type: 'error', text: 'Fehlende Daten: ' + (!profile?.clan_id ? 'clan_id fehlt' : !overviewUrl ? 'kein Screenshot' : !overviewHash ? 'kein Hash' : 'kein Datum') })
       return
@@ -326,7 +327,7 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
 
           <button
             onClick={handleCreateReport}
-            disabled={saving || !overviewUrl || !battleDateStr}
+            disabled={saving || !overviewUrl || !overviewHash || !battleDateStr}
             className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg py-2.5 text-sm font-medium transition-colors"
           >
             {saving
