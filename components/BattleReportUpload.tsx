@@ -365,9 +365,9 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
                   <ScreenshotUpload
                     key={'slot-' + i + '-' + (slot.url ? '1' : '0')}
                     clanId={profile.clan_id}
-                    existingUrl={slot.url}
+                    existingUrl={slot.url ?? undefined}
                     isOfficerOrAdmin={true}
-                    onUploadComplete={(url, hash) => updateSlot(i, url, hash)}
+                    onUploadComplete={(url, hash) => updateSlot(i, url, hash ?? null)}
                   />
                 )}
               </div>
