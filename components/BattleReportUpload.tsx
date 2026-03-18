@@ -83,7 +83,10 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
   }
 
   async function handleCreateReport() {
-    if (!profile?.clan_id || !overviewUrl || !overviewHash || !battleDateStr) return
+    if (!profile?.clan_id || !overviewUrl || !overviewHash || !battleDateStr) {
+      setFeedback({ type: 'error', text: 'Fehlende Daten: ' + (!profile?.clan_id ? 'clan_id fehlt' : !overviewUrl ? 'kein Screenshot' : !overviewHash ? 'kein Hash' : 'kein Datum') })
+      return
+    }
     setSaving(true)
     setFeedback(null)
 
