@@ -29,7 +29,9 @@ function getKwFromDate(val: string): { kw: number; year: number } {
   return { kw, year: d.getUTCFullYear() }
 }
 
-const EMPTY_SLOTS: ScreenSlot[] = Array.from({ length: 6 }, () => ({ url: null, hash: null }))
+function makeEmptySlots(): ScreenSlot[] {
+  return Array.from({ length: 6 }, () => ({ url: null, hash: null }))
+}
 
 export default function BattleReportUpload({ lang, onComplete }: Props) {
   const { profile } = useAuth()
@@ -38,7 +40,6 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
   const [step, setStep] = useState<'overview' | 'details' | 'done'>('overview')
   const [battleReportId, setBattleReportId] = useState<string | null>(null)
 
-  // Overview
   const [overviewUrl, setOverviewUrl] = useState<string | null>(null)
   const [overviewHash, setOverviewHash] = useState<string | null>(null)
   const [battleDateStr, setBattleDateStr] = useState('')
@@ -46,8 +47,7 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
   const [battleYear, setBattleYear] = useState<number>(new Date().getFullYear())
   const [side, setSide] = useState<Side>('attacker')
 
-  // Detail screens — 6 Slots
-  const [slots, setSlots] = useState<ScreenSlot[]>(EMPTY_SLOTS)
+  const [slots, setSlots] = useState<ScreenSlot[]>(makeEmptySlots())
   const [uploadedCount, setUploadedCount] = useState(0)
 
   const [saving, setSaving] = useState(false)
@@ -69,8 +69,8 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
 
   useEffect(() => {
     if (feedback) {
-      const t = setTimeout(() => setFeedback(null), 5000)
-      return () => clearTimeout(t)
+      const timer = setTimeout(() => setFeedback(null), 5000)
+      return () => clearTimeout(timer)
     }
   }, [feedback])
 
@@ -83,7 +83,7 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
     }
   }
 
-  function updateSlot(index: number, url: string, hash?: string | null) {
+  function updateSlot(index: number, url: string, hash: string | undefined | null) {
     setSlots(prev => {
       const next = [...prev]
       next[index] = { url, hash: hash ?? null }
@@ -93,7 +93,10 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
 
   async function handleCreateReport() {
     if (!profile?.clan_id || !overviewUrl || !battleDateStr) {
-      setFeedback({ type: 'error', text: 'Fehlende Daten: ' + (!profile?.clan_id ? 'clan_id fehlt' : !overviewUrl ? 'kein Screenshot' : 'kein Datum') })
+      setFeedback({
+        type: 'error',
+        text: 'Fehlende Daten: ' + (!profile?.clan_id ? 'clan_id fehlt' : !overviewUrl ? 'kein Screenshot' : 'kein Datum'),
+      })
       return
     }
     setSaving(true)
@@ -138,7 +141,10 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
     if (!battleReportId) return
     const filled = slots.filter(s => s.url !== null)
     if (filled.length === 0) {
-      setFeedback({ type: 'error', text: lang === 'de' ? 'Mindestens ein Detail-Screen erforderlich.' : 'At least one detail screen is required.' })
+      setFeedback({
+        type: 'error',
+        text: lang === 'de' ? 'Mindestens ein Detail-Screen erforderlich.' : 'At least one detail screen is required.',
+      })
       return
     }
     setSaving(true)
@@ -147,12 +153,10 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
     let successCount = 0
     for (const slot of filled) {
       if (!slot.url) continue
-
       if (slot.hash) {
         const { data: dup } = await supabase.rpc('check_battle_screenshot_hash', { p_hash: slot.hash })
         if (dup?.exists) continue
       }
-
       const { data, error } = await supabase.rpc('add_battle_screen', {
         p_battle_report_id: battleReportId,
         p_screenshot_url:   slot.url,
@@ -182,7 +186,7 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
     setBattleKw(1)
     setBattleYear(new Date().getFullYear())
     setSide('attacker')
-    setSlots(EMPTY_SLOTS)
+    setSlots(makeEmptySlots())
     setUploadedCount(0)
     setFeedback(null)
   }
@@ -206,7 +210,6 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
   return (
     <div className="space-y-4">
 
-      {/* Feedback */}
       {feedback && (
         <div className={'px-4 py-3 rounded-lg text-sm flex items-start justify-between gap-2 ' + (
           feedback.type === 'success'
@@ -218,26 +221,24 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
         </div>
       )}
 
-      {/* Step indicator */}
       <div className="flex items-center gap-2 text-xs">
         <span className={step === 'overview' ? 'text-blue-400 font-medium' : 'text-zinc-500 line-through'}>
-          1. {lang === 'de' ? 'Übersicht' : 'Overview'}
+          {'1. ' + (lang === 'de' ? 'Übersicht' : 'Overview')}
         </span>
-        <span className="text-zinc-700">→</span>
+        <span className="text-zinc-700">{'→'}</span>
         <span className={step === 'details' ? 'text-blue-400 font-medium' : step === 'done' ? 'text-zinc-500 line-through' : 'text-zinc-600'}>
-          2. {lang === 'de' ? 'Details' : 'Details'}
+          {'2. ' + (lang === 'de' ? 'Details' : 'Details')}
         </span>
-        <span className="text-zinc-700">→</span>
+        <span className="text-zinc-700">{'→'}</span>
         <span className={step === 'done' ? 'text-green-400 font-medium' : 'text-zinc-600'}>
-          3. {lang === 'de' ? 'Fertig' : 'Done'}
+          {'3. ' + (lang === 'de' ? 'Fertig' : 'Done')}
         </span>
       </div>
 
-      {/* ── STEP 1: Übersichts-Screen ── */}
       {step === 'overview' && (
         <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-5 space-y-4">
           <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider flex items-center gap-1">
-            📋 {lang === 'de' ? 'Übersichts-Screen' : 'Overview Screen'}
+            {'📋 ' + (lang === 'de' ? 'Übersichts-Screen' : 'Overview Screen')}
             <InfoTooltip
               de="Lade den Übersichts-Screen des Kampfberichts hoch. Pflichtfeld — muss zuerst hochgeladen werden."
               en="Upload the battle report overview screen. Required — must be uploaded first."
@@ -249,7 +250,7 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
           <div>
             <label className="block text-xs text-zinc-500 mb-1">
               {lang === 'de' ? 'Übersichts-Screen' : 'Overview screenshot'}
-              <span className="text-red-400 ml-1">*</span>
+              <span className="text-red-400 ml-1">{'*'}</span>
             </label>
             {profile?.clan_id && (
               <ScreenshotUpload
@@ -258,7 +259,7 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
                 isOfficerOrAdmin={true}
                 onUploadComplete={(url, hash) => {
                   setOverviewUrl(url)
-                  if (hash) setOverviewHash(hash)
+                  setOverviewHash(hash ?? null)
                 }}
               />
             )}
@@ -267,7 +268,7 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
           <div>
             <label className="block text-xs text-zinc-500 mb-1">
               {lang === 'de' ? 'Kampfdatum' : 'Battle date'}
-              <span className="text-red-400 ml-1">*</span>
+              <span className="text-red-400 ml-1">{'*'}</span>
               <span className="text-zinc-600 ml-1">
                 {lang === 'de' ? '(wird später per OCR automatisch erkannt)' : '(will be auto-detected via OCR later)'}
               </span>
@@ -289,7 +290,8 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
 
           <div className="flex gap-4 flex-wrap">
             <label className="text-xs text-zinc-500 flex items-center gap-2">
-              {lang === 'de' ? 'KW (Korrektur)' : 'Week (override)'}:
+              {lang === 'de' ? 'KW (Korrektur)' : 'Week (override)'}
+              {':'}
               <select
                 value={battleKw}
                 onChange={(e) => setBattleKw(Number(e.target.value))}
@@ -303,14 +305,14 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
 
             <label className="text-xs text-zinc-500 flex items-center gap-2">
               {lang === 'de' ? 'Seite' : 'Side'}
-              <span className="text-red-400">*</span>
+              <span className="text-red-400">{'*'}</span>
               <InfoTooltip
                 de="Angreifer = [1Ca] hat angegriffen. Verteidiger = [1Ca] wurde angegriffen."
                 en="Attacker = [1Ca] attacked. Defender = [1Ca] was attacked."
                 lang={lang}
                 position="bottom"
               />
-              :
+              {':'}
               <select
                 value={side}
                 onChange={(e) => setSide(e.target.value as Side)}
@@ -335,11 +337,10 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
         </div>
       )}
 
-      {/* ── STEP 2: Detail-Screens Grid ── */}
       {step === 'details' && (
         <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-5 space-y-4">
           <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider flex items-center gap-1">
-            🖼️ {lang === 'de' ? 'Detail-Screens' : 'Detail Screens'}
+            {'🖼️ ' + (lang === 'de' ? 'Detail-Screens' : 'Detail Screens')}
             <InfoTooltip
               de="Lade bis zu 6 Kampf-Detail-Screens gleichzeitig hoch. Mindestens 1 Screen erforderlich."
               en="Upload up to 6 battle detail screens at once. At least 1 screen required."
@@ -348,18 +349,17 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
             />
             {filledSlots > 0 && (
               <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/20">
-                {filledSlots} {lang === 'de' ? 'bereit' : 'ready'}
+                {filledSlots + ' ' + (lang === 'de' ? 'bereit' : 'ready')}
               </span>
             )}
           </h3>
 
-          {/* 2×3 Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {slots.map((slot, i) => (
               <div key={i} className="space-y-1">
                 <p className="text-xs text-zinc-600">
                   {'Screen ' + (i + 1)}
-                  {slot.url && <span className="ml-1 text-green-400">✓</span>}
+                  {slot.url && <span className="ml-1 text-green-400">{'✓'}</span>}
                 </p>
                 {profile?.clan_id && (
                   <ScreenshotUpload
@@ -367,7 +367,7 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
                     clanId={profile.clan_id}
                     existingUrl={slot.url}
                     isOfficerOrAdmin={true}
-                    onUploadComplete={(url, hash) => updateSlot(i, url, hash ?? null)}
+                    onUploadComplete={(url, hash) => updateSlot(i, url, hash)}
                   />
                 )}
               </div>
@@ -389,18 +389,16 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
                 ? (lang === 'de' ? 'Wird gespeichert...' : 'Saving...')
                 : ('✓ ' + (lang === 'de'
                     ? 'Upload abschließen (' + filledSlots + ' Screen(s))'
-                    : 'Finish upload (' + filledSlots + ' screen(s))')
-                )
+                    : 'Finish upload (' + filledSlots + ' screen(s))'))
               }
             </button>
           </div>
         </div>
       )}
 
-      {/* ── STEP 3: Fertig ── */}
       {step === 'done' && (
         <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-5 text-center space-y-3">
-          <div className="text-3xl">✅</div>
+          <div className="text-3xl">{'✅'}</div>
           <p className="text-sm font-medium text-green-400">
             {lang === 'de' ? 'Upload abgeschlossen!' : 'Upload complete!'}
           </p>
