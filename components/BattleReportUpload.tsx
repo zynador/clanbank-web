@@ -83,7 +83,7 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
     }
   }
 
-  function updateSlot(index: number, url: string, hash: string | null) {
+  function updateSlot(index: number, url: string, hash?: string | null) {
     setSlots(prev => {
       const next = [...prev]
       next[index] = { url, hash: hash ?? null }
