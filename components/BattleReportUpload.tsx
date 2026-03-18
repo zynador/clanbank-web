@@ -414,4 +414,4 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
           )}
           <button
             onClick={reset}
-            className="px-4 py-2 bg-z
+            className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 text-sm rounded-lg transition-colors"
