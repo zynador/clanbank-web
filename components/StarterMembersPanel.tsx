@@ -76,24 +76,29 @@ export default function StarterMembersPanel({ lang }: { lang: Lang }) {
       const text = ev.target?.result as string
       setPreview(parseCSV(text))
     }
-    reader.readAsText(file)
+    reader.readAsText(file, 'UTF-8')
   }
 
   function parseCSV(text: string): ParsedRow[] {
     const lines = text.trim().split('\n').filter(Boolean)
     if (lines.length < 2) return []
-    const header = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''))
+    const delimiter = firstLine.includes(';') ? ';' : ','
+    const header = firstLine.split(delimiter).map(h => h.trim().toLowerCase().replace(/"/g, ''))
     const iIdx = header.findIndex(h => h.includes('ingame') || h === 'name')
     const dIdx = header.findIndex(h => h.includes('display'))
     const rIdx = header.findIndex(h => h.includes('role') || h.includes('rolle'))
     if (iIdx === -1) return []
     return lines.slice(1).map(line => {
-      const cols = line.split(',').map(c => c.trim().replace(/"/g, ''))
-      return {
-        ingame_name:  cols[iIdx] || '',
-        display_name: dIdx >= 0 ? (cols[dIdx] || '') : '',
-        role:         rIdx >= 0 ? (cols[rIdx] || 'mitglied') : 'mitglied',
-      }
+    const cols = line.split(delimiter).map(c => c.trim().replace(/"/g, ''))
+    const rawName = cols[iIdx] || ''
+    const cleanName = rawName.includes(';;') ? rawName.split(';;')[0].trim() : rawName
+    const rawRole = rIdx >= 0 ? (cols[rIdx] || '') : ''
+    const cleanRole = rawRole.includes(';;') ? rawRole.split(';;')[0].trim() : rawRole
+    return {
+      ingame_name: cleanName,
+      display_name: dIdx >= 0 ? (cols[dIdx] || '') : '',
+      role: cleanRole || 'mitglied',
+    }
     }).filter(r => r.ingame_name)
   }
 
