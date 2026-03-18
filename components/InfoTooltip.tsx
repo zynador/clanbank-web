@@ -1,5 +1,4 @@
 'use client'
-
 import { useState, useRef, useEffect } from 'react'
 
 interface InfoTooltipProps {
@@ -24,9 +23,9 @@ export default function InfoTooltip({
       const rect = btnRef.current.getBoundingClientRect()
       setCoords({
         top: position === 'bottom'
-          ? rect.bottom + window.scrollY + 6
-          : rect.top + window.scrollY - 6,
-        left: rect.left + window.scrollX + rect.width / 2,
+          ? rect.bottom + 6
+          : rect.top - 6,
+        left: rect.left + rect.width / 2,
       })
     }
     setVisible(true)
@@ -56,7 +55,6 @@ export default function InfoTooltip({
       >
         i
       </button>
-
       {visible && (
         <span
           style={{
