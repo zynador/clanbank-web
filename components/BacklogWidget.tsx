@@ -23,20 +23,25 @@ export default function BacklogWidget({ lang, currentUserId }: Props) {
     async function load() {
       const today = new Date().toISOString().split('T')[0]
 
-      const [rankRes, exemptRes] = await Promise.all([
+      const [rankRes, exemptRes, rlRes] = await Promise.all([
         supabase.rpc('get_ranking_data', { p_year: null, p_kw: null, p_month: null }),
         supabase
           .from('member_exemptions')
           .select('user_id')
           .lte('start_date', today)
           .or('end_date.is.null,end_date.gte.' + today),
+        supabase
+          .from('profiles')
+          .select('id')
+          .eq('is_raidleiter', true),
       ])
 
       if (rankRes.error || !rankRes.data) { setLoading(false); return }
 
-      const exemptSet = new Set<string>(
-        ((exemptRes.data as { user_id: string }[]) || []).map((e) => e.user_id)
-      )
+      const exemptSet = new Set<string>([
+        ...((exemptRes.data as { user_id: string }[]) || []).map((e) => e.user_id),
+        ...((rlRes.data as { id: string }[]) || []).map((r) => r.id),
+      ])
 
       const filtered = (rankRes.data as RankingRow[])
         .filter((r) => !exemptSet.has(r.user_id))
