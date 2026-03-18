@@ -249,12 +249,13 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
             </label>
             {profile?.clan_id && (
               <ScreenshotUpload
+                key={'detail-' + detailScreens.length}
                 clanId={profile.clan_id}
-                existingUrl={overviewUrl}
+                existingUrl={pendingUrl}
                 isOfficerOrAdmin={true}
                 onUploadComplete={(url, hash) => {
-                  setOverviewUrl(url)
-                  if (hash) setOverviewHash(hash)
+                  setPendingUrl(url)
+                  if (hash) setPendingHash(hash)
                 }}
               />
             )}
