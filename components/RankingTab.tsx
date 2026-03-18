@@ -60,7 +60,18 @@ export default function RankingTab({ lang }: { lang: Lang }) {
   const [tab, setTab] = useState<TabMode>('gesamt')
   const [filterMonth, setFilterMonth] = useState<number | null>(null)
   const [filterKw, setFilterKw] = useState<number | null>(null)
+  const [raidleiterIds, setRaidleiterIds] = useState<Set<string>>(new Set())
   const { getExemptionForUser } = useExemptions()
+
+  useEffect(() => {
+    supabase
+      .from('profiles')
+      .select('id')
+      .eq('is_raidleiter', true)
+      .then(({ data }) => {
+        if (data) setRaidleiterIds(new Set((data as { id: string }[]).map(r => r.id)))
+      })
+  }, [])
 
   useEffect(() => { fetchData() }, [filterMonth, filterKw])
 
@@ -91,18 +102,18 @@ export default function RankingTab({ lang }: { lang: Lang }) {
 
   const kwOptions = Array.from({ length: currentKw }, (_, i) => i + 1)
   const monthOptions = [
-    { v: 1, de: 'Januar', en: 'January' },
-    { v: 2, de: 'Februar', en: 'February' },
-    { v: 3, de: 'März', en: 'March' },
-    { v: 4, de: 'April', en: 'April' },
-    { v: 5, de: 'Mai', en: 'May' },
-    { v: 6, de: 'Juni', en: 'June' },
-    { v: 7, de: 'Juli', en: 'July' },
-    { v: 8, de: 'August', en: 'August' },
-    { v: 9, de: 'September', en: 'September' },
-    { v: 10, de: 'Oktober', en: 'October' },
-    { v: 11, de: 'November', en: 'November' },
-    { v: 12, de: 'Dezember', en: 'December' },
+    { v: 1,  de: 'Januar',    en: 'January' },
+    { v: 2,  de: 'Februar',   en: 'February' },
+    { v: 3,  de: 'März',      en: 'March' },
+    { v: 4,  de: 'April',     en: 'April' },
+    { v: 5,  de: 'Mai',       en: 'May' },
+    { v: 6,  de: 'Juni',      en: 'June' },
+    { v: 7,  de: 'Juli',      en: 'July' },
+    { v: 8,  de: 'August',    en: 'August' },
+    { v: 9,  de: 'September', en: 'September' },
+    { v: 10, de: 'Oktober',   en: 'October' },
+    { v: 11, de: 'November',  en: 'November' },
+    { v: 12, de: 'Dezember',  en: 'December' },
   ]
 
   const t = {
@@ -116,6 +127,7 @@ export default function RankingTab({ lang }: { lang: Lang }) {
     threshold:    { de: 'Soll', en: 'Target' },
     berechtigt:   { de: 'Auszahlung berechtigt', en: 'Eligible for payout' },
     nichtBerecht: { de: 'Nicht berechtigt', en: 'Not eligible' },
+    rlBefreit:    { de: 'RL — befreit', en: 'RL — exempt' },
     noData:       { de: 'Keine Daten gefunden.', en: 'No data found.' },
     loading:      { de: 'Lädt...', en: 'Loading...' },
     legend_green: { de: 'Soll erreicht', en: 'Target reached' },
@@ -194,6 +206,10 @@ export default function RankingTab({ lang }: { lang: Lang }) {
             {l.label}
           </span>
         ))}
+        <span className="flex items-center gap-1.5 text-xs text-zinc-400">
+          <span className="text-yellow-400">⚔️</span>
+          {lang === 'de' ? 'Raidleiter (befreit)' : 'Raid leader (exempt)'}
+        </span>
         <span className="text-xs text-zinc-600 ml-auto">{t.hint[lang]}</span>
       </div>
 
@@ -208,8 +224,9 @@ export default function RankingTab({ lang }: { lang: Lang }) {
         <div className="space-y-2">
           {sortedRows.map((row, idx) => {
             const exemption = getExemptionForUser(row.user_id)
+            const isRl = raidleiterIds.has(row.user_id)
             const met = metCount(row)
-            const berechtigt = met >= 3
+            const berechtigt = isRl || met >= 3
             const totalThr = row.threshold_per_res * 5
             const totalPct = pct(row.total_deposit, totalThr)
             const rankLabel = sort === 'value' ? String(idx + 1) : '–'
@@ -217,7 +234,9 @@ export default function RankingTab({ lang }: { lang: Lang }) {
             let alphaSep: string | null = null
             if (sort === 'alpha') {
               const name = (row.ingame_name || row.username)[0]?.toUpperCase() ?? ''
-              const prevName = idx > 0 ? (sortedRows[idx - 1].ingame_name || sortedRows[idx - 1].username)[0]?.toUpperCase() ?? '' : ''
+              const prevName = idx > 0
+                ? (sortedRows[idx - 1].ingame_name || sortedRows[idx - 1].username)[0]?.toUpperCase() ?? ''
+                : ''
               if (name !== prevName) alphaSep = name
             }
 
@@ -237,6 +256,11 @@ export default function RankingTab({ lang }: { lang: Lang }) {
                     <span className="text-sm font-medium text-zinc-200 flex-1">
                       {row.ingame_name || row.username}
                     </span>
+                    {isRl && (
+                      <span className="text-xs px-2 py-0.5 rounded-full border bg-yellow-500/15 text-yellow-400 border-yellow-500/20 shrink-0">
+                        ⚔️ RL
+                      </span>
+                    )}
                     <ExemptionBadge exemption={exemption} />
                     <span className="text-xs text-zinc-500 shrink-0">
                       {fmtMio(row.total_deposit)} / {fmtMio(totalThr)}
@@ -245,7 +269,6 @@ export default function RankingTab({ lang }: { lang: Lang }) {
 
                   {tab === 'gesamt' ? (
                     <>
-                      {/* Gesamt-Balken */}
                       <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
                         <div
                           className={'h-full rounded-full ' + ampelClass(totalPct)}
@@ -258,7 +281,6 @@ export default function RankingTab({ lang }: { lang: Lang }) {
                       </div>
                     </>
                   ) : (
-                    /* Pro-Ressource-Balken */
                     <div className="space-y-1.5">
                       {RESOURCES.map(res => {
                         const val = row[res.key]
@@ -283,9 +305,15 @@ export default function RankingTab({ lang }: { lang: Lang }) {
 
                   {/* Berechtigungs-Zeile */}
                   <div className="flex items-center gap-2 pt-1 border-t border-zinc-800/60">
-                    <span className={'text-xs font-medium px-2 py-0.5 rounded-full ' + (berechtigt ? 'bg-green-900/40 text-green-400 border border-green-800/40' : 'bg-red-900/30 text-red-400 border border-red-800/30')}>
-                      {berechtigt ? t.berechtigt[lang] : t.nichtBerecht[lang]}
-                    </span>
+                    {isRl ? (
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 border border-yellow-500/20">
+                        {'⚔️ ' + t.rlBefreit[lang]}
+                      </span>
+                    ) : (
+                      <span className={'text-xs font-medium px-2 py-0.5 rounded-full ' + (berechtigt ? 'bg-green-900/40 text-green-400 border border-green-800/40' : 'bg-red-900/30 text-red-400 border border-red-800/30')}>
+                        {berechtigt ? t.berechtigt[lang] : t.nichtBerecht[lang]}
+                      </span>
+                    )}
                     <span className="text-xs text-zinc-500">
                       {met} / 5 {lang === 'de' ? 'Ressourcen erfüllt' : 'resources met'}
                     </span>
