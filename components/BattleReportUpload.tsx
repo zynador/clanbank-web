@@ -367,7 +367,7 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
                     clanId={profile.clan_id}
                     existingUrl={slot.url ?? undefined}
                     isOfficerOrAdmin={true}
-                    onUploadComplete={(url, hash) => updateSlot(i, url, hash ?? null)}
+                    onUploadComplete={(url, hash) => { if (url) updateSlot(i, url, hash ?? null) }}
                   />
                 )}
               </div>
