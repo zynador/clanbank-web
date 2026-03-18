@@ -1,5 +1,4 @@
 'use client'
-
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 
@@ -90,16 +89,16 @@ export default function StarterMembersPanel({ lang }: { lang: Lang }) {
     const rIdx = header.findIndex(h => h.includes('role') || h.includes('rolle'))
     if (iIdx === -1) return []
     return lines.slice(1).map(line => {
-    const cols = line.split(delimiter).map(c => c.trim().replace(/"/g, ''))
-    const rawName = cols[iIdx] || ''
-    const cleanName = rawName.includes(';;') ? rawName.split(';;')[0].trim() : rawName
-    const rawRole = rIdx >= 0 ? (cols[rIdx] || '') : ''
-    const cleanRole = rawRole.includes(';;') ? rawRole.split(';;')[0].trim() : rawRole
-    return {
-      ingame_name: cleanName,
-      display_name: dIdx >= 0 ? (cols[dIdx] || '') : '',
-      role: cleanRole || 'mitglied',
-    }
+      const cols = line.split(delimiter).map(c => c.trim().replace(/"/g, ''))
+      const rawName = cols[iIdx] || ''
+      const cleanName = rawName.includes(';;') ? rawName.split(';;')[0].trim() : rawName
+      const rawRole = rIdx >= 0 ? (cols[rIdx] || '') : ''
+      const cleanRole = rawRole.includes(';;') ? rawRole.split(';;')[0].trim() : rawRole
+      return {
+        ingame_name: cleanName,
+        display_name: dIdx >= 0 ? (cols[dIdx] || '') : '',
+        role: cleanRole || 'mitglied',
+      }
     }).filter(r => r.ingame_name)
   }
 
@@ -141,9 +140,14 @@ export default function StarterMembersPanel({ lang }: { lang: Lang }) {
     setProcessing(null)
   }
 
+  function roleBadge(role: string) {
+    if (role === 'admin') return 'bg-purple-900/40 text-purple-400 border-purple-800'
+    if (role === 'offizier') return 'bg-amber-900/40 text-amber-400 border-amber-800'
+    return 'bg-zinc-800 text-zinc-400 border-zinc-700'
+  }
+
   return (
     <div className="space-y-6">
-
       {feedback && (
         <div className={`px-4 py-3 rounded-lg text-sm ${
           feedback.type === 'success'
@@ -162,7 +166,6 @@ export default function StarterMembersPanel({ lang }: { lang: Lang }) {
             ? 'CSV-Datei mit Spalten: ingame_name, display_name (optional), role (optional). Erste Zeile = Kopfzeile.'
             : 'CSV file with columns: ingame_name, display_name (optional), role (optional). First row = header.'}
         </p>
-
         <input
           ref={fileRef}
           type="file"
@@ -170,7 +173,6 @@ export default function StarterMembersPanel({ lang }: { lang: Lang }) {
           onChange={handleFileChange}
           className="block text-sm text-zinc-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-zinc-700 file:text-zinc-300 hover:file:bg-zinc-600 file:cursor-pointer"
         />
-
         {preview.length > 0 && (
           <div className="space-y-3">
             <p className="text-xs text-zinc-400">
@@ -207,12 +209,9 @@ export default function StarterMembersPanel({ lang }: { lang: Lang }) {
       <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl overflow-hidden">
         <div className="px-5 py-4 border-b border-zinc-800">
           <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">
-            {lang === 'de'
-              ? `Ausstehende Zuordnungen (${pendingClaims.length})`
-              : `Pending Claims (${pendingClaims.length})`}
+            {lang === 'de' ? `Ausstehende Zuordnungen (${pendingClaims.length})` : `Pending Claims (${pendingClaims.length})`}
           </h3>
         </div>
-
         {pendingClaims.length === 0 ? (
           <div className="px-5 py-6 text-sm text-zinc-500 text-center">
             {lang === 'de' ? 'Keine ausstehenden Zuordnungen.' : 'No pending claims.'}
@@ -223,17 +222,17 @@ export default function StarterMembersPanel({ lang }: { lang: Lang }) {
               const claimer = claim.claimed_by ? claimers[claim.claimed_by] : null
               return (
                 <div key={claim.id} className="px-5 py-3 flex items-center justify-between gap-4">
-                  <div className="text-sm">
+                  <div className="text-sm flex items-center flex-wrap gap-x-2 gap-y-1">
                     <span className="font-medium text-zinc-200">{claim.ingame_name}</span>
-              <span className="text-zinc-500 ml-2 text-xs">
-                {lang === 'de' ? '← Ingame-Name, zuordnen zu:' : '← ingame name, link to:'}{' '}
-                <span className="text-zinc-300">
-                  {claimer ? `@${claimer.username} (${claimer.ingame_name})` : '...'}
-                </span>
-              </span>
-              <span className="text-zinc-600 text-xs ml-2">
-                {lang === 'de' ? '— Bestätigen wenn korrekt' : '— Confirm if correct'}
-              </span>
+                    <span className={'text-[10px] font-medium px-1.5 py-0.5 rounded border capitalize ' + roleBadge(claim.role)}>
+                      {claim.role}
+                    </span>
+                    <span className="text-zinc-500 text-xs">
+                      {lang === 'de' ? '← beantragt von' : '← requested by'}{' '}
+                      <span className="text-zinc-300">
+                        {claimer ? `@${claimer.username}` : '...'}
+                      </span>
+                    </span>
                   </div>
                   <div className="flex gap-2 shrink-0">
                     <button
