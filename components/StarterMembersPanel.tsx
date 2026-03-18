@@ -82,6 +82,7 @@ export default function StarterMembersPanel({ lang }: { lang: Lang }) {
   function parseCSV(text: string): ParsedRow[] {
     const lines = text.trim().split('\n').filter(Boolean)
     if (lines.length < 2) return []
+    const firstLine = lines[0]
     const delimiter = firstLine.includes(';') ? ';' : ','
     const header = firstLine.split(delimiter).map(h => h.trim().toLowerCase().replace(/"/g, ''))
     const iIdx = header.findIndex(h => h.includes('ingame') || h === 'name')
