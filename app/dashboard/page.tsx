@@ -28,6 +28,7 @@ function DashboardContent() {
   const [showWelcome, setShowWelcome] = useState(false)
   const [lang, setLang] = useState<'de' | 'en'>('de')
   const [alertsCount, setAlertsCount] = useState(0)
+  const [pendingClaimsCount, setPendingClaimsCount] = useState(0)
   const isOfficerOrAdmin = profile?.role === 'admin' || profile?.role === 'offizier'
   const role = (profile?.role as 'admin' | 'offizier' | 'mitglied') ?? 'mitglied'
 
@@ -53,6 +54,17 @@ function DashboardContent() {
     })
   }, [isOfficerOrAdmin])
 
+  useEffect(() => {
+    if (profile?.role !== 'admin') return
+    supabase
+      .from('starter_members')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'claimed_pending')
+      .then(({ count }) => {
+        if (typeof count === 'number') setPendingClaimsCount(count)
+      })
+  }, [profile?.role])
+
   function toggleLang() {
     const next = lang === 'de' ? 'en' : 'de'
     setLang(next)
@@ -60,42 +72,21 @@ function DashboardContent() {
   }
 
   const t = {
-    deposits:      { de: 'Einzahlungen', en: 'Deposits' },
-    ranking:       { de: 'Ranking',      en: 'Ranking' },
-    approvals:     { de: 'Freigaben',    en: 'Approvals' },
-    warnings:      { de: 'Warnungen',    en: 'Warnings' },
-    suggestions:   { de: 'Vorschläge',   en: 'Suggestions' },
-    management:    { de: 'Verwaltung',   en: 'Management' },
-    logout:        { de: 'Abmelden',     en: 'Sign out' },
-    pendingTitle:  { de: '⏳ Ausstehende Freigaben', en: '⏳ Pending Approvals' },
-    tip_dashboard: {
-      de: 'Zeigt Gesamtstatistiken deiner Einzahlungen.',
-      en: 'Shows overall statistics of your deposits.',
-    },
-    tip_ranking: {
-      de: 'Rangliste aller Clan-Mitglieder mit individuellem Schwellwert und Auszahlungsberechtigung.',
-      en: 'Ranking of all clan members with individual threshold and payout eligibility.',
-    },
-    tip_deposits: {
-      de: 'Hier kannst du neue Einzahlungen erfassen. Screenshot hochladen → KI erkennt Werte → bestätigen.',
-      en: 'Here you can record new deposits. Upload screenshot → AI detects values → confirm.',
-    },
-    tip_approvals: {
-      de: 'Manuelle Einzahlungen warten hier auf Prüfung. Als Offizier kannst du sie genehmigen oder ablehnen.',
-      en: 'Manual deposits wait here for review. As an Officer you can approve or reject them.',
-    },
-    tip_warnings: {
-      de: 'Duplikat-Versuche werden hier gemeldet.',
-      en: 'Duplicate attempts are reported here.',
-    },
-    tip_suggestions: {
-      de: 'Ideen und Verbesserungsvorschläge für den Clan einreichen.',
-      en: 'Submit ideas and improvement suggestions for the clan.',
-    },
-    tip_management: {
-      de: 'Spieler-Rollen vergeben, Ingame-Namen und Start-KW verwalten.',
-      en: 'Assign player roles, manage in-game names and start weeks.',
-    },
+    deposits: { de: 'Einzahlungen', en: 'Deposits' },
+    ranking: { de: 'Ranking', en: 'Ranking' },
+    approvals: { de: 'Freigaben', en: 'Approvals' },
+    warnings: { de: 'Warnungen', en: 'Warnings' },
+    suggestions: { de: 'Vorschläge', en: 'Suggestions' },
+    management: { de: 'Verwaltung', en: 'Management' },
+    logout: { de: 'Abmelden', en: 'Sign out' },
+    pendingTitle: { de: '⏳ Ausstehende Freigaben', en: '⏳ Pending Approvals' },
+    tip_dashboard: { de: 'Zeigt Gesamtstatistiken deiner Einzahlungen.', en: 'Shows overall statistics of your deposits.' },
+    tip_ranking: { de: 'Rangliste aller Clan-Mitglieder mit individuellem Schwellwert und Auszahlungsberechtigung.', en: 'Ranking of all clan members with individual threshold and payout eligibility.' },
+    tip_deposits: { de: 'Hier kannst du neue Einzahlungen erfassen. Screenshot hochladen → KI erkennt Werte → bestätigen.', en: 'Here you can record new deposits. Upload screenshot → AI detects values → confirm.' },
+    tip_approvals: { de: 'Manuelle Einzahlungen warten hier auf Prüfung. Als Offizier kannst du sie genehmigen oder ablehnen.', en: 'Manual deposits wait here for review. As an Officer you can approve or reject them.' },
+    tip_warnings: { de: 'Duplikat-Versuche werden hier gemeldet.', en: 'Duplicate attempts are reported here.' },
+    tip_suggestions: { de: 'Ideen und Verbesserungsvorschläge für den Clan einreichen.', en: 'Submit ideas and improvement suggestions for the clan.' },
+    tip_management: { de: 'Spieler-Rollen vergeben, Ingame-Namen und Start-KW verwalten.', en: 'Assign player roles, manage in-game names and start weeks.' },
   }
 
   return (
@@ -104,33 +95,21 @@ function DashboardContent() {
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <Logo />
           <div className="flex items-center gap-3">
-            <button
-              onClick={toggleLang}
-              title={lang === 'de' ? 'Switch to English' : 'Auf Deutsch wechseln'}
-              className="flex items-center gap-1 text-xs text-gray-400 hover:text-teal-400 transition-colors px-2 py-1 rounded border border-gray-700 hover:border-teal-600"
-            >
+            <button onClick={toggleLang} title={lang === 'de' ? 'Switch to English' : 'Auf Deutsch wechseln'} className="flex items-center gap-1 text-xs text-gray-400 hover:text-teal-400 transition-colors px-2 py-1 rounded border border-gray-700 hover:border-teal-600">
               🌐 {lang === 'de' ? 'EN' : 'DE'}
             </button>
-            <button
-              onClick={() => setShowWelcome(true)}
-              title={lang === 'de' ? 'Anleitung öffnen' : 'Open guide'}
-              className="flex items-center gap-1 text-xs text-gray-400 hover:text-teal-400 transition-colors px-2 py-1 rounded border border-gray-700 hover:border-teal-600"
-            >
+            <button onClick={() => setShowWelcome(true)} title={lang === 'de' ? 'Anleitung öffnen' : 'Open guide'} className="flex items-center gap-1 text-xs text-gray-400 hover:text-teal-400 transition-colors px-2 py-1 rounded border border-gray-700 hover:border-teal-600">
               ❓ {lang === 'de' ? 'Hilfe' : 'Help'}
             </button>
             <span className="text-sm text-gray-400 hidden sm:block">
               {profile?.ingame_name || profile?.username}
               <span className="ml-2 text-xs text-gray-600 capitalize">({profile?.role})</span>
             </span>
-            <button
-              onClick={() => signOut()}
-              className="text-xs text-gray-500 hover:text-red-400 transition-colors"
-            >
+            <button onClick={() => signOut()} className="text-xs text-gray-500 hover:text-red-400 transition-colors">
               {t.logout[lang]}
             </button>
           </div>
         </div>
-
         <div className="max-w-6xl mx-auto px-4 flex gap-1 flex-wrap overflow-visible">
           <TabButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')}>
             Dashboard
@@ -169,13 +148,19 @@ function DashboardContent() {
           </TabButton>
           {profile?.role === 'admin' && (
             <TabButton active={activeTab === 'verwaltung'} onClick={() => setActiveTab('verwaltung')}>
-              {t.management[lang]}
+              <span className="flex items-center gap-1.5">
+                {t.management[lang]}
+                {pendingClaimsCount > 0 && (
+                  <span className="bg-amber-900/60 text-amber-400 border border-amber-800 text-[10px] font-medium rounded-full px-1.5 py-0.5 leading-none">
+                    {pendingClaimsCount}
+                  </span>
+                )}
+              </span>
               <InfoTooltip de={t.tip_management.de} en={t.tip_management.en} lang={lang} position="bottom" />
             </TabButton>
           )}
         </div>
       </header>
-
       <main className="max-w-6xl mx-auto px-4 py-6">
         {activeTab === 'dashboard' && (
           <>
@@ -197,16 +182,12 @@ function DashboardContent() {
         )}
         {activeTab === 'warnungen' && isOfficerOrAdmin && (
           <section className="bg-[#161822] border border-gray-800 rounded-xl p-6">
-            <SecurityAlerts
-              lang={lang}
-              onCountChange={(n) => setAlertsCount(n)}
-            />
+            <SecurityAlerts lang={lang} onCountChange={(n) => setAlertsCount(n)} />
           </section>
         )}
         {activeTab === 'vorschlaege' && <SuggestionBox lang={lang} />}
         {activeTab === 'verwaltung' && profile?.role === 'admin' && <AdminPanel />}
       </main>
-
       <WelcomeModal role={role} isOpen={showWelcome} onClose={() => setShowWelcome(false)} />
       <HelpButton onClick={() => setShowWelcome(true)} lang={lang} />
     </div>
@@ -214,7 +195,9 @@ function DashboardContent() {
 }
 
 function TabButton({
-  children, active, onClick,
+  children,
+  active,
+  onClick,
 }: {
   children: React.ReactNode
   active: boolean
@@ -223,7 +206,8 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={'flex items-center px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ' + (active ? 'border-teal-500 text-teal-400' : 'border-transparent text-gray-500 hover:text-gray-300')}
+      className={'flex items-center px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ' +
+        (active ? 'border-teal-500 text-teal-400' : 'border-transparent text-gray-500 hover:text-gray-300')}
     >
       {children}
     </button>
