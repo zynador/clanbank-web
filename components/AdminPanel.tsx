@@ -20,6 +20,7 @@ interface MemberRow {
   created_at: string
   start_kw: number
   start_year: number
+  is_raidleiter: boolean
 }
 
 export default function AdminPanel() {
@@ -37,6 +38,7 @@ export default function AdminPanel() {
   const [generatingCode, setGeneratingCode] = useState(false)
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [exemptionTarget, setExemptionTarget] = useState<{ id: string; ingameName: string } | null>(null)
+  const [togglingRl, setTogglingRl] = useState<string | null>(null)
   const { getExemptionForUser, refresh: refreshExemptions } = useExemptions()
 
   useEffect(() => {
@@ -59,7 +61,7 @@ export default function AdminPanel() {
     setLoading(true)
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, username, display_name, ingame_name, role, created_at, start_kw, start_year')
+      .select('id, username, display_name, ingame_name, role, created_at, start_kw, start_year, is_raidleiter')
       .order('created_at', { ascending: true })
     if (error) {
       setFeedback({ type: 'error', text: lang === 'de' ? 'Fehler beim Laden der Mitglieder.' : 'Error loading members.' })
@@ -112,6 +114,29 @@ export default function AdminPanel() {
     setSaving(false)
   }
 
+  async function handleToggleRaidleiter(member: MemberRow) {
+    setTogglingRl(member.id)
+    setFeedback(null)
+    const newValue = !member.is_raidleiter
+    const { data, error } = await supabase.rpc('set_raidleiter_flag', {
+      p_target_user_id: member.id,
+      p_value: newValue,
+    })
+    if (error || (data && !data.success)) {
+      setFeedback({ type: 'error', text: (data?.message) || (error?.message) || 'Fehler' })
+    } else {
+      const name = member.ingame_name || member.display_name
+      setFeedback({
+        type: 'success',
+        text: newValue
+          ? (lang === 'de' ? name + ' ist jetzt Raidleiter.' : name + ' is now raid leader.')
+          : (lang === 'de' ? 'Raidleiter-Flag von ' + name + ' entfernt.' : 'Raid leader flag removed from ' + name + '.'),
+      })
+      fetchMembers()
+    }
+    setTogglingRl(null)
+  }
+
   async function handleGenerateCode() {
     setGeneratingCode(true)
     const { data, error } = await supabase.rpc('generate_invite_code')
@@ -161,8 +186,8 @@ export default function AdminPanel() {
     },
     members_title: { de: 'Mitglieder', en: 'Members' },
     tip_members: {
-      de: 'Hier kannst du Rollen vergeben, Ingame-Namen aktualisieren und die Start-KW für den persönlichen Schwellwert setzen.',
-      en: 'Here you can assign roles, update in-game names and set the start week for the personal threshold.',
+      de: 'Hier kannst du Rollen vergeben, Ingame-Namen aktualisieren, die Start-KW setzen und das Raidleiter-Flag vergeben.',
+      en: 'Here you can assign roles, update in-game names, set the start week and assign the raid leader flag.',
     },
     edit:     { de: 'Bearbeiten', en: 'Edit' },
     tip_edit: {
@@ -188,6 +213,13 @@ export default function AdminPanel() {
     save:    { de: 'Speichern', en: 'Save' },
     saving:  { de: 'Speichern...', en: 'Saving...' },
     cancel:  { de: 'Abbrechen', en: 'Cancel' },
+    rl_add:    { de: '⚔️ RL setzen', en: '⚔️ Set RL' },
+    rl_remove: { de: '⚔️ RL entfernen', en: '⚔️ Remove RL' },
+    rl_busy:   { de: '...', en: '...' },
+    tip_rl: {
+      de: 'Raidleiter-Flag: Gibt Zugriff auf Kampfbericht-Upload und Auszahlungsberechnung. Raidleiter sind von der Einzahlungsschwelle befreit und erhalten doppelte Auszahlungen.',
+      en: 'Raid leader flag: Grants access to battle report upload and payout calculation. Raid leaders are exempt from the deposit threshold and receive double payouts.',
+    },
   }
 
   const currentYear = new Date().getFullYear()
@@ -371,7 +403,7 @@ export default function AdminPanel() {
                   </div>
                 ) : (
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 flex-wrap">
                       <div>
                         <span className="text-sm font-medium text-zinc-200">
                           {member.ingame_name || member.display_name}
@@ -384,9 +416,33 @@ export default function AdminPanel() {
                       <span className={`text-xs px-2 py-0.5 rounded-full border ${roleBadgeStyles[member.role]}`}>
                         {roleLabels[member.role]}
                       </span>
+                      {member.is_raidleiter && (
+                        <span className="text-xs px-2 py-0.5 rounded-full border bg-yellow-500/15 text-yellow-400 border-yellow-500/20">
+                          ⚔️ Raidleiter
+                        </span>
+                      )}
                       <ExemptionBadge exemption={getExemptionForUser(member.id)} />
                     </div>
-                    <span className="inline-flex items-center gap-2">
+                    <span className="inline-flex items-center gap-2 flex-shrink-0">
+                      <span className="inline-flex items-center gap-1">
+                        <button
+                          onClick={() => handleToggleRaidleiter(member)}
+                          disabled={togglingRl === member.id}
+                          className={`text-xs transition-colors ${
+                            member.is_raidleiter
+                              ? 'text-yellow-500 hover:text-yellow-300'
+                              : 'text-zinc-500 hover:text-yellow-400'
+                          }`}
+                        >
+                          {togglingRl === member.id
+                            ? t.rl_busy[lang]
+                            : member.is_raidleiter
+                              ? t.rl_remove[lang]
+                              : t.rl_add[lang]
+                          }
+                        </button>
+                        <InfoTooltip de={t.tip_rl.de} en={t.tip_rl.en} lang={lang} position="bottom" />
+                      </span>
                       <button
                         onClick={() => setExemptionTarget({ id: member.id, ingameName: member.ingame_name || member.display_name })}
                         className="text-xs text-amber-500 hover:text-amber-300 transition-colors"
