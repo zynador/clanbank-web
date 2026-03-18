@@ -43,10 +43,10 @@ export default function RegisterPage() {
 
   // Redirect if already logged in
   useEffect(() => {
-    if (!loading && session) {
-      router.replace("/dashboard");
-    }
-  }, [session, loading, router]);
+    if (!loading && session && step === "code") {
+    router.replace("/dashboard");
+  }
+  }, [session, loading, router, step]);
 
   // Step 1: Validate invite code
   async function handleValidateCode(e: FormEvent) {
