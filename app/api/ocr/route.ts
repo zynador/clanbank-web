@@ -130,40 +130,35 @@ async function handleBattleDetailOcr(base64: string, contentType: string) {
   const prompt = `Du analysierst einen Detail-Screen eines Kampfberichts aus "The Grand Mafia".
 
 Das Bild zeigt Verluste einzelner Spieler. Für jeden Spieler gibt es einen Block mit:
-- Dem Spielernamen (oben im Block)
-- Mehreren Truppenzeilen, jede Zeile enthält:
-  * Ein Icon (Truppenart): Messer, Schützen, Biker oder Autos
-  * Eine Tier-Zahl (T1, T2, T3, T4, T5 — als Zahl: 1, 2, 3, 4, 5)
-  * Pro Truppenzeile gibt es Zahlen in zwei Farben:
-    GRÜN = Feinde töten + Überlebende (diese komplett ignorieren)
-    ROT = Verwundete + Tote (diese sind immer die letzten beiden Zahlen)
-  * Nur die ERSTE rote Zahl übernehmen = Verwundete
-  * Die ZWEITE rote Zahl = Tote — ignorieren
+- Dem Spielernamen (oben im Block, oft fett oder hervorgehoben)
+- Mehreren Truppenzeilen darunter
 
-TRUPPENART-ERKENNUNG anhand des Icons (kleines Icon links neben der Tier-Zahl):
-- Dolch/Schwert/Messer-Symbol (spitze Klinge) → "messer"
-- Gewehr/Pistolen-Symbol (Schusswaffe) → "schuetzen"
-- Motorrad-Symbol → "biker"
-- Auto/Fahrzeug-Symbol → "autos"
-WICHTIG: Im Zweifel lieber "messer" als "autos" — Messer sind die häufigste Truppenart.
+AUFBAU EINER TRUPPENZEILE (von links nach rechts):
+[Icon] [Tier-Zahl] [Zahl1: Feinde getötet] [Zahl2: Feinde überlebt] [Zahl3: VERWUNDETE] [Zahl4: Tote]
+→ wounded = immer die DRITTE Zahl in der Zeile (nach Icon und Tier)
+→ Zahl1 und Zahl2 sind Kills/Überlebende des Gegners — ignorieren
+→ Zahl4 = eigene Tote — ignorieren
 
-WICHTIG — Farberkennung:
-- Grüne Zahlen = eigene Kills und Überlebende → komplett ignorieren
-- Rote Zahlen = eigene Verluste → nur die ERSTE davon (Verwundete) übernehmen
-- wounded = erste rote Zahl in der Truppenzeile
+TRUPPENART-ERKENNUNG (Icon ganz links in der Zeile):
+- Messer/Dolch/Klinge (schmales spitzes Symbol) → "messer"
+- Gewehr/Pistole (horizontales Waffen-Symbol) → "schuetzen"
+- Motorrad (Zweirad-Symbol) → "biker"
+- Auto/PKW (Fahrzeug mit 4 Rädern) → "autos"
+WICHTIG: Messer sind die häufigste Truppenart — im Zweifel "messer" wählen, nicht "autos"
 
-WICHTIG — Filter:
-- Nur Zeilen mit Tier >= 4 (T4, T5) übernehmen — T1/T2/T3 ignorieren
-- Zahlenformat: "12,5 K" = 12500, "1,2 M" = 1200000, "17.143" = 17143
+ZAHLENFORMAT: "12,5 K" = 12500, "1,2 M" = 1200000, "17.143" = 17143, "17,143" = 17143
+
+FILTER:
+- Nur Tier >= 4 übernehmen (T4, T5) — T1/T2/T3 komplett ignorieren
+- Nur wounded > 0 übernehmen
 
 Antworte NUR mit einem JSON-Array (kein Markdown, keine Backticks):
-[{"ingame_name":"Spieler1","troop_type":"autos","tier":4,"wounded":17143},{"ingame_name":"Spieler1","troop_type":"messer","tier":4,"wounded":8000}]
+[{"ingame_name":"Spieler1","troop_type":"messer","tier":4,"wounded":17143}]
 
 Regeln:
 - Ein Objekt pro Spieler pro Truppenart pro Tier (nur T4+)
-- ingame_name exakt wie im Bild
-- wounded = immer die erste rote Zahl in der Truppenzeile
-- Falls keine T4+ Zeilen vorhanden: []`;
+- ingame_name exakt wie im Bild geschrieben
+- Falls keine T4+ Zeilen: []`;
 
   const response = await callClaude(base64, contentType, prompt);
   const text = response.content?.[0]?.text?.trim() ?? "";
