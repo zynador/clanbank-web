@@ -259,7 +259,6 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
     const files = Array.from(e.target.files || [])
     if (files.length === 0 || !profile?.clan_id) return
 
-    // 7-Tage-Altersvalidierung
     const tooOld = files.filter(f => isFileTooOld(f))
     if (tooOld.length > 0) {
       setFeedback({
@@ -380,26 +379,10 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
             <p className="font-medium text-zinc-300">
               {'ℹ️ ' + (lang === 'de' ? 'So funktioniert der Kampfbericht-Upload' : 'How battle report upload works')}
             </p>
-            <p>
-              {lang === 'de'
-                ? '1. Übersichts-Screen hochladen (zeigt Datum, Uhrzeit und [1Ca]-Kürzel)'
-                : '1. Upload overview screen (shows date, time and [1Ca] tag)'}
-            </p>
-            <p>
-              {lang === 'de'
-                ? '2. Kampfdatum manuell eintragen — exakt wie auf dem Screenshot sichtbar'
-                : '2. Enter battle date manually — exactly as shown on the screenshot'}
-            </p>
-            <p>
-              {lang === 'de'
-                ? '3. Detail-Screens hochladen (ein Screen pro Spieler-Block, bis zu 6 auf einmal)'
-                : '3. Upload detail screens (one screen per player block, up to 6 at once)'}
-            </p>
-            <p>
-              {lang === 'de'
-                ? '4. OCR liest automatisch: Spielername, Truppenart, Tier, Verwundete (T4+)'
-                : '4. OCR reads automatically: player name, troop type, tier, wounded (T4+)'}
-            </p>
+            <p>{lang === 'de' ? '1. Übersichts-Screen hochladen (zeigt Datum, Uhrzeit und [1Ca]-Kürzel)' : '1. Upload overview screen (shows date, time and [1Ca] tag)'}</p>
+            <p>{lang === 'de' ? '2. Kampfdatum manuell eintragen — exakt wie auf dem Screenshot sichtbar' : '2. Enter battle date manually — exactly as shown on the screenshot'}</p>
+            <p>{lang === 'de' ? '3. Detail-Screens hochladen (ein Screen pro Spieler-Block, bis zu 6 auf einmal)' : '3. Upload detail screens (one screen per player block, up to 6 at once)'}</p>
+            <p>{lang === 'de' ? '4. OCR liest automatisch: Spielername, Truppenart, Tier, Verwundete (T4+)' : '4. OCR reads automatically: player name, troop type, tier, wounded (T4+)'}</p>
             <p className="text-amber-400/80">
               {'⏱ ' + (lang === 'de'
                 ? 'Screenshots dürfen maximal ' + MAX_SCREEN_AGE_DAYS + ' Tage alt sein (Dateidatum).'
@@ -407,6 +390,7 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
             </p>
           </div>
 
+          {/* h3 mit InfoTooltip — korrekt, kein label-Konflikt */}
           <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider flex items-center gap-1">
             {'📋 ' + (lang === 'de' ? 'Schritt 1: Übersichts-Screen' : 'Step 1: Overview Screen')}
             <InfoTooltip
@@ -417,16 +401,18 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
             />
           </h3>
 
+          {/* Übersichts-Screenshot */}
           <div>
-            <label className="block text-xs text-zinc-500 mb-1">
+            <p className="text-xs text-zinc-500 mb-1">
               {lang === 'de' ? 'Übersichts-Screen' : 'Overview screenshot'}
               <span className="text-red-400 ml-1">{'*'}</span>
-            </label>
+            </p>
             {profile?.clan_id && (
               <ScreenshotUpload
                 clanId={profile.clan_id}
                 existingUrl={overviewUrl}
                 isOfficerOrAdmin={true}
+                maxAgeDays={7}
                 onUploadComplete={(url, hash) => {
                   setOverviewUrl(url)
                   setOverviewHash(hash ?? null)
@@ -440,20 +426,23 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
             )}
           </div>
 
-          {/* Kampfdatum */}
+          {/* Kampfdatum — InfoTooltip im div neben label, NICHT im label */}
           <div>
-            <label className="block text-xs text-zinc-500 mb-1 flex items-center gap-1">
-              {lang === 'de' ? 'Kampfdatum' : 'Battle date'}
-              <span className="text-red-400">{'*'}</span>
+            <div className="flex items-center gap-1 mb-1">
+              <label htmlFor="battle-date" className="text-xs text-zinc-500">
+                {lang === 'de' ? 'Kampfdatum' : 'Battle date'}
+              </label>
+              <span className="text-red-400 text-xs">{'*'}</span>
               <InfoTooltip
                 de="Das Datum des Kampfes — sichtbar oben rechts auf dem Übersichts-Screen. Pflichtfeld für die Kalenderwochenberechnung und Auszahlungsberechtigung."
                 en="The battle date — visible top right on the overview screen. Required for calendar week calculation and payout eligibility."
                 lang={lang}
                 position="bottom"
               />
-            </label>
+            </div>
             <div className="flex items-center gap-3 flex-wrap">
               <input
+                id="battle-date"
                 type="date"
                 value={battleDateStr}
                 onChange={(e) => handleDateChange(e.target.value)}
@@ -478,12 +467,14 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
             </p>
           </div>
 
-          {/* KW-Korrektur und Seite */}
-          <div className="flex gap-4 flex-wrap">
-            <label className="text-xs text-zinc-500 flex items-center gap-2">
-              {lang === 'de' ? 'KW (Korrektur)' : 'Week (override)'}
-              {':'}
+          {/* KW-Korrektur und Seite — InfoTooltip im div neben label, NICHT im label */}
+          <div className="flex gap-6 flex-wrap items-end">
+            <div>
+              <label htmlFor="battle-kw" className="text-xs text-zinc-500 block mb-1">
+                {lang === 'de' ? 'KW (Korrektur)' : 'Week (override)'}
+              </label>
               <select
+                id="battle-kw"
                 value={battleKw}
                 onChange={(e) => setBattleKw(Number(e.target.value))}
                 className="bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-blue-500"
@@ -492,19 +483,23 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
                   <option key={kw} value={kw}>{'KW ' + kw}</option>
                 ))}
               </select>
-            </label>
+            </div>
 
-            <label className="text-xs text-zinc-500 flex items-center gap-2">
-              {lang === 'de' ? 'Seite' : 'Side'}
-              <span className="text-red-400">{'*'}</span>
-              <InfoTooltip
-                de="Angreifer = [1Ca] hat den Raid gestartet. Verteidiger = [1Ca] wurde angegriffen. Bestimmt welche Spalte der OCR ausgewertet wird."
-                en="Attacker = [1Ca] started the raid. Defender = [1Ca] was attacked. Determines which column OCR evaluates."
-                lang={lang}
-                position="bottom"
-              />
-              {':'}
+            <div>
+              <div className="flex items-center gap-1 mb-1">
+                <label htmlFor="battle-side" className="text-xs text-zinc-500">
+                  {lang === 'de' ? 'Seite' : 'Side'}
+                </label>
+                <span className="text-red-400 text-xs">{'*'}</span>
+                <InfoTooltip
+                  de="Angreifer = [1Ca] hat den Raid gestartet. Verteidiger = [1Ca] wurde angegriffen. Bestimmt welche Spieler-Spalte die OCR auswertet."
+                  en="Attacker = [1Ca] started the raid. Defender = [1Ca] was attacked. Determines which player column OCR evaluates."
+                  lang={lang}
+                  position="bottom"
+                />
+              </div>
               <select
+                id="battle-side"
                 value={side}
                 onChange={(e) => setSide(e.target.value as Side)}
                 className="bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-blue-500"
@@ -512,12 +507,12 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
                 <option value="attacker">{lang === 'de' ? 'Angreifer [1Ca]' : 'Attacker [1Ca]'}</option>
                 <option value="defender">{lang === 'de' ? 'Verteidiger [1Ca]' : 'Defender [1Ca]'}</option>
               </select>
-            </label>
+            </div>
           </div>
 
           {/* Validierungsstatus */}
           {(!overviewUrl || !battleDateStr) && (
-            <div className="text-xs text-zinc-600 space-y-0.5">
+            <div className="text-xs space-y-0.5">
               {!overviewUrl && (
                 <p className="text-amber-500/70">{'• ' + (lang === 'de' ? 'Übersichts-Screen fehlt' : 'Overview screenshot missing')}</p>
               )}
@@ -575,11 +570,12 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
             </p>
           </div>
 
+          {/* h3 mit InfoTooltip — korrekt */}
           <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider flex items-center gap-1">
             {'🖼️ ' + (lang === 'de' ? 'Schritt 2: Detail-Screens' : 'Step 2: Detail Screens')}
             <InfoTooltip
-              de="Lade bis zu 6 Kampf-Detail-Screens hoch. Jeder Screen zeigt einen Spieler-Block. Die OCR erkennt automatisch Truppenart, Tier und Verwundete (rot markierte Zahlen)."
-              en="Upload up to 6 battle detail screens. Each screen shows a player block. OCR automatically detects troop type, tier and wounded (red numbers)."
+              de="Lade bis zu 6 Kampf-Detail-Screens hoch. Jeder Screen zeigt einen Spieler-Block. Die OCR erkennt automatisch Truppenart, Tier und Verwundete (rot markierte Zahlen in der Verwundete-Spalte)."
+              en="Upload up to 6 battle detail screens. Each screen shows a player block. OCR automatically detects troop type, tier and wounded (red numbers in the wounded column)."
               lang={lang}
               position="bottom"
             />
@@ -590,8 +586,8 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
             )}
           </h3>
 
-          {/* Multi-Upload Button */}
-          <div className="mb-3">
+          {/* Multi-Upload */}
+          <div>
             <input
               ref={multiFileRef}
               type="file"
@@ -612,9 +608,7 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
                     : 'Upload all screens at once (up to 6)'))}
             </button>
             <p className="text-xs text-zinc-600 text-center mt-1">
-              {lang === 'de'
-                ? 'Oder einzelne Slots unten manuell befüllen'
-                : 'Or fill individual slots manually below'}
+              {lang === 'de' ? 'Oder einzelne Slots unten manuell befüllen' : 'Or fill individual slots manually below'}
             </p>
           </div>
 
@@ -632,6 +626,7 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
                     clanId={profile.clan_id}
                     existingUrl={slot.url ?? undefined}
                     isOfficerOrAdmin={true}
+                    maxAgeDays={7}
                     onUploadComplete={(url, hash) => { if (url) updateSlot(i, url, hash ?? null) }}
                   />
                 )}
