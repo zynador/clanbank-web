@@ -171,8 +171,8 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
 
         // OCR für diesen Detail-Screen
         try {
-          const { data: urlData } = supabase.storage.from('screenshots').getPublicUrl(slot.url)
-          const publicUrl = urlData?.publicUrl
+          const { data: urlData } = await supabase.storage.from('screenshots').createSignedUrl(slot.url, 300)
+          const publicUrl = urlData?.signedUrl
           if (publicUrl) {
             setOcrStatus(
               lang === 'de'
