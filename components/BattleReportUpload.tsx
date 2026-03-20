@@ -49,6 +49,7 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
 
   const [slots, setSlots] = useState<ScreenSlot[]>(makeEmptySlots())
   const [uploadedCount, setUploadedCount] = useState(0)
+  const [ocrStatus, setOcrStatus] = useState<string | null>(null)
 
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
@@ -149,8 +150,11 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
     }
     setSaving(true)
     setFeedback(null)
+    setOcrStatus(lang === 'de' ? 'Screens werden verarbeitet...' : 'Processing screens...')
 
     let successCount = 0
+    let ocrCount = 0
+
     for (const slot of filled) {
       if (!slot.url) continue
       if (slot.hash) {
@@ -162,16 +166,54 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
         p_screenshot_url:   slot.url,
         p_screenshot_hash:  slot.hash,
       })
-      if (!error && data?.success) successCount++
+      if (!error && data?.success) {
+        successCount++
+
+        // OCR für diesen Detail-Screen
+        try {
+          const { data: urlData } = supabase.storage.from('screenshots').getPublicUrl(slot.url)
+          const publicUrl = urlData?.publicUrl
+          if (publicUrl) {
+            setOcrStatus(
+              lang === 'de'
+                ? 'OCR Screen ' + successCount + ' von ' + filled.length + '...'
+                : 'OCR screen ' + successCount + ' of ' + filled.length + '...'
+            )
+            const ocrRes = await fetch('/api/ocr', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ imageUrl: publicUrl, mode: 'battle_detail' }),
+            })
+            const ocrJson = await ocrRes.json()
+            if (ocrJson?.casualties && ocrJson.casualties.length > 0) {
+              const { error: saveErr } = await supabase.rpc('save_battle_casualties', {
+                p_battle_report_id: battleReportId,
+                p_casualties: ocrJson.casualties,
+              })
+              if (!saveErr) ocrCount += ocrJson.casualties.length
+            }
+          }
+        } catch (ocrErr) {
+          console.error('OCR error for slot:', slot.url, ocrErr)
+        }
+      }
     }
 
     setUploadedCount(successCount)
+    setOcrStatus(null)
     setSaving(false)
 
     if (successCount === 0) {
       setFeedback({ type: 'error', text: lang === 'de' ? 'Keine Screens konnten hochgeladen werden.' : 'No screens could be uploaded.' })
       return
     }
+
+    setFeedback({
+      type: 'success',
+      text: lang === 'de'
+        ? successCount + ' Screen(s) gespeichert, ' + ocrCount + ' Verlust-Einträge erkannt.'
+        : successCount + ' screen(s) saved, ' + ocrCount + ' casualty entries detected.',
+    })
 
     setStep('done')
     if (onComplete && battleReportId) onComplete(battleReportId)
@@ -188,6 +230,7 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
     setSide('attacker')
     setSlots(makeEmptySlots())
     setUploadedCount(0)
+    setOcrStatus(null)
     setFeedback(null)
   }
 
@@ -218,6 +261,13 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
         )}>
           <span>{feedback.text}</span>
           <button className="opacity-60 hover:opacity-100 shrink-0" onClick={() => setFeedback(null)}>✕</button>
+        </div>
+      )}
+
+      {ocrStatus && (
+        <div className="px-4 py-3 rounded-lg text-sm bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center gap-2">
+          <span className="animate-pulse">⏳</span>
+          <span>{ocrStatus}</span>
         </div>
       )}
 
@@ -386,7 +436,7 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
               className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg py-2.5 text-sm font-medium transition-colors"
             >
               {saving
-                ? (lang === 'de' ? 'Wird gespeichert...' : 'Saving...')
+                ? (lang === 'de' ? 'Wird verarbeitet...' : 'Processing...')
                 : ('✓ ' + (lang === 'de'
                     ? 'Upload abschließen (' + filledSlots + ' Screen(s))'
                     : 'Finish upload (' + filledSlots + ' screen(s))'))
@@ -404,8 +454,8 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
           </p>
           <p className="text-xs text-zinc-500">
             {lang === 'de'
-              ? uploadedCount + ' Detail-Screen(s) gespeichert. OCR-Analyse und Berechnung unten.'
-              : uploadedCount + ' detail screen(s) saved. OCR analysis and calculation below.'}
+              ? uploadedCount + ' Detail-Screen(s) gespeichert. OCR-Analyse abgeschlossen.'
+              : uploadedCount + ' detail screen(s) saved. OCR analysis complete.'}
           </p>
           {battleReportId && (
             <p className="text-xs text-zinc-700 font-mono">{'ID: ' + battleReportId}</p>
