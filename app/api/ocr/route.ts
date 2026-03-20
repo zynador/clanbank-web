@@ -189,6 +189,7 @@ Regeln:
     throw new Error("JSON-Parse-Fehler: " + text.slice(0, 300));
   }
 
+  console.log('battle_detail OCR result:', JSON.stringify(parsed))
   return NextResponse.json({ casualties: parsed });
 }
 
