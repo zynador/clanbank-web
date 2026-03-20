@@ -1,0 +1,41 @@
+name: Playwright Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Playwright
+        run: |
+          npm install -D @playwright/test
+          npx playwright install chromium
+
+      - name: Run Playwright Tests
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ secrets.PLAYWRIGHT_BASE_URL }}
+          TEST_ADMIN_USER:     ${{ secrets.TEST_ADMIN_USER }}
+          TEST_ADMIN_PASS:     ${{ secrets.TEST_ADMIN_PASS }}
+          TEST_MEMBER_USER:    ${{ secrets.TEST_MEMBER_USER }}
+          TEST_MEMBER_PASS:    ${{ secrets.TEST_MEMBER_PASS }}
+        run: npx playwright test --config=tests/playwright.config.ts --project=chromium
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
