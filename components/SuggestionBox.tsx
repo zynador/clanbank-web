@@ -52,6 +52,7 @@ export default function SuggestionBox({ lang }: { lang: Lang }) {
       return
     }
 
+    setError(null)
     const rows = (data || []) as Suggestion[]
 
     // Namen nur für Officer/Admin nachladen
