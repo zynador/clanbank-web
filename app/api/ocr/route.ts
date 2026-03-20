@@ -133,11 +133,13 @@ Das Bild zeigt Verluste einzelner Spieler. Für jeden Spieler gibt es einen Bloc
 - Dem Spielernamen (oben im Block, oft fett oder hervorgehoben)
 - Mehreren Truppenzeilen darunter
 
-AUFBAU EINER TRUPPENZEILE (von links nach rechts):
-[Icon] [Tier-Zahl] [Zahl1: Feinde getötet] [Zahl2: Feinde überlebt] [Zahl3: VERWUNDETE] [Zahl4: Tote]
-→ wounded = immer die DRITTE Zahl in der Zeile (nach Icon und Tier)
-→ Zahl1 und Zahl2 sind Kills/Überlebende des Gegners — ignorieren
-→ Zahl4 = eigene Tote — ignorieren
+TABELLENSTRUKTUR — jeder Spielerblock hat eine Kopfzeile mit diesen Spalten:
+"Einheiten | Feinde töten | Überlebende | Verwundete | Tote"
+
+→ wounded = der Wert in der Spalte "Verwundete" (vierte Spalte, rot)
+→ "Feinde töten" (zweite Spalte, grün) — ignorieren
+→ "Überlebende" (dritte Spalte, grün) — ignorieren
+→ "Tote" (fünfte Spalte, rot) — ignorieren
 
 TRUPPENART-ERKENNUNG (Icon ganz links in der Zeile):
 - Messer/Dolch/Klinge (schmales spitzes Symbol) → "messer"
