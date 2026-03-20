@@ -133,7 +133,13 @@ Das Bild zeigt Verluste einzelner Spieler. Für jeden Spieler gibt es einen Bloc
 - Dem Spielernamen (oben im Block, oft fett oder hervorgehoben)
 - Mehreren Truppenzeilen darunter
 
-TABELLENSTRUKTUR — jeder Spielerblock hat eine Kopfzeile mit diesen Spalten:
+IGNORIEREN — diese Elemente komplett überspringen:
+- Held-Portraits (Charakterbilder mit Level-Anzeige)
+- Fahrzeug-Karten (Autos mit Sternebewertung)
+- Helikopter-Statistiken ("Dieser Helikopter nimmt/hat nicht am Kampf teil")
+- Prozentzahlen wie "50,5%", Zahlen mit Münz-Icons
+
+NUR AUSWERTEN — die "Einheiten"-Tabelle mit dieser Kopfzeile:
 "Einheiten | Feinde töten | Überlebende | Verwundete | Tote"
 
 → wounded = der Wert in der Spalte "Verwundete" (vierte Spalte, rot)
