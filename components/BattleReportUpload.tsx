@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '@/lib/auth-context'
 import { supabase } from '@/lib/supabaseClient'
 import ScreenshotUpload from '@/components/ScreenshotUpload'
@@ -50,6 +50,9 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
   const [slots, setSlots] = useState<ScreenSlot[]>(makeEmptySlots())
   const [uploadedCount, setUploadedCount] = useState(0)
   const [ocrStatus, setOcrStatus] = useState<string | null>(null)
+
+  const [multiUploading, setMultiUploading] = useState(false)
+  const multiFileRef = useRef<HTMLInputElement>(null)
 
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
@@ -217,6 +220,40 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
 
     setStep('done')
     if (onComplete && battleReportId) onComplete(battleReportId)
+  }
+
+  async function handleMultiFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || [])
+    if (files.length === 0 || !profile?.clan_id) return
+    const toProcess = files.slice(0, 6)
+    setMultiUploading(true)
+    setFeedback(null)
+
+    for (let i = 0; i < toProcess.length; i++) {
+      const file = toProcess[i]
+      try {
+        const buf = await file.arrayBuffer()
+        const digest = await crypto.subtle.digest('SHA-256', buf)
+        const hash = Array.from(new Uint8Array(digest))
+          .map(b => b.toString(16).padStart(2, '0'))
+          .join('')
+        const ext = file.name.split('.').pop() || 'jpg'
+        const path = profile.clan_id + '/' + Date.now() + '_' + i + '_detail.' + ext
+        const { error: upErr } = await supabase.storage
+          .from('screenshots')
+          .upload(path, file, { upsert: false })
+        if (upErr) {
+          console.error('Multi-upload slot ' + i, upErr)
+          continue
+        }
+        updateSlot(i, path, hash)
+      } catch (err) {
+        console.error('Multi-upload error slot ' + i, err)
+      }
+    }
+
+    setMultiUploading(false)
+    if (multiFileRef.current) multiFileRef.current.value = ''
   }
 
   function reset() {
@@ -403,6 +440,33 @@ export default function BattleReportUpload({ lang, onComplete }: Props) {
               </span>
             )}
           </h3>
+
+          <div className="mb-3">
+            <input
+              ref={multiFileRef}
+              type="file"
+              multiple
+              accept="image/*"
+              className="hidden"
+              onChange={handleMultiFileSelect}
+            />
+            <button
+              onClick={() => multiFileRef.current?.click()}
+              disabled={multiUploading}
+              className="w-full flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 border border-zinc-700 hover:border-zinc-500 text-zinc-300 rounded-lg py-2.5 text-sm font-medium transition-colors"
+            >
+              {multiUploading
+                ? (lang === 'de' ? '⏳ Wird hochgeladen...' : '⏳ Uploading...')
+                : ('📁 ' + (lang === 'de'
+                    ? 'Alle Screens auf einmal hochladen (bis zu 6)'
+                    : 'Upload all screens at once (up to 6)'))}
+            </button>
+            <p className="text-xs text-zinc-600 text-center mt-1">
+              {lang === 'de'
+                ? 'Oder einzelne Slots unten befüllen'
+                : 'Or fill individual slots below'}
+            </p>
+          </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {slots.map((slot, i) => (
