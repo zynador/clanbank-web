@@ -134,7 +134,11 @@ Das Bild zeigt Verluste einzelner Spieler. Für jeden Spieler gibt es einen Bloc
 - Mehreren Truppenzeilen, jede Zeile enthält:
   * Ein Icon (Truppenart): Messer, Schützen, Biker oder Autos
   * Eine Tier-Zahl (T1, T2, T3, T4, T5 — als Zahl: 1, 2, 3, 4, 5)
-  * Zwei Zahlen: Verletzte (wounded) und Tote (dead) — in dieser Reihenfolge
+  * Pro Truppenzeile gibt es Zahlen in zwei Farben:
+    GRÜN = Feinde töten + Überlebende (diese komplett ignorieren)
+    ROT = Verwundete + Tote (diese sind immer die letzten beiden Zahlen)
+  * Nur die ERSTE rote Zahl übernehmen = Verwundete
+  * Die ZWEITE rote Zahl = Tote — ignorieren
 
 TRUPPENART-ERKENNUNG anhand des Icons:
 - Messer/Knife-Symbol → "messer"
@@ -142,19 +146,23 @@ TRUPPENART-ERKENNUNG anhand des Icons:
 - Biker/Motorrad-Symbol → "biker"
 - Auto/Car-Symbol → "autos"
 
-WICHTIG:
+WICHTIG — Farberkennung:
+- Grüne Zahlen = eigene Kills und Überlebende → komplett ignorieren
+- Rote Zahlen = eigene Verluste → nur die ERSTE davon (Verwundete) übernehmen
+- wounded = erste rote Zahl in der Truppenzeile
+
+WICHTIG — Filter:
 - Nur Zeilen mit Tier >= 4 (T4, T5) übernehmen — T1/T2/T3 ignorieren
-- Nur die Verwundeten-Zahl übernehmen — Tote ignorieren
-- Zahlenformat: "12,5 K" = 12500, "1,2 M" = 1200000, "500" = 500
+- Zahlenformat: "12,5 K" = 12500, "1,2 M" = 1200000, "17.143" = 17143
 
 Antworte NUR mit einem JSON-Array (kein Markdown, keine Backticks):
-[{"ingame_name":"Spieler1","troop_type":"autos","tier":4,"wounded":15000},{"ingame_name":"Spieler1","troop_type":"messer","tier":4,"wounded":8000}]
+[{"ingame_name":"Spieler1","troop_type":"autos","tier":4,"wounded":17143},{"ingame_name":"Spieler1","troop_type":"messer","tier":4,"wounded":8000}]
 
 Regeln:
 - Ein Objekt pro Spieler pro Truppenart pro Tier (nur T4+)
 - ingame_name exakt wie im Bild
-- Falls keine T4+ Zeilen vorhanden: []
-- Tote-Spalte vollständig ignorieren`;
+- wounded = immer die erste rote Zahl in der Truppenzeile
+- Falls keine T4+ Zeilen vorhanden: []`;
 
   const response = await callClaude(base64, contentType, prompt);
   const text = response.content?.[0]?.text?.trim() ?? "";
@@ -189,7 +197,8 @@ Regeln:
     throw new Error("JSON-Parse-Fehler: " + text.slice(0, 300));
   }
 
-  console.log('battle_detail OCR result:', JSON.stringify(parsed))
+  console.log('battle_detail OCR result:', JSON.stringify(parsed));
+
   return NextResponse.json({ casualties: parsed });
 }
 
@@ -243,7 +252,6 @@ export async function POST(req: NextRequest) {
     const base64 = Buffer.from(buffer).toString("base64");
     const contentType = imgRes.headers.get("content-type") || "image/jpeg";
 
-    // mode: "deposit" (default), "battle_overview", "battle_detail"
     if (mode === "battle_overview") {
       return await handleBattleOverviewOcr(base64, contentType);
     }
@@ -251,7 +259,6 @@ export async function POST(req: NextRequest) {
       return await handleBattleDetailOcr(base64, contentType);
     }
 
-    // Default: Einzahlungs-OCR (bestehend, unverändert)
     return await handleDepositOcr(base64, contentType);
 
   } catch (e: unknown) {
