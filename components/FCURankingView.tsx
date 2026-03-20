@@ -1,0 +1,210 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabaseClient'
+import { useAuth } from '@/lib/auth-context'
+
+type Lang = 'de' | 'en'
+
+interface Props {
+  lang: Lang
+  onBack: () => void
+}
+
+type RankingRow = {
+  ingame_name: string
+  profile_id: string | null
+  event_count: number
+  rank_sum: number
+  avg_rank: number
+  best_rank: number
+}
+
+export default function FCURankingView({ lang, onBack }: Props) {
+  const { profile } = useAuth()
+  const [rows, setRows] = useState<RankingRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+
+  const t = {
+    title:      lang === 'de' ? 'FCU Gesamtranking' : 'FCU Overall Ranking',
+    back:       lang === 'de' ? '← Zurück' : '← Back',
+    name:       lang === 'de' ? 'Spieler' : 'Player',
+    events:     lang === 'de' ? 'Events' : 'Events',
+    rankSum:    lang === 'de' ? 'Rang-Summe' : 'Rank Sum',
+    avgRank:    lang === 'de' ? 'Ø Rang' : 'Avg Rank',
+    bestRank:   lang === 'de' ? 'Bester' : 'Best',
+    noData:     lang === 'de' ? 'Noch keine bestätigten Events.' : 'No confirmed events yet.',
+    searchHint: lang === 'de' ? 'Spieler suchen...' : 'Search player...',
+    hint:       lang === 'de' ? 'Niedrigste Rang-Summe = Bester Platz' : 'Lowest rank sum = best position',
+    myRank:     lang === 'de' ? 'Mein Rang' : 'My Rank',
+  }
+
+  useEffect(() => {
+    loadRanking()
+  }, [profile])
+
+  async function loadRanking() {
+    if (!profile?.clan_id) return
+    setLoading(true)
+    const { data } = await supabase.rpc('get_fcu_overall_ranking', {
+      p_clan_id: profile.clan_id,
+    })
+    setRows(data ?? [])
+    setLoading(false)
+  }
+
+  const filtered = rows.filter(r =>
+    r.ingame_name.toLowerCase().includes(search.toLowerCase())
+  )
+
+  // Eigener Rang in der Liste
+  const myPosition = profile?.ingame_name
+    ? rows.findIndex(r =>
+        r.ingame_name.toLowerCase() === profile.ingame_name.toLowerCase() ||
+        r.profile_id === profile.id
+      ) + 1
+    : 0
+
+  return (
+    <div className="p-4 space-y-4">
+
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <button onClick={onBack} className="text-sm text-gray-500 hover:text-gray-700">
+          {t.back}
+        </button>
+        <div>
+          <h2 className="text-lg font-semibold">{t.title}</h2>
+          <p className="text-xs text-gray-400 mt-0.5">{t.hint}</p>
+        </div>
+      </div>
+
+      {/* Eigener Rang — Highlight */}
+      {myPosition > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 flex items-center justify-between">
+          <span className="text-sm font-medium text-blue-800">{t.myRank}</span>
+          <span className="text-xl font-semibold text-blue-700">{'#' + myPosition}</span>
+        </div>
+      )}
+
+      {/* Top 3 Podest */}
+      {rows.length >= 3 && (
+        <div className="grid grid-cols-3 gap-2">
+          {[1, 0, 2].map(i => {
+            const row = rows[i]
+            if (!row) return null
+            const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'
+            const pos = i + 1
+            const isMe = row.profile_id === profile?.id ||
+              row.ingame_name.toLowerCase() === profile?.ingame_name?.toLowerCase()
+            return (
+              <div
+                key={row.ingame_name}
+                className={
+                  'rounded-lg p-3 text-center border ' +
+                  (pos === 1
+                    ? 'bg-amber-50 border-amber-300'
+                    : pos === 2
+                    ? 'bg-gray-50 border-gray-300'
+                    : 'bg-orange-50 border-orange-200') +
+                  (isMe ? ' ring-2 ring-blue-400' : '')
+                }
+              >
+                <div className="text-2xl">{medal}</div>
+                <div className="text-xs font-medium mt-1 truncate">{row.ingame_name}</div>
+                <div className="text-xs text-gray-500 mt-0.5">
+                  {lang === 'de' ? 'Summe: ' : 'Sum: '}{row.rank_sum}
+                </div>
+                <div className="text-xs text-gray-400">
+                  {row.event_count + (lang === 'de' ? ' Events' : ' events')}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Suche */}
+      {rows.length > 10 && (
+        <input
+          type="text"
+          placeholder={t.searchHint}
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+        />
+      )}
+
+      {/* Tabelle */}
+      {loading ? (
+        <p className="text-sm text-gray-400">...</p>
+      ) : rows.length === 0 ? (
+        <p className="text-sm text-gray-500">{t.noData}</p>
+      ) : (
+        <div className="space-y-1">
+
+          {/* Kopfzeile */}
+          <div className="grid grid-cols-12 gap-1 px-2 py-1 text-xs text-gray-400 font-medium">
+            <div className="col-span-1">#</div>
+            <div className="col-span-5">{t.name}</div>
+            <div className="col-span-2 text-center">{t.events}</div>
+            <div className="col-span-2 text-center">{t.rankSum}</div>
+            <div className="col-span-2 text-center">{t.bestRank}</div>
+          </div>
+
+          {filtered.map((row, idx) => {
+            const position = rows.indexOf(row) + 1
+            const isMe = row.profile_id === profile?.id ||
+              row.ingame_name.toLowerCase() === profile?.ingame_name?.toLowerCase()
+
+            return (
+              <div
+                key={row.ingame_name}
+                className={
+                  'grid grid-cols-12 gap-1 px-2 py-2 rounded items-center text-sm border ' +
+                  (isMe
+                    ? 'bg-blue-50 border-blue-200 font-medium'
+                    : position <= 3
+                    ? 'bg-amber-50 border-amber-100'
+                    : 'bg-white border-gray-100')
+                }
+              >
+                {/* Position */}
+                <div className="col-span-1 text-xs font-medium text-gray-600">
+                  {position <= 3
+                    ? (position === 1 ? '🥇' : position === 2 ? '🥈' : '🥉')
+                    : position}
+                </div>
+
+                {/* Name */}
+                <div className="col-span-5 text-xs truncate">
+                  {row.ingame_name}
+                  {isMe && (
+                    <span className="ml-1 text-blue-500 text-xs">←</span>
+                  )}
+                </div>
+
+                {/* Events */}
+                <div className="col-span-2 text-center text-xs text-gray-500">
+                  {row.event_count}
+                </div>
+
+                {/* Rang-Summe */}
+                <div className="col-span-2 text-center text-xs font-medium">
+                  {row.rank_sum}
+                </div>
+
+                {/* Bester Rang */}
+                <div className="col-span-2 text-center text-xs text-gray-500">
+                  {'#' + row.best_rank}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+    </div>
+  )
+}
