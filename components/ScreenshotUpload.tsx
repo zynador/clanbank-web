@@ -4,7 +4,6 @@ import { useState, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
-const MAX_FILE_AGE_MS = 4 * 24 * 60 * 60 * 1000; // 4 Tage
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "application/pdf"];
 const ALLOWED_EXTENSIONS = ".jpg,.jpeg,.png,.pdf";
 
@@ -23,6 +22,7 @@ interface ScreenshotUploadProps {
   onUploadComplete: (url: string | null, hash?: string) => void;
   disabled?: boolean;
   isOfficerOrAdmin?: boolean;
+  maxAgeDays?: number;
 }
 
 export default function ScreenshotUpload({
@@ -32,6 +32,7 @@ export default function ScreenshotUpload({
   onUploadComplete,
   disabled = false,
   isOfficerOrAdmin = false,
+  maxAgeDays = 4,
 }: ScreenshotUploadProps) {
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<string | null>(existingUrl || null);
@@ -40,6 +41,7 @@ export default function ScreenshotUpload({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isPdf = preview?.endsWith(".pdf") || fileName?.endsWith(".pdf");
+  const maxAgeMs = maxAgeDays * 24 * 60 * 60 * 1000;
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -60,8 +62,10 @@ export default function ScreenshotUpload({
 
     // 3. Alter prüfen
     const fileAge = Date.now() - file.lastModified;
-    if (fileAge > MAX_FILE_AGE_MS) {
-      setError("Dieser Screenshot ist älter als 4 Tage und wird nicht akzeptiert.");
+    if (fileAge > maxAgeMs) {
+      setError(
+        "Dieser Screenshot ist älter als " + maxAgeDays + " Tage und wird nicht akzeptiert."
+      );
       return;
     }
 
@@ -84,7 +88,7 @@ export default function ScreenshotUpload({
       return;
     }
     if (isDuplicate) {
-      await supabase.rpc('log_duplicate_attempt', { p_hash: hash })
+      await supabase.rpc("log_duplicate_attempt", { p_hash: hash });
       setError(
         isOfficerOrAdmin
           ? "⚠️ Duplikat erkannt: Dieser Screenshot wurde bereits für eine andere Einzahlung verwendet. Möglicher Betrugsversuch."
@@ -103,7 +107,7 @@ export default function ScreenshotUpload({
       setPreview(null);
     }
 
-    // 7. Upload
+    // 6. Upload
     setUploading(true);
     try {
       const fileExt = file.name.split(".").pop()?.toLowerCase() || "jpg";
@@ -121,7 +125,6 @@ export default function ScreenshotUpload({
 
       if (urlError) throw urlError;
 
-      // 8. Hash mitgeben
       onUploadComplete(filePath, hash);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Upload fehlgeschlagen";
@@ -179,7 +182,9 @@ export default function ScreenshotUpload({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                     d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
-                <span>Screenshot hochladen (JPG, PNG, PDF – max. 5 MB, max. 4 Tage alt)</span>
+                <span>
+                  {"Screenshot hochladen (JPG, PNG, PDF – max. 5 MB, max. " + maxAgeDays + " Tage alt)"}
+                </span>
               </>
             )}
           </label>
