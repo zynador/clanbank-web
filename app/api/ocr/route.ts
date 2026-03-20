@@ -140,11 +140,12 @@ Das Bild zeigt Verluste einzelner Spieler. Für jeden Spieler gibt es einen Bloc
   * Nur die ERSTE rote Zahl übernehmen = Verwundete
   * Die ZWEITE rote Zahl = Tote — ignorieren
 
-TRUPPENART-ERKENNUNG anhand des Icons:
-- Messer/Knife-Symbol → "messer"
-- Schützen/Gun/Shooter-Symbol → "schuetzen"
-- Biker/Motorrad-Symbol → "biker"
-- Auto/Car-Symbol → "autos"
+TRUPPENART-ERKENNUNG anhand des Icons (kleines Icon links neben der Tier-Zahl):
+- Dolch/Schwert/Messer-Symbol (spitze Klinge) → "messer"
+- Gewehr/Pistolen-Symbol (Schusswaffe) → "schuetzen"
+- Motorrad-Symbol → "biker"
+- Auto/Fahrzeug-Symbol → "autos"
+WICHTIG: Im Zweifel lieber "messer" als "autos" — Messer sind die häufigste Truppenart.
 
 WICHTIG — Farberkennung:
 - Grüne Zahlen = eigene Kills und Überlebende → komplett ignorieren
