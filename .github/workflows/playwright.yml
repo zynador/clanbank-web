@@ -26,11 +26,14 @@ jobs:
 
       - name: Run Playwright Tests
         env:
-          PLAYWRIGHT_BASE_URL: ${{ secrets.PLAYWRIGHT_BASE_URL }}
-          TEST_ADMIN_USER:     ${{ secrets.TEST_ADMIN_USER }}
-          TEST_ADMIN_PASS:     ${{ secrets.TEST_ADMIN_PASS }}
-          TEST_MEMBER_USER:    ${{ secrets.TEST_MEMBER_USER }}
-          TEST_MEMBER_PASS:    ${{ secrets.TEST_MEMBER_PASS }}
+          PLAYWRIGHT_BASE_URL:  ${{ secrets.PLAYWRIGHT_BASE_URL }}
+          TEST_ADMIN_USER:      ${{ secrets.TEST_ADMIN_USER }}
+          TEST_ADMIN_PASS:      ${{ secrets.TEST_ADMIN_PASS }}
+          TEST_OFFICER_USER:    ${{ secrets.TEST_OFFICER_USER }}
+          TEST_OFFICER_PASS:    ${{ secrets.TEST_OFFICER_PASS }}
+          TEST_MEMBER_USER:     ${{ secrets.TEST_MEMBER_USER }}
+          TEST_MEMBER_PASS:     ${{ secrets.TEST_MEMBER_PASS }}
+          VERCEL_BYPASS_SECRET: ${{ secrets.VERCEL_BYPASS_SECRET }}
         run: npx playwright test --config=tests/playwright.config.ts --project=chromium
 
       - uses: actions/upload-artifact@v4
