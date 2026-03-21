@@ -1,14 +1,18 @@
 # ClanBank — Codestruktur
 
-> **Letzte Aktualisierung:** 20.03.2026 | Fahrplan V22
+> **Letzte Aktualisierung:** 21.03.2026 | Fahrplan V24
 > **Raw-URL für neue Chat-Sessions:**
 > `https://raw.githubusercontent.com/zynador/clanbank-web/main/CODESTRUKTUR.md`
 
 ---
 
 ## 1. Projektstruktur (Verzeichnisse)
+
 ```
 clanbank-web/
+├── .github/
+│   └── workflows/
+│       └── playwright.yml        ← GitHub Actions E2E-Tests (bei jedem Push auf main)
 ├── app/
 │   ├── api/
 │   │   └── ocr/
@@ -34,7 +38,7 @@ clanbank-web/
 │   ├── FCURankingView.tsx        ← Gesamtranking über alle FCU Events
 │   ├── FCUUploadPanel.tsx        ← Multi-Screenshot Upload + OCR pro Screen
 │   ├── HelpButton.tsx
-│   ├── HomeTab.tsx               ← Neue Startseite (Status, Backlog, Ankündigungen, Schnellzugriff)
+│   ├── HomeTab.tsx               ← Startseite (Status, Backlog, Ankündigungen, Schnellzugriff)
 │   ├── InfoTooltip.tsx
 │   ├── Logo.tsx                  ← KEINE Props
 │   ├── PayoutCalculation.tsx
@@ -48,6 +52,14 @@ clanbank-web/
 ├── lib/
 │   ├── auth-context.tsx          ← useAuth() Hook
 │   └── supabaseClient.ts         ← supabase Client (IMMER von hier importieren)
+├── tests/                        ← Playwright E2E-Tests (von tsconfig ausgeschlossen)
+│   ├── playwright.config.ts
+│   ├── auth.spec.ts
+│   ├── navigation.spec.ts
+│   ├── home.spec.ts
+│   ├── fcu.spec.ts
+│   └── announcements.spec.ts
+├── tsconfig.json                 ← exclude: ["node_modules", "tests"]
 └── CODESTRUKTUR.md               ← diese Datei
 ```
 
@@ -97,7 +109,7 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 
 ### `FCUEventTab.tsx`
 - **Props:** `lang: Lang`
-- **Sichtbar für:** alle Rollen (Admin kann anlegen/hochladen)
+- **Sichtbar für:** alle Rollen (nur Admin kann anlegen/hochladen)
 - **Key-States:** `view: 'list' | 'upload' | 'results' | 'ranking'`, `activeEventId`
 - **Sub-Views:** lazy-loaded via `require()` (FCUUploadPanel, FCUResultsEditor, FCURankingView)
 - **RPC:** `create_fcu_event`
@@ -136,7 +148,7 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 
 ### `InfoTooltip.tsx`
 - **Props:** `content: string`, `lang?: Lang`
-- **Wichtig:** NICHT in `<label>`-Tag einbetten — immer als Geschwister neben `<label htmlFor="...">`:
+- **Wichtig:** NICHT in `<label>`-Tag einbetten:
 ```tsx
 <div className="flex items-center gap-1">
   <label htmlFor="field-id">Feldname</label>
@@ -149,7 +161,6 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 ### `ScreenshotUpload.tsx`
 - **Props:** `lang: Lang`, `clanId: string`, `onUploadComplete: (url: string, hash: string | null) => void`, `maxAgeDays?: number`
 - **Default maxAgeDays:** 4 (Einzahlungen), BattleReport: 7
-- **Hinweis:** Für FCU kein Alterscheck — `FCUUploadPanel` hat eigene Upload-Logik
 
 ---
 
@@ -157,6 +168,7 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 - **Props:** `lang: Lang`, `onComplete?: (battleReportId: string) => void`
 - **Key-States:** `overviewUrl`, `overviewHash`, `detailSlots: ScreenSlot[6]`, `battleDate`, `selectedSide`
 - **OCR-Modi:** `battle_overview` / `battle_detail`
+- **Kampfdatum:** Pflichtfeld, oranger Rahmen wenn leer
 
 ---
 
@@ -175,13 +187,7 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 ### `RankingTab.tsx`
 - **Props:** `lang: Lang`
 - **RPC:** `get_ranking_data(p_clan_id)`
-- **Hinweis:** Raidleiter (`is_raidleiter = true`) werden NICHT im Ranking angezeigt
-
----
-
-### `BacklogWidget.tsx`
-- **Props:** `lang: Lang`
-- **Hinweis:** Wird in HomeTab ersetzt — kann für separate Ansichten noch genutzt werden
+- **Hinweis:** Raidleiter (`is_raidleiter = true`) werden NICHT angezeigt
 
 ---
 
@@ -191,26 +197,8 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 
 ---
 
-### `SecurityAlerts.tsx`
+### `SecurityAlerts.tsx` / `StarterMembersPanel.tsx` / `SuggestionBox.tsx` / `AdminPanel.tsx`
 - **Props:** `lang: Lang`
-
----
-
-### `StarterMembersPanel.tsx`
-- **Props:** `lang: Lang`
-- **Sichtbar für:** `admin`
-
----
-
-### `SuggestionBox.tsx`
-- **Props:** `lang: Lang`
-
----
-
-### `AdminPanel.tsx`
-- **Props:** `lang: Lang`
-
----
 
 ### `WelcomeModal.tsx` / `HelpButton.tsx`
 - **Props:** `lang: Lang`, `onClose: () => void` (WelcomeModal)
@@ -220,37 +208,67 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 ## 3. API-Routen
 
 ### `app/api/ocr/route.ts`
-- **Methode:** POST
-- **Model:** `claude-haiku-4-5-20251001`
+- **Model:** `claude-haiku-4-5-20251001` ← GENAU so
 - **max_tokens:** 2048
-- **Modi:**
 
 | Mode | Beschreibung |
 |------|-------------|
 | `deposit` | Einzahlungs-Screenshot — 5 Ressourcen, filtert "Bam bamm" |
 | `battle_overview` | Kampfbericht Übersicht — Datum, Seite |
-| `battle_detail` | Kampfbericht Detail — Verwundete T4+ |
+| `battle_detail` | Kampfbericht Detail — Verwundete T4+, Hero-Block ignorieren |
 | `fcu` | FCU-Rangliste — Rang, Name (ohne Präfix), Punkte (ohne Tausenderpunkt) |
 
 - **FCU-Besonderheiten:**
-  - Präfix `#171 [1Ca]` wird im Prompt gestrippt
-  - Tausenderpunkte: `"2.753"` → `2753`
-  - Spalte 4 "Annehmen" wird ignoriert
+  - Präfix `#171 [1Ca]` wird gestrippt
+  - `"2.753"` → `2753`
+  - Spalte 4 "Annehmen" ignorieren
   - Rückgabe: `{ results: [{rank, ingame_name, points}] }`
 
 ---
 
 ## 4. Datenbank
 
-### Tabellen (neu seit V22)
+### Tabellen
+
+#### `clans`
+| Spalte | Typ | Hinweis |
+|--------|-----|---------|
+| id | uuid PK | `00000000-0000-0000-0000-000000000001` für Camorra Elite |
+| name | text | "Camorra Elite" |
+| invite_code | text | "MAFIA2026" |
+
+#### `profiles`
+| Spalte | Typ | Hinweis |
+|--------|-----|---------|
+| id | uuid PK | = auth.uid() |
+| clan_id | uuid FK | → clans.id |
+| ingame_name | text | |
+| display_name | text | |
+| role | enum | `admin` / `offizier` / `mitglied` |
+| is_raidleiter | boolean | |
+| deleted_at | timestamptz | Soft-Delete |
+
+#### `deposits`
+| Spalte | Typ | Hinweis |
+|--------|-----|---------|
+| id | uuid PK | |
+| user_id | uuid FK | |
+| clan_id | uuid FK | |
+| resource_type | text | cash / arms / cargo / metal / diamond |
+| amount | bigint | |
+| status | enum | `pending` / `approved` / `rejected` |
+| screenshot_url | text | |
+| screenshot_hash | text | SHA-256 |
+| input_manual | boolean | |
+| deleted_at | timestamptz | |
 
 #### `fcu_events`
 | Spalte | Typ | Hinweis |
 |--------|-----|---------|
 | id | uuid PK | |
-| clan_id | uuid FK | → clans.id |
-| created_by | uuid FK | → profiles.id |
-| event_name | text | z.B. "FCU März 2026" |
+| clan_id | uuid FK | |
+| created_by | uuid FK | |
+| event_name | text | |
 | event_date | date | |
 | status | text | `draft` / `confirmed` |
 
@@ -260,7 +278,7 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 | id | uuid PK | |
 | fcu_event_id | uuid FK | ON DELETE CASCADE |
 | slot_index | int | 0-basiert |
-| url | text | Supabase Storage URL |
+| url | text | |
 | hash | text | SHA-256 |
 
 #### `fcu_results`
@@ -270,7 +288,7 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 | fcu_event_id | uuid FK | ON DELETE CASCADE |
 | clan_id | uuid FK | |
 | rank | int | |
-| ingame_name | text | vollständiger Name (nach Abgleich) |
+| ingame_name | text | vollständiger Name nach Abgleich |
 | points | bigint | |
 | profile_id | uuid | nullable, auto-match |
 
@@ -284,27 +302,37 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 | content | text | nullable |
 | pinned | boolean | Default: false |
 
-### Bestehende Tabellen
-→ Siehe V21 (clans, profiles, deposits, battle_reports, battle_report_screens, battle_casualties, payouts, member_exemptions, starter_members, suggestions, security_alerts, audit_log)
+#### Weitere Tabellen (unverändert seit V21)
+`starter_members`, `suggestions`, `security_alerts`, `battle_reports`, `battle_report_screens`, `battle_casualties`, `payouts`, `member_exemptions`, `audit_log`
+
+### Views
+- **`active_deposits`** — filtert approved + nicht-deleted
+
+### Supabase Storage
+- **Bucket:** `screenshots` — Einzahlungen + Kampfberichte + FCU
 
 ---
 
 ## 5. RPCs
 
-### Neu seit V22
+### Hilfs-Funktionen
+```sql
+get_my_clan_id() → uuid
+get_my_role()    → text
+```
+
+### FCU (neu seit V23)
 ```sql
 create_fcu_event(p_clan_id, p_event_name, p_event_date)
   → { success, message, fcu_event_id }
 
 save_fcu_results(p_fcu_event_id, p_results jsonb)
   → { success, message }
-  -- p_results: [{rank, ingame_name, points}]
-  -- Macht Namensabgleich: exakt → ILIKE prefix%
-  -- Setzt Event-Status auf 'confirmed'
+  -- Namensabgleich: exakt → ILIKE prefix%
+  -- Setzt status auf 'confirmed'
 
 get_fcu_overall_ranking(p_clan_id)
   → TABLE(ingame_name, profile_id, event_count, rank_sum, avg_rank, best_rank)
-  -- Nur confirmed Events, sortiert nach rank_sum ASC
 
 create_announcement(p_clan_id, p_title, p_content, p_pinned)
   → { success, message }
@@ -313,16 +341,44 @@ delete_announcement(p_announcement_id)
   → { success, message }
 ```
 
-### Bestehende RPCs
-→ Siehe V21 (create_bulk_deposit, check_screenshot_hash, get_ranking_data, import_starter_members, claim_starter_profile, confirm_starter_claim, reject_starter_claim, create_suggestion, respond_to_suggestion, create_battle_report, save_battle_casualties, calculate_payouts, mark_payout_paid)
+### Einzahlungen
+```sql
+create_bulk_deposit(p_clan_id, p_deposits jsonb) → { success, message }
+check_screenshot_hash(p_hash, p_clan_id) → { exists: boolean }
+```
+
+### Ranking
+```sql
+get_ranking_data(p_clan_id uuid) → TABLE(...)
+```
+
+### Starter-Mitglieder
+```sql
+import_starter_members(p_members jsonb) → { success, message }
+claim_starter_profile(p_starter_id uuid) → { success, message }
+confirm_starter_claim(p_starter_id uuid) → { success, message }
+reject_starter_claim(p_starter_id uuid) → { success, message }
+```
+
+### Vorschläge
+```sql
+create_suggestion(p_title, p_content) → { success, message }
+respond_to_suggestion(p_suggestion_id, p_response, p_status) → { success, message }
+```
+
+### Kampfberichte & Auszahlungen
+```sql
+create_battle_report(p_clan_id, p_battle_date, p_overview_url, p_overview_hash)
+  → { success, message, battle_report_id }
+save_battle_casualties(p_battle_report_id, p_casualties jsonb) → { success, message }
+calculate_payouts(p_battle_report_id) → { success, message }
+mark_payout_paid(p_battle_report_id) → { success, message }
+```
 
 ---
 
 ## 6. Navigation (Hamburger Drawer)
 
-`dashboard/page.tsx` verwendet einen Hamburger Drawer statt Top-Tabs.
-
-### Tab-Typen
 ```typescript
 type Tab =
   | 'home'        // HomeTab (Standard)
@@ -336,66 +392,132 @@ type Tab =
   | 'verwaltung'  // AdminPanel (admin)
 ```
 
-### Navigation aus Komponenten
-```typescript
-// HomeTab Schnellzugriff:
-onNavigate('deposits')   // → Bank
-onNavigate('battle')     // → Kampfberichte
-onNavigate('ranking')    // → Ranking
-onNavigate('fcu')        // → FCU
-```
+---
+
+## 7. Playwright E2E-Tests
+
+### Setup
+- Config: `tests/playwright.config.ts` (testDir: '.')
+- Workflow: `.github/workflows/playwright.yml` (läuft bei jedem Push auf main)
+- `tsconfig.json` schließt `tests/` aus
+
+### GitHub Secrets (alle eingerichtet)
+| Secret | Beschreibung |
+|--------|-------------|
+| `PLAYWRIGHT_BASE_URL` | Vercel-URL |
+| `TEST_ADMIN_USER` | `autoadmin` |
+| `TEST_ADMIN_PASS` | `admin123` |
+| `TEST_OFFICER_USER` | `autooffi` |
+| `TEST_OFFICER_PASS` | `offi123` |
+| `TEST_MEMBER_USER` | `automitglied` |
+| `TEST_MEMBER_PASS` | `mitglied123` |
+
+### Spec-Dateien
+| Datei | Testfälle |
+|-------|-----------|
+| `auth.spec.ts` | Login, Redirect, Fehlermeldung |
+| `navigation.spec.ts` | Drawer, Tab-Sichtbarkeit, Abmelden |
+| `home.spec.ts` | Status, Backlog, Schnellzugriff |
+| `fcu.spec.ts` | Event anlegen, Upload, Ranking |
+| `announcements.spec.ts` | Erstellen, Anpinnen, Löschen |
+
+### Testaccounts
+| Account | Rolle |
+|---------|-------|
+| `autoadmin` | admin |
+| `autooffi` | offizier |
+| `automitglied` | mitglied |
 
 ---
 
-## 7. Key-Patterns
+## 8. Key-Patterns
 
-→ Siehe V21 (Imports, RPC-Aufrufe, FK-Joins, SHA-256, Altersvalidierung, InfoTooltip, Template Literals, Variable Shadowing)
+### Imports
+```typescript
+import { supabase } from '@/lib/supabaseClient'
+import { useAuth } from '@/lib/auth-context'
+const { user, profile, loading, signOut } = useAuth()
+```
 
-### FCU sessionStorage Pattern
+### RPC aufrufen
+```typescript
+const { data, error } = await supabase.rpc('rpc_name', { p_param: value })
+if (error || !data?.success) {
+  setFeedback(data?.message || 'Fehler')
+  return
+}
+```
+
+### FK-Join (Ambiguität)
+```typescript
+supabase.from('deposits').select('*, profiles!deposits_user_id_fkey(ingame_name)')
+```
+
+### SHA-256
+```typescript
+const buf = await file.arrayBuffer()
+const digest = await crypto.subtle.digest('SHA-256', buf)
+const hash = Array.from(new Uint8Array(digest))
+  .map(b => b.toString(16).padStart(2, '0')).join('')
+```
+
+### FCU sessionStorage
 ```typescript
 // FCUUploadPanel schreibt:
-const key = 'fcu_ocr_' + eventId
-sessionStorage.setItem(key, JSON.stringify(mergedRows))
-
-// FCUResultsEditor liest:
-const stored = sessionStorage.getItem('fcu_ocr_' + eventId)
-
-// Nach Speichern aufräumen:
+sessionStorage.setItem('fcu_ocr_' + eventId, JSON.stringify(mergedRows))
+// FCUResultsEditor liest + löscht nach Speichern:
 sessionStorage.removeItem('fcu_ocr_' + eventId)
 ```
 
-### FCU Sub-View lazy loading
+### Template Literals vermeiden (Turbopack)
 ```typescript
-// In FCUEventTab — verhindert zirkuläre Imports:
-const FCUUploadPanel = require('./FCUUploadPanel').default
-const FCUResultsEditor = require('./FCUResultsEditor').default
-const FCURankingView = require('./FCURankingView').default
+// ❌ const text = `Hallo ${name}`
+// ✅ const text = 'Hallo ' + name
+```
+
+### Datei-Editierung
+- **< 300 Zeilen** → vollständige Datei
+- **> 300 Zeilen** → str_replace-Paare
+
+### Kein lucide-react
+```typescript
+// ❌ import { AlertCircle } from 'lucide-react'
+// ✅ Emoji: ⚠️ ✅ ❌ 💡
 ```
 
 ---
 
-## 8. Auth & Rollen
+## 9. Auth & Rollen
 
 | | Admin | Offizier | Mitglied |
 |--|-------|----------|---------|
+| Einzahlungen sehen | ✅ alle | ✅ alle | ✅ eigene |
+| Einzahlungen genehmigen | ✅ | ✅ | ❌ |
 | FCU Event anlegen | ✅ | ❌ | ❌ |
-| FCU Screenshots hochladen | ✅ | ❌ | ❌ |
-| FCU Ergebnisse bearbeiten | ✅ | ❌ | ❌ |
-| FCU Ergebnisse lesen | ✅ | ✅ | ✅ (confirmed) |
+| FCU Ergebnisse sehen | ✅ | ✅ | ✅ (confirmed) |
 | Ankündigungen erstellen | ✅ | ❌ | ❌ |
 | Wand der Schande sehen | ✅ | ✅ | ❌ |
+| AdminPanel | ✅ | ❌ | ❌ |
+| Kampfbericht hochladen | ✅ | ✅ | ❌ |
+
+**Auth-Pattern:**
+- Fake-Email: `username@clanbank.local`
+- Clan-Code: `MAFIA2026`
+- Supabase-ID Camorra Elite: `00000000-0000-0000-0000-000000000001`
 
 ---
 
-## 9. Bekannte Fallstricke
-
-→ Alle aus V21 weiterhin gültig, zusätzlich:
+## 10. Bekannte Fallstricke
 
 | Problem | Lösung |
 |---------|--------|
-| FCU-Namen mit Sonderzeichen ohne Match | Bleiben als OCR-Name — Admin korrigiert manuell in FCUResultsEditor |
-| sessionStorage leer nach Seitenreload | FCUResultsEditor fällt auf DB-Ergebnisse zurück |
-| Tausenderpunkte in FCU-Punkten | OCR-Prompt konvertiert explizit: `"2.753"` → `2753` |
+| `search_path`-Fehler bei RPCs | `SET search_path = public` in jede RPC |
+| Supabase FK-Join-Ambiguität | `profiles!deposits_user_id_fkey(...)` |
+| Vercel build schlägt fehl | `tests/` in `tsconfig.json` ausschließen |
+| OCR-Modell-String falsch | Muss exakt `claude-haiku-4-5-20251001` sein |
+| FCU-Namen ohne Match | Admin korrigiert manuell in FCUResultsEditor |
+| sessionStorage leer nach Reload | FCUResultsEditor fällt auf DB-Ergebnisse zurück |
+| Mehrere GitHub-Tabs | Können sich überschreiben — immer nur ein Tab |
 
 ---
 
