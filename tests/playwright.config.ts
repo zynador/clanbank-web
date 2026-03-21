@@ -7,6 +7,9 @@ export default defineConfig({
   reporter: [['html', { open: 'never' }], ['list']],
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL || 'https://clanbank-web.vercel.app',
+    extraHTTPHeaders: {
+      'x-vercel-protection-bypass': process.env.VERCEL_BYPASS_SECRET || '',
+    },
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
   },
