@@ -11,10 +11,12 @@ async function loginAs(page: any, user: string, pass: string) {
   await page.getByPlaceholder(/passwort/i).fill(pass)
   await page.getByRole('button', { name: /anmelden/i }).click()
   await page.waitForURL(/dashboard/, { timeout: 10000 })
-  const closeBtn = page.locator('button[aria-label="Schließen"]')
-  if (await closeBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await closeBtn.click()
-    await page.locator('div.fixed.inset-0.z-50').waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {})
+  try {
+    await page.locator('button[aria-label="Schließen"]').waitFor({ state: 'visible', timeout: 5000 })
+    await page.locator('button[aria-label="Schließen"]').click()
+    await page.locator('div.fixed.inset-0.z-50').waitFor({ state: 'hidden', timeout: 5000 })
+  } catch {
+    // Modal nicht erschienen
   }
 }
 
