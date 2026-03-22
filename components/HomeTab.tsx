@@ -143,11 +143,11 @@ export default function HomeTab({ lang, onNavigate }: Props) {
 
     const { data: allProfiles } = await supabase
       .from('profiles')
-      .select('id, ingame_name, is_raidleiter')
+      .select('id, ingame_name, is_raidleiter, is_test')
       .eq('clan_id', profile.clan_id)
 
-    // Raidleiter in JS herausfiltern (NULL = kein Raidleiter)
-    const profiles = (allProfiles ?? []).filter(p => !(p as any).is_raidleiter)
+    // Raidleiter und Testaccounts in JS herausfiltern
+    const profiles = (allProfiles ?? []).filter(p => !(p as any).is_raidleiter && !(p as any).is_test)
     setTotalMembers(profiles.length)
 
     const since = new Date()
