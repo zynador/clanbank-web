@@ -14,6 +14,7 @@ async function loginAs(page: any, user: string, pass: string) {
   const closeBtn = page.locator('button[aria-label="Schließen"]')
   if (await closeBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
     await closeBtn.click()
+    await page.locator('div.fixed.inset-0.z-50').waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {})
   }
 }
 
