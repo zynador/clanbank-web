@@ -93,6 +93,10 @@ export default function HomeTab({ lang, onNavigate }: Props) {
 
   async function loadMyStatus() {
     if (!profile?.id) return
+    if (profile.is_raidleiter) {
+    setMyStatus({ weeks_behind: 0, missing_resources: [] })
+    return
+  }
 
     const now = new Date()
     const currentKw = getISOWeek(now)
