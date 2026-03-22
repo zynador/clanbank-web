@@ -168,7 +168,9 @@ function DashboardContent() {
       {/* Header */}
       <header className="border-b border-gray-800 bg-[#161822] sticky top-0 z-20">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
-          <Logo />
+          <button onClick={() => navigate('home')} className="flex items-center">
+            <Logo />
+          </button>
           <div className="flex items-center gap-2">
             {profile?.ingame_name && (
               <span className="text-xs text-gray-400 truncate max-w-[120px]">
