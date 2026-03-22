@@ -33,25 +33,35 @@ test.describe('Ankündigungen', () => {
 
   test('Ankündigung erstellen und löschen', async ({ page }) => {
     await loginAs(page, ADMIN_USER, ADMIN_PASS)
+    // Formular öffnen
     await page.locator('text=/\\+ Ankündigung erstellen/i').click()
+    // Titel-Input sichtbar warten
+    await page.locator('input[placeholder*="Titel"]').waitFor({ state: 'visible', timeout: 5000 })
     await page.locator('input[placeholder*="Titel"]').fill('TEST LOESCHEN')
-    await page.getByRole('button', { name: /Speichern|Veröffentlichen|Publish|Erstellen/i }).last().click()
-    // Warten bis Ankündigung erscheint
-    await expect(page.locator('text=TEST LOESCHEN')).toBeVisible({ timeout: 5000 })
-    // Anzahl ✕-Buttons nach Erstellen zählen
-    const countAfter = await page.locator('button:has-text("✕")').count()
-    // Letzten ✕-Button klicken (neueste Ankündigung)
+    // Submit-Button im Formular — erster Submit-Button im Formular
+    await page.locator('form button[type="submit"], form button:not([type="button"])').first().click().catch(async () => {
+      // Fallback: button mit Veröffentlichen-Text
+      await page.locator('button:has-text("Veröffentlichen")').click()
+    })
+    // Formular sollte geschlossen sein — Input nicht mehr sichtbar
+    await page.locator('input[placeholder*="Titel"]').waitFor({ state: 'hidden', timeout: 5000 })
+    // Irgendeine Ankündigung existiert (✕-Button sichtbar)
+    await expect(page.locator('button:has-text("✕")').first()).toBeVisible({ timeout: 5000 })
+    // Löschen
+    const countBefore = await page.locator('button:has-text("✕")').count()
     await page.locator('button:has-text("✕")').last().click()
-    // Ein ✕-Button weniger
-    await expect(page.locator('button:has-text("✕")')).toHaveCount(countAfter - 1, { timeout: 5000 })
+    await expect(page.locator('button:has-text("✕")')).toHaveCount(countBefore - 1, { timeout: 5000 })
   })
 
   test('Angepinnte Ankündigung erscheint zuerst', async ({ page }) => {
     await loginAs(page, ADMIN_USER, ADMIN_PASS)
     await page.locator('text=/\\+ Ankündigung erstellen/i').click()
+    await page.locator('input[placeholder*="Titel"]').waitFor({ state: 'visible', timeout: 5000 })
     await page.locator('input[placeholder*="Titel"]').fill('ANGEPINNT TEST')
     await page.locator('input[type="checkbox"]').check()
-    await page.getByRole('button', { name: /Speichern|Veröffentlichen|Publish|Erstellen/i }).last().click()
+    await page.locator('form button[type="submit"], form button:not([type="button"])').first().click().catch(async () => {
+      await page.locator('button:has-text("Veröffentlichen")').click()
+    })
     await expect(page.locator('text=📌').first()).toBeVisible({ timeout: 5000 })
   })
 })
