@@ -103,7 +103,6 @@ export default function HomeTab({ lang, onNavigate }: Props) {
     const now = new Date()
     const currentKw = getISOWeek(now)
 
-    // Eigene Einzahlungen letzte 4 KW prüfen
     const since = new Date()
     since.setDate(since.getDate() - 28)
 
@@ -121,7 +120,6 @@ export default function HomeTab({ lang, onNavigate }: Props) {
       paid.add(d.resource_type + '_' + kw)
     }
 
-    // Welche Ressourcen fehlen in aktueller + letzter KW
     const resources: ResourceType[] = ['cash', 'arms', 'cargo', 'metal', 'diamond']
     const missing: ResourceType[] = []
     for (const res of resources) {
@@ -130,7 +128,6 @@ export default function HomeTab({ lang, onNavigate }: Props) {
       if (!hasThisKw && !hasLastKw) missing.push(res)
     }
 
-    // Wochen-Rückstand berechnen
     let weeksBehind = 0
     for (let w = currentKw - 1; w >= currentKw - 4; w--) {
       const hasAny = resources.some(r => paid.has(r + '_' + w))
@@ -144,14 +141,15 @@ export default function HomeTab({ lang, onNavigate }: Props) {
   async function loadBacklog() {
     if (!profile?.clan_id) return
 
-    const { data: profiles } = await supabase
+    const { data: allProfiles } = await supabase
       .from('profiles')
-      .select('id, ingame_name')
+      .select('id, ingame_name, is_raidleiter')
       .eq('clan_id', profile.clan_id)
-      .or('is_raidleiter.is.null,is_raidleiter.eq.false')
       .is('deleted_at', null)
 
-    setTotalMembers(profiles?.length ?? 0)
+    // Raidleiter in JS herausfiltern (NULL = kein Raidleiter)
+    const profiles = (allProfiles ?? []).filter(p => !(p as any).is_raidleiter)
+    setTotalMembers(profiles.length)
 
     const since = new Date()
     since.setDate(since.getDate() - 28)
@@ -177,10 +175,9 @@ export default function HomeTab({ lang, onNavigate }: Props) {
     const behind: BacklogMember[] = []
     let paidThisKw = 0
 
-    for (const p of profiles ?? []) {
+    for (const p of profiles) {
       if (p.id === profile.id) continue
 
-      // Wochen-Rückstand
       let weeksBehind = 0
       for (let w = currentKw - 1; w >= currentKw - 4; w--) {
         const hasAny = resources.some(r => paidSet.has(p.id + '_' + r + '_' + w))
@@ -188,7 +185,6 @@ export default function HomeTab({ lang, onNavigate }: Props) {
         else break
       }
 
-      // Fehlende Ressourcen (aktuelle + letzte KW)
       const missing: ResourceType[] = []
       for (const res of resources) {
         const hasThisKw = paidSet.has(p.id + '_' + res + '_' + currentKw)
