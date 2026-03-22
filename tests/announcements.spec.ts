@@ -38,7 +38,11 @@ test.describe('Ankündigungen', () => {
     await page.locator('input[placeholder*="Titel"]').fill(title)
     await page.locator('text=/Veröffentlichen|Publish/i').click()
     await expect(page.locator('text=' + title)).toBeVisible({ timeout: 5000 })
-    await page.locator('text=' + title).locator('..').locator('button:has-text("✕")').click()
+    // Löschen-Button direkt im Announcement-Container suchen
+    await page.locator('[data-title="' + title + '"] button').click().catch(async () => {
+      // Fallback: ersten sichtbaren ✕-Button nach dem Titel klicken
+      await page.locator('text=' + title).locator('xpath=ancestor::div[1]//button').last().click()
+    })
     await expect(page.locator('text=' + title)).not.toBeVisible({ timeout: 5000 })
   })
 
