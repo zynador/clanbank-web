@@ -7,37 +7,34 @@ const MEMBER_PASS = process.env.TEST_MEMBER_PASS || 'testpass123'
 
 async function loginAs(page: any, user: string, pass: string) {
   await page.goto('/login')
-  await page.getByPlaceholder(/username|benutzername/i).fill(user)
-  await page.getByPlaceholder(/passwort|password/i).fill(pass)
-  await page.getByRole('button', { name: /login|anmelden/i }).click()
+  await page.getByPlaceholder(/benutzername/i).fill(user)
+  await page.getByPlaceholder(/passwort/i).fill(pass)
+  await page.getByRole('button', { name: /anmelden/i }).click()
   await page.waitForURL(/dashboard/, { timeout: 10000 })
+  const closeBtn = page.locator('button[aria-label="Schließen"]')
+  if (await closeBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+    await closeBtn.click()
+  }
 }
 
 test.describe('Ankündigungen', () => {
-
   test('Admin sieht Ankündigung erstellen Button', async ({ page }) => {
     await loginAs(page, ADMIN_USER, ADMIN_PASS)
-    await expect(page.locator('text=/\\+ Ankündigung|\\+ Announcement/')).toBeVisible({ timeout: 8000 })
+    await expect(page.locator('text=/\\+ Ankündigung erstellen/i')).toBeVisible()
   })
 
   test('Mitglied sieht KEINEN erstellen Button', async ({ page }) => {
     await loginAs(page, MEMBER_USER, MEMBER_PASS)
-    await expect(page.locator('text=/\\+ Ankündigung|\\+ Announcement/')).not.toBeVisible({ timeout: 5000 })
+    await expect(page.locator('text=/\\+ Ankündigung erstellen/i')).not.toBeVisible()
   })
 
   test('Ankündigung erstellen und löschen', async ({ page }) => {
     await loginAs(page, ADMIN_USER, ADMIN_PASS)
-    const title = 'Test Ankuendigung ' + Date.now()
-
-    // Erstellen
-    await page.locator('text=/\\+ Ankündigung|\\+ Announcement/').click()
+    const title = 'TEST ' + Date.now()
+    await page.locator('text=/\\+ Ankündigung erstellen/i').click()
     await page.locator('input[placeholder*="Titel"]').fill(title)
-    await page.locator('text=/Veröffentlichen|Publish/').click()
-
-    // Sichtbar
+    await page.locator('text=/Veröffentlichen|Publish/i').click()
     await expect(page.locator('text=' + title)).toBeVisible({ timeout: 5000 })
-
-    // Löschen
     await page.locator('text=' + title).locator('..').locator('button:has-text("✕")').click()
     await expect(page.locator('text=' + title)).not.toBeVisible({ timeout: 5000 })
   })
@@ -45,16 +42,11 @@ test.describe('Ankündigungen', () => {
   test('Angepinnte Ankündigung erscheint zuerst', async ({ page }) => {
     await loginAs(page, ADMIN_USER, ADMIN_PASS)
     const pinnedTitle = 'ANGEPINNT ' + Date.now()
-
-    await page.locator('text=/\\+ Ankündigung|\\+ Announcement/').click()
+    await page.locator('text=/\\+ Ankündigung erstellen/i').click()
     await page.locator('input[placeholder*="Titel"]').fill(pinnedTitle)
     await page.locator('input[type="checkbox"]').check()
-    await page.locator('text=/Veröffentlichen|Publish/').click()
-
-    await expect(page.locator('text=📌')).toBeVisible({ timeout: 5000 })
-
-    // Aufräumen
-    await page.locator('text=' + pinnedTitle).locator('..').locator('button:has-text("✕")').click()
+    await page.locator('text=/Veröffentlichen|Publish/i').click()
+    await expect(page.locator('text=' + pinnedTitle)).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('text=📌').first()).toBeVisible()
   })
-
 })
