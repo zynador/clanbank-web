@@ -36,13 +36,13 @@ test.describe('Navigation — Hamburger Drawer', () => {
     await expect(page.getByRole('button', { name: '🏠 Home' })).toBeVisible()
     await expect(page.getByRole('button', { name: /Bank/i })).toBeVisible()
     await expect(page.getByRole('button', { name: /Kampfberichte/i })).toBeVisible()
-    await expect(page.getByRole('button', { name: /Verwaltung/i })).toBeVisible()
+    await expect(page.getByRole('navigation').locator('text=/Admin|Verwaltung/i').first()).toBeVisible()
   })
 
   test('Mitglied sieht keine Admin-Tabs', async ({ page }) => {
     await loginAs(page, MEMBER_USER, MEMBER_PASS)
     await page.locator('button[aria-label="Menü öffnen"]').click()
-    await expect(page.getByRole('button', { name: /Verwaltung/i })).not.toBeVisible()
+    await expect(page.getByRole('navigation').locator('text=/Admin|Verwaltung/i')).not.toBeVisible()
     await expect(page.getByRole('button', { name: /Freigaben/i })).not.toBeVisible()
     await expect(page.getByRole('button', { name: /Warnungen/i })).not.toBeVisible()
   })
