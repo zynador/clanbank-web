@@ -169,7 +169,13 @@ function DashboardContent() {
       {/* Header */}
       <header className="border-b border-gray-800 bg-[#161822] sticky top-0 z-20">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
-          <Logo />
+          <button
+            onClick={() => navigate('home')}
+            className="cursor-pointer hover:opacity-75 transition-opacity"
+            aria-label="Home"
+          >
+            <Logo />
+          </button>
           <div className="flex items-center gap-2">
             <button
               onClick={toggleLang}
