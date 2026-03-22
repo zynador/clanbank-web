@@ -168,13 +168,17 @@ function DashboardContent() {
       {/* Header */}
       <header className="border-b border-gray-800 bg-[#161822] sticky top-0 z-20">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
-          <button
-            onClick={() => navigate('home')}
-            className="flex items-center"
-            title={lang === 'de' ? 'Zur Startseite' : 'Go to Home'}
-          >
-            <Logo />
-          </button>
+          <div className="relative group">
+            <button
+              onClick={() => navigate('home')}
+              className="flex items-center"
+            >
+              <Logo />
+            </button>
+            <div className="absolute left-0 top-full mt-1 px-2 py-1 rounded bg-gray-800 text-gray-200 text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+              {lang === 'de' ? 'Zur Startseite' : 'Go to Home'}
+            </div>
+          </div>
           <div className="flex items-center gap-2">
             {profile?.ingame_name && (
               <span className="text-xs text-gray-400 truncate max-w-[120px]">
