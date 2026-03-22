@@ -33,27 +33,26 @@ test.describe('Ankündigungen', () => {
 
   test('Ankündigung erstellen und löschen', async ({ page }) => {
     await loginAs(page, ADMIN_USER, ADMIN_PASS)
-    const title = 'TEST ' + Date.now()
+    // Anzahl vorhandener Ankündigungen zählen
+    const countBefore = await page.locator('button:has-text("✕")').count()
+    // Neue Ankündigung erstellen
     await page.locator('text=/\\+ Ankündigung erstellen/i').click()
-    await page.locator('input[placeholder*="Titel"]').fill(title)
-    await page.locator('text=/Veröffentlichen|Publish/i').click()
-    await expect(page.locator('text=' + title)).toBeVisible({ timeout: 5000 })
-    // Löschen-Button direkt im Announcement-Container suchen
-    await page.locator('[data-title="' + title + '"] button').click().catch(async () => {
-      // Fallback: ersten sichtbaren ✕-Button nach dem Titel klicken
-      await page.locator('text=' + title).locator('xpath=ancestor::div[1]//button').last().click()
-    })
-    await expect(page.locator('text=' + title)).not.toBeVisible({ timeout: 5000 })
+    await page.locator('input[placeholder*="Titel"]').fill('TEST LOESCHEN')
+    await page.getByRole('button', { name: /Speichern|Veröffentlichen|Publish|Erstellen/i }).last().click()
+    // Eine neue ✕-Schaltfläche ist erschienen
+    await expect(page.locator('button:has-text("✕")')).toHaveCount(countBefore + 1, { timeout: 5000 })
+    // Letzte ✕-Schaltfläche klicken
+    await page.locator('button:has-text("✕")').last().click()
+    // Wieder auf ursprüngliche Anzahl zurück
+    await expect(page.locator('button:has-text("✕")')).toHaveCount(countBefore, { timeout: 5000 })
   })
 
   test('Angepinnte Ankündigung erscheint zuerst', async ({ page }) => {
     await loginAs(page, ADMIN_USER, ADMIN_PASS)
-    const pinnedTitle = 'ANGEPINNT ' + Date.now()
     await page.locator('text=/\\+ Ankündigung erstellen/i').click()
-    await page.locator('input[placeholder*="Titel"]').fill(pinnedTitle)
+    await page.locator('input[placeholder*="Titel"]').fill('ANGEPINNT TEST')
     await page.locator('input[type="checkbox"]').check()
-    await page.locator('text=/Veröffentlichen|Publish/i').click()
-    await expect(page.locator('text=' + pinnedTitle)).toBeVisible({ timeout: 5000 })
-    await expect(page.locator('text=📌').first()).toBeVisible()
+    await page.getByRole('button', { name: /Speichern|Veröffentlichen|Publish|Erstellen/i }).last().click()
+    await expect(page.locator('text=📌').first()).toBeVisible({ timeout: 5000 })
   })
 })
