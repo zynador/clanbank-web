@@ -14,12 +14,13 @@ async function loginAs(page: any, user: string, pass: string) {
   const closeBtn = page.locator('button[aria-label="Schließen"]')
   if (await closeBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
     await closeBtn.click()
+    await page.locator('div.fixed.inset-0.z-50').waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {})
   }
 }
 
 async function navigateToFCU(page: any) {
   await page.locator('button[aria-label="Menü öffnen"]').click()
-  await page.locator('text=FCU').click()
+  await page.getByRole('button', { name: /FCU/i }).click()
 }
 
 test.describe('FCU Event-Tracking', () => {
@@ -73,7 +74,7 @@ test.describe('FCU Event-Tracking', () => {
     await loginAs(page, ADMIN_USER, ADMIN_PASS)
     await navigateToFCU(page)
     await page.locator('text=/Gesamtranking/i').click()
-    await expect(page.locator('text=/Rang|Ranking/i')).toBeVisible()
+    await expect(page.locator('text=/Rang|Ranking/i').first()).toBeVisible()
   })
 
   test('Gesamtranking zurück zur Liste', async ({ page }) => {
