@@ -142,7 +142,7 @@ export default function HomeTab({ lang, onNavigate }: Props) {
       .from('profiles')
       .select('id, ingame_name')
       .eq('clan_id', profile.clan_id)
-      .eq('is_raidleiter', true)
+      .or('is_raidleiter.is.null,is_raidleiter.eq.false')
       .is('deleted_at', null)
 
     setTotalMembers(profiles?.length ?? 0)
