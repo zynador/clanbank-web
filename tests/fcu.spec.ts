@@ -22,7 +22,7 @@ async function loginAs(page: any, user: string, pass: string) {
 
 async function navigateToFCU(page: any) {
   await page.locator('button[aria-label="Menü öffnen"]').click()
-  await page.getByRole('button', { name: /FCU/i }).click()
+  await page.getByRole('navigation').getByRole('button', { name: /FCU/i }).click()
 }
 
 test.describe('FCU Event-Tracking', () => {
@@ -59,7 +59,7 @@ test.describe('FCU Event-Tracking', () => {
     await page.locator('input[type="text"]').fill('Test FCU ' + Date.now())
     await page.locator('input[type="date"]').fill('2026-03-20')
     await page.locator('text=/Anlegen|Create/i').click()
-    await expect(page.locator('text=/Screenshot|Upload/i')).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('text=/Screenshot 1/i')).toBeVisible({ timeout: 5000 })
   })
 
   test('Upload Panel — Slot vorhanden', async ({ page }) => {
