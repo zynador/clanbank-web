@@ -31,6 +31,16 @@ type LastFcu = {
   rank: number | null
 }
 
+type MemberDetail = {
+  user_id: string
+  ingame_name: string
+  weeks_behind: number
+  total_all_time: number
+  per_resource: Record<ResourceType, number>
+}
+
+const RESOURCES: ResourceType[] = ['cash', 'arms', 'cargo', 'metal', 'diamond']
+
 const RESOURCE_LABELS: Record<ResourceType, { emoji: string; label: string }> = {
   cash:    { emoji: '💵', label: 'Cash' },
   arms:    { emoji: '🔫', label: 'Arms' },
@@ -47,6 +57,30 @@ const RESOURCE_COLORS: Record<ResourceType, string> = {
   diamond: 'bg-purple-100 text-purple-800',
 }
 
+function fmtMio(n: number): string {
+  if (n >= 1_000_000) return (Math.round(n / 100_000) / 10) + 'M'
+  if (n >= 1_000) return (Math.round(n / 100) / 10) + 'K'
+  return String(n)
+}
+
+function kwBadgeColor(weeks: number): string {
+  if (weeks >= 3) return 'text-red-600'
+  if (weeks === 2) return 'text-orange-500'
+  return 'text-yellow-600'
+}
+
+function barColor(pct: number): string {
+  if (pct >= 100) return 'bg-green-600'
+  if (pct >= 60) return 'bg-amber-500'
+  return 'bg-red-500'
+}
+
+function valColor(pct: number): string {
+  if (pct >= 100) return 'text-green-700'
+  if (pct >= 60) return 'text-amber-600'
+  return 'text-red-600'
+}
+
 export default function HomeTab({ lang, onNavigate }: Props) {
   const { profile } = useAuth()
   const [myStatus, setMyStatus] = useState<MyStatus | null>(null)
@@ -55,30 +89,34 @@ export default function HomeTab({ lang, onNavigate }: Props) {
   const [totalMembers, setTotalMembers] = useState(0)
   const [paidCount, setPaidCount] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [detail, setDetail] = useState<MemberDetail | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [threshold, setThreshold] = useState(0)
 
   const isAdmin = profile?.role === 'admin'
   const isOfficer = profile?.role === 'offizier'
 
   const t = {
-    greeting:      lang === 'de' ? 'Willkommen' : 'Welcome',
-    statusOk:      lang === 'de' ? 'Clanbank: Du bist auf dem Laufenden' : 'Clanbank: You are up to date',
-    statusBehind:  lang === 'de' ? 'Clanbank: Du bist im Rückstand!' : 'Clanbank: You are behind!',
-    weeksBehind:   lang === 'de' ? 'Wochen fehlen' : 'weeks missing',
-    missingRes:    lang === 'de' ? 'Fehlende Ressourcen:' : 'Missing resources:',
-    backlogTitle:  lang === 'de' ? 'Clanbank-Rückstand' : 'Clanbank backlog',
-    membersBack:   lang === 'de' ? 'Mitglieder haben nicht eingezahlt' : 'members have not paid',
-    paid:          lang === 'de' ? 'bezahlt' : 'paid',
-    alsoBack:      lang === 'de' ? 'Auch im Rückstand' : 'Also behind',
-    noBacklog:     lang === 'de' ? 'Alle Mitglieder haben eingezahlt.' : 'All members have paid.',
-    quickActions:  lang === 'de' ? 'Schnellzugriff' : 'Quick Actions',
-    deposit:       lang === 'de' ? 'Einzahlen' : 'Deposit',
-    battle:        lang === 'de' ? 'Kampfbericht' : 'Battle Report',
-    ranking:       lang === 'de' ? 'Ranking' : 'Ranking',
-    fcu:           lang === 'de' ? 'FCU' : 'FCU',
-    lastFcu:       lang === 'de' ? 'Letztes FCU' : 'Last FCU',
-    rank:          lang === 'de' ? 'Rang' : 'Rank',
-    noFcu:         lang === 'de' ? 'Noch kein FCU' : 'No FCU yet',
-    weeksShort:    lang === 'de' ? 'KW' : 'W',
+    greeting:     lang === 'de' ? 'Willkommen' : 'Welcome',
+    statusOk:     lang === 'de' ? 'Clanbank: Du bist auf dem Laufenden' : 'Clanbank: You are up to date',
+    statusBehind: lang === 'de' ? 'Clanbank: Du bist im Rückstand!' : 'Clanbank: You are behind!',
+    weeksBehind:  lang === 'de' ? 'Wochen fehlen' : 'weeks missing',
+    missingRes:   lang === 'de' ? 'Fehlende Ressourcen:' : 'Missing resources:',
+    backlogTitle: lang === 'de' ? 'Clanbank-Rückstand' : 'Clanbank backlog',
+    paid:         lang === 'de' ? 'bezahlt' : 'paid',
+    noBacklog:    lang === 'de' ? 'Alle Mitglieder haben eingezahlt.' : 'All members have paid.',
+    quickActions: lang === 'de' ? 'Schnellzugriff' : 'Quick Actions',
+    deposit:      lang === 'de' ? 'Einzahlen' : 'Deposit',
+    battle:       lang === 'de' ? 'Kampfbericht' : 'Battle Report',
+    ranking:      lang === 'de' ? 'Ranking' : 'Ranking',
+    fcu:          lang === 'de' ? 'FCU' : 'FCU',
+    lastFcu:      lang === 'de' ? 'Letztes FCU' : 'Last FCU',
+    weeksShort:   lang === 'de' ? 'KW' : 'W',
+    close:        lang === 'de' ? '✕ schließen' : '✕ close',
+    totalAll:     lang === 'de' ? 'Gesamt eingezahlt' : 'Total deposited',
+    schwellwert:  lang === 'de' ? 'Schwellwert / Res.' : 'Threshold / res.',
+    behind:       lang === 'de' ? 'Rückstand' : 'behind',
   }
 
   useEffect(() => {
@@ -87,22 +125,20 @@ export default function HomeTab({ lang, onNavigate }: Props) {
 
   async function loadData() {
     setLoading(true)
+    const kw = getISOWeek(new Date())
+    setThreshold((kw - 2) * 5_000_000)
     await Promise.all([loadMyStatus(), loadBacklog(), loadLastFcu()])
     setLoading(false)
   }
 
   async function loadMyStatus() {
     if (!profile?.id) return
-
-    // Raidleiter sind von der Einzahlungspflicht befreit
     if ((profile as any).is_raidleiter) {
       setMyStatus({ weeks_behind: 0, missing_resources: [] })
       return
     }
-
     const now = new Date()
     const currentKw = getISOWeek(now)
-
     const since = new Date()
     since.setDate(since.getDate() - 28)
 
@@ -120,17 +156,16 @@ export default function HomeTab({ lang, onNavigate }: Props) {
       paid.add(d.resource_type + '_' + kw)
     }
 
-    const resources: ResourceType[] = ['cash', 'arms', 'cargo', 'metal', 'diamond']
     const missing: ResourceType[] = []
-    for (const res of resources) {
-      const hasThisKw = paid.has(res + '_' + currentKw)
-      const hasLastKw = paid.has(res + '_' + (currentKw - 1))
-      if (!hasThisKw && !hasLastKw) missing.push(res)
+    for (const res of RESOURCES) {
+      if (!paid.has(res + '_' + currentKw) && !paid.has(res + '_' + (currentKw - 1))) {
+        missing.push(res)
+      }
     }
 
     let weeksBehind = 0
     for (let w = currentKw - 1; w >= currentKw - 4; w--) {
-      const hasAny = resources.some(r => paid.has(r + '_' + w))
+      const hasAny = RESOURCES.some(r => paid.has(r + '_' + w))
       if (!hasAny) weeksBehind++
       else break
     }
@@ -146,7 +181,6 @@ export default function HomeTab({ lang, onNavigate }: Props) {
       .select('id, ingame_name, is_raidleiter, is_test')
       .eq('clan_id', profile.clan_id)
 
-    // Raidleiter und Testaccounts in JS herausfiltern
     const profiles = (allProfiles ?? []).filter(p => !(p as any).is_raidleiter && !(p as any).is_test)
     setTotalMembers(profiles.length)
 
@@ -163,7 +197,6 @@ export default function HomeTab({ lang, onNavigate }: Props) {
 
     const now = new Date()
     const currentKw = getISOWeek(now)
-    const resources: ResourceType[] = ['cash', 'arms', 'cargo', 'metal', 'diamond']
 
     const paidSet = new Set<string>()
     for (const d of deposits ?? []) {
@@ -179,13 +212,13 @@ export default function HomeTab({ lang, onNavigate }: Props) {
 
       let weeksBehind = 0
       for (let w = currentKw - 1; w >= currentKw - 4; w--) {
-        const hasAny = resources.some(r => paidSet.has(p.id + '_' + r + '_' + w))
+        const hasAny = RESOURCES.some(r => paidSet.has(p.id + '_' + r + '_' + w))
         if (!hasAny) weeksBehind++
         else break
       }
 
       const missing: ResourceType[] = []
-      for (const res of resources) {
+      for (const res of RESOURCES) {
         const hasThisKw = paidSet.has(p.id + '_' + res + '_' + currentKw)
         const hasLastKw = paidSet.has(p.id + '_' + res + '_' + (currentKw - 1))
         if (!hasThisKw && !hasLastKw) missing.push(res)
@@ -194,18 +227,43 @@ export default function HomeTab({ lang, onNavigate }: Props) {
       if (weeksBehind === 0) paidThisKw++
 
       if (weeksBehind > 0 || missing.length > 0) {
-        behind.push({
-          user_id:           p.id,
-          ingame_name:       p.ingame_name,
-          weeks_behind:      weeksBehind,
-          missing_resources: missing,
-        })
+        behind.push({ user_id: p.id, ingame_name: p.ingame_name, weeks_behind: weeksBehind, missing_resources: missing })
       }
     }
 
     setPaidCount(paidThisKw)
     behind.sort((a, b) => b.weeks_behind - a.weeks_behind)
     setBacklog(behind)
+  }
+
+  async function loadDetail(member: BacklogMember) {
+    if (selectedId === member.user_id) {
+      setSelectedId(null)
+      setDetail(null)
+      return
+    }
+    setSelectedId(member.user_id)
+    setDetailLoading(true)
+
+    const { data } = await supabase
+      .from('deposits')
+      .select('resource_type, amount')
+      .eq('user_id', member.user_id)
+      .eq('status', 'approved')
+      .is('deleted_at', null)
+
+    const perResource: Record<ResourceType, number> = { cash: 0, arms: 0, cargo: 0, metal: 0, diamond: 0 }
+    let totalAllTime = 0
+    for (const d of data ?? []) {
+      const rt = d.resource_type as ResourceType
+      if (perResource[rt] !== undefined) {
+        perResource[rt] += d.amount
+        totalAllTime += d.amount
+      }
+    }
+
+    setDetail({ user_id: member.user_id, ingame_name: member.ingame_name, weeks_behind: member.weeks_behind, total_all_time: totalAllTime, per_resource: perResource })
+    setDetailLoading(false)
   }
 
   async function loadLastFcu() {
@@ -220,7 +278,6 @@ export default function HomeTab({ lang, onNavigate }: Props) {
       .limit(1)
 
     if (!events || events.length === 0) return
-
     const ev = events[0]
 
     const { data: result } = await supabase
@@ -240,12 +297,6 @@ export default function HomeTab({ lang, onNavigate }: Props) {
     return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
   }
 
-  function kwBadgeColor(weeks: number): string {
-    if (weeks >= 3) return 'bg-red-100 text-red-800'
-    if (weeks === 2) return 'bg-orange-100 text-orange-800'
-    return 'bg-yellow-100 text-yellow-800'
-  }
-
   if (loading) return <div className="p-4 text-sm text-gray-400">...</div>
 
   const isBehind = (myStatus?.weeks_behind ?? 0) > 0 || (myStatus?.missing_resources?.length ?? 0) > 0
@@ -260,20 +311,16 @@ export default function HomeTab({ lang, onNavigate }: Props) {
         </p>
       </div>
 
-      {/* Persönlicher Clanbank-Status */}
+      {/* Persönlicher Status */}
       {myStatus && (
         isBehind ? (
           <div className="bg-red-50 border-2 border-red-400 rounded-xl p-3 space-y-2">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-red-200 flex items-center justify-center text-sm flex-shrink-0">
-                ⚠️
-              </div>
+              <div className="w-8 h-8 rounded-full bg-red-200 flex items-center justify-center text-sm flex-shrink-0">⚠️</div>
               <div>
                 <p className="text-sm font-medium text-red-800">{t.statusBehind}</p>
                 {myStatus.weeks_behind > 0 && (
-                  <p className="text-xs text-red-600 mt-0.5">
-                    {myStatus.weeks_behind + ' ' + t.weeksBehind}
-                  </p>
+                  <p className="text-xs text-red-600 mt-0.5">{myStatus.weeks_behind + ' ' + t.weeksBehind}</p>
                 )}
               </div>
             </div>
@@ -292,62 +339,118 @@ export default function HomeTab({ lang, onNavigate }: Props) {
           </div>
         ) : (
           <div className="bg-green-50 border border-green-300 rounded-xl p-3 flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-green-200 flex items-center justify-center text-sm flex-shrink-0">
-              ✅
-            </div>
+            <div className="w-8 h-8 rounded-full bg-green-200 flex items-center justify-center text-sm flex-shrink-0">✅</div>
             <p className="text-sm font-medium text-green-800">{t.statusOk}</p>
           </div>
         )
       )}
 
-      {/* Clanbank-Rückstand (Wand der Schande) */}
+      {/* Wand der Schande */}
       {(isAdmin || isOfficer) && (
-        <div className={
-          'rounded-xl p-3 space-y-2 border ' +
-          (backlog.length > 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200')
-        }>
+        <div className={'rounded-xl p-3 space-y-3 border ' + (backlog.length > 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200')}>
+
           <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-gray-800">
-              {'⚠️ ' + t.backlogTitle}
-            </p>
+            <p className="text-sm font-medium text-gray-800">{'⚠️ ' + t.backlogTitle}</p>
             {totalMembers > 0 && (
-              <span className="text-xs text-gray-500">
-                {paidCount + '/' + totalMembers + ' ' + t.paid}
-              </span>
+              <span className="text-xs text-gray-500">{paidCount + '/' + totalMembers + ' ' + t.paid}</span>
             )}
           </div>
 
           {backlog.length === 0 ? (
             <p className="text-xs text-green-700">{t.noBacklog}</p>
           ) : (
-            <div className="space-y-1.5">
-              {backlog.map(member => (
-                <div key={member.user_id} className="bg-white rounded-lg px-3 py-2">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full bg-red-200 flex items-center justify-center text-xs font-medium text-red-800">
+            <>
+              {/* Grid */}
+              <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))' }}>
+                {backlog.map(member => (
+                  <button
+                    key={member.user_id}
+                    onClick={() => loadDetail(member)}
+                    className={'text-left bg-white rounded-lg px-2.5 py-2 border transition-colors ' + (selectedId === member.user_id ? 'border-gray-400' : 'border-gray-100 hover:border-gray-300')}
+                  >
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <div className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center text-xs font-medium text-red-700 flex-shrink-0">
                         {member.ingame_name.slice(0, 2).toUpperCase()}
                       </div>
-                      <span className="text-xs font-medium text-gray-800">{member.ingame_name}</span>
+                      <span className="text-xs font-medium text-gray-800 truncate">{member.ingame_name}</span>
                     </div>
                     {member.weeks_behind > 0 && (
-                      <span className={'text-xs px-2 py-0.5 rounded-full font-medium ' + kwBadgeColor(member.weeks_behind)}>
+                      <p className={'text-xs font-medium mb-1.5 ' + kwBadgeColor(member.weeks_behind)}>
                         {member.weeks_behind + ' ' + t.weeksShort}
-                      </span>
+                      </p>
                     )}
-                  </div>
-                  {member.missing_resources.length > 0 && (
                     <div className="flex gap-1 flex-wrap">
                       {member.missing_resources.map(res => (
-                        <span key={res} className={'text-xs px-1.5 py-0.5 rounded-full ' + RESOURCE_COLORS[res]}>
+                        <span key={res} className={'text-xs px-1 py-0.5 rounded ' + RESOURCE_COLORS[res]}>
                           {RESOURCE_LABELS[res].emoji}
                         </span>
                       ))}
                     </div>
-                  )}
+                  </button>
+                ))}
+              </div>
+
+              {/* Detail Panel */}
+              {selectedId && (
+                <div className="bg-white border border-gray-200 rounded-xl p-3 space-y-3">
+                  {detailLoading ? (
+                    <p className="text-xs text-gray-400 text-center py-2">...</p>
+                  ) : detail ? (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-full bg-red-100 flex items-center justify-center text-xs font-medium text-red-700">
+                            {detail.ingame_name.slice(0, 2).toUpperCase()}
+                          </div>
+                          <span className="text-sm font-medium text-gray-800">{detail.ingame_name}</span>
+                          {detail.weeks_behind > 0 && (
+                            <span className={'text-xs font-medium ' + kwBadgeColor(detail.weeks_behind)}>
+                              {detail.weeks_behind + ' ' + t.weeksShort + ' ' + t.behind}
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => { setSelectedId(null); setDetail(null) }}
+                          className="text-xs text-gray-400 border border-gray-200 rounded-lg px-2 py-1 hover:bg-gray-50"
+                        >
+                          {t.close}
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="bg-gray-50 rounded-lg px-3 py-2">
+                          <p className="text-xs text-gray-500 mb-0.5">{t.totalAll}</p>
+                          <p className="text-lg font-semibold text-gray-800">{fmtMio(detail.total_all_time)}</p>
+                        </div>
+                        <div className="bg-gray-50 rounded-lg px-3 py-2">
+                          <p className="text-xs text-gray-500 mb-0.5">{t.schwellwert}</p>
+                          <p className="text-lg font-semibold text-gray-800">{fmtMio(threshold)}</p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        {RESOURCES.map(res => {
+                          const val = detail.per_resource[res]
+                          const pct = threshold > 0 ? Math.min(100, Math.round(val / threshold * 100)) : 100
+                          return (
+                            <div key={res} className="flex items-center gap-2">
+                              <span className="text-sm w-5 text-center">{RESOURCE_LABELS[res].emoji}</span>
+                              <span className="text-xs text-gray-500 w-12 flex-shrink-0">{RESOURCE_LABELS[res].label}</span>
+                              <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                <div className={'h-full rounded-full ' + barColor(pct)} style={{ width: pct + '%' }} />
+                              </div>
+                              <span className={'text-xs font-medium w-20 text-right flex-shrink-0 ' + valColor(pct)}>
+                                {fmtMio(val) + ' / ' + fmtMio(threshold)}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </>
+                  ) : null}
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
         </div>
       )}
