@@ -144,7 +144,6 @@ function DashboardContent() {
     verwaltung:  '⚙️',
   }
 
-  // Welche Tabs sichtbar sind
   const visibleTabs: Tab[] = [
     'home',
     'deposits',
@@ -169,15 +168,8 @@ function DashboardContent() {
       {/* Header */}
       <header className="border-b border-gray-800 bg-[#161822] sticky top-0 z-20">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
-          <button
-            onClick={() => navigate('home')}
-            className="cursor-pointer hover:opacity-75 transition-opacity"
-            aria-label="Home"
-          >
-            <Logo />
-          </button>
+          <Logo />
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2">
             {profile?.ingame_name && (
               <span className="text-xs text-gray-400 truncate max-w-[120px]">
                 {'👤 ' + profile.ingame_name}
@@ -194,7 +186,7 @@ function DashboardContent() {
               className="text-xs text-gray-400 hover:text-red-400 px-2 py-1 rounded border border-gray-700 hover:border-red-600"
               title={t.logout}
             >
-              🚪
+              {'🚪'}
             </button>
             {/* Hamburger */}
             <button
@@ -272,14 +264,14 @@ function DashboardContent() {
                 onClick={() => { setDrawerOpen(false); setShowWelcome(true) }}
                 className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-gray-800 hover:text-gray-200"
               >
-                <span>❓</span>
+                <span>{'❓'}</span>
                 <span>{lang === 'de' ? 'Hilfe' : 'Help'}</span>
               </button>
               <button
                 onClick={() => signOut()}
                 className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-gray-800 hover:text-red-400"
               >
-                <span>🚪</span>
+                <span>{'🚪'}</span>
                 <span>{t.logout}</span>
               </button>
             </div>
@@ -314,7 +306,7 @@ function DashboardContent() {
                 {'📋 ' + t.upload_title}
                 {isRaidleiter && !isOfficerOrAdmin && (
                   <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 border border-yellow-500/20">
-                    ⚔️ Raidleiter
+                    {'⚔️ Raidleiter'}
                   </span>
                 )}
               </h2>
