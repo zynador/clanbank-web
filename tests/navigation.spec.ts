@@ -11,17 +11,18 @@ async function loginAs(page: any, user: string, pass: string) {
   await page.getByPlaceholder(/passwort/i).fill(pass)
   await page.getByRole('button', { name: /anmelden/i }).click()
   await page.waitForURL(/dashboard/, { timeout: 10000 })
-  const closeBtn = page.locator('button[aria-label="Schließen"]')
-  if (await closeBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await closeBtn.click()
-    await page.locator('div.fixed.inset-0.z-50').waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {})
+  try {
+    await page.locator('button[aria-label="Schließen"]').waitFor({ state: 'visible', timeout: 5000 })
+    await page.locator('button[aria-label="Schließen"]').click()
+    await page.locator('div.fixed.inset-0.z-50').waitFor({ state: 'hidden', timeout: 5000 })
+  } catch {
+    // Modal nicht erschienen
   }
 }
 
 test.describe('Navigation — Hamburger Drawer', () => {
   test('Drawer öffnet und schließt', async ({ page }) => {
     await loginAs(page, ADMIN_USER, ADMIN_PASS)
-    // Drawer ist geschlossen — Drawer-Buttons nicht sichtbar
     await expect(page.getByRole('button', { name: '🏠 Home' })).not.toBeVisible()
     await page.locator('button[aria-label="Menü öffnen"]').click()
     await expect(page.getByRole('button', { name: '🏠 Home' })).toBeVisible()
