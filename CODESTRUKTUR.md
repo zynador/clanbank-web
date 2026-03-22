@@ -1,6 +1,6 @@
 # ClanBank — Codestruktur
 
-> **Letzte Aktualisierung:** 22.03.2026 | Fahrplan V25
+> **Letzte Aktualisierung:** 22.03.2026 | Fahrplan V26
 > **Raw-URL für neue Chat-Sessions:**
 > `https://raw.githubusercontent.com/zynador/clanbank-web/main/CODESTRUKTUR.md`
 
@@ -91,11 +91,14 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 - **Props:** `lang: Lang`, `onNavigate: (tab: string) => void`
 - **Key-Sections:**
   - Persönlicher Clanbank-Status (grün/rot) mit fehlenden Ressourcen als Pills
-  - Wand der Schande (Admin + Offizier): Mitglied + KW-Rückstand + Ressourcen-Emojis
+  - Wand der Schande (Admin + Offizier): Grid-Layout mit kompakten Mitgliederkarten (2–5 nebeneinander)
+  - Klick auf Karte → Detail-Panel mit Gesamteinzahlungen + Ressourcen-Balken (lazy loaded)
   - `AnnouncementWidget` eingebettet
   - Stats-Kacheln: letzter FCU-Rang + Clan-Einzahlungsquote
   - Schnellzugriff auf alle 4 Hauptbereiche via `onNavigate`
 - **Backlog-Logik:** ISO-Kalenderwochen, keine externen Abhängigkeiten
+- **Filter:** Raidleiter (`is_raidleiter = true`) und Testaccounts (`is_test = true`) werden clientseitig herausgefiltert
+- **Raidleiter-Status:** `loadMyStatus()` prüft `is_raidleiter` zuerst → setzt sofort auf "auf dem Laufenden"
 
 ---
 
@@ -290,6 +293,7 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 | display_name | text | Anzeigename |
 | role | enum | `admin` / `offizier` / `mitglied` |
 | is_raidleiter | boolean | Flag (nicht Rolle), Admin+Offizier können setzen |
+| is_test | boolean | Testaccounts (Playwright) — aus allen UI-Listen gefiltert |
 | deleted_at | timestamptz | Soft-Delete |
 
 #### `deposits`
@@ -592,7 +596,8 @@ sessionStorage.removeItem('fcu_ocr_' + eventId)
 | Playwright: WelcomeModal blockiert Klicks | `waitFor({ state: 'visible' })` + `waitFor({ state: 'hidden' })` in loginAs() |
 | Playwright: Strict mode violation | Drawer-Buttons per `getByRole('navigation')` einschränken |
 | Playwright: Ankündigungen limit(5) voll | Formular-Schliessung als Erfolgsindikator verwenden, nicht Titel in Liste suchen |
-| Enum + View ändern | View droppen → Enum ändern → View neu erstellen |
+| `profiles` hat kein `deleted_at` | `.is('deleted_at', null)` auf profiles-Query weglassen |
+| `is_raidleiter` / `is_test` PostgREST-Filter | `.eq(false)` und `.neq(true)` schließen NULL aus — immer JS-seitig filtern: `.filter(p => !p.is_raidleiter && !p.is_test)` |
 
 ---
 
