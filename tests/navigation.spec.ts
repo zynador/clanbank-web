@@ -34,8 +34,8 @@ test.describe('Navigation — Hamburger Drawer', () => {
     await loginAs(page, ADMIN_USER, ADMIN_PASS)
     await page.locator('button[aria-label="Menü öffnen"]').click()
     await expect(page.getByRole('button', { name: '🏠 Home' })).toBeVisible()
-    await expect(page.getByRole('button', { name: /Bank/i })).toBeVisible()
-    await expect(page.getByRole('button', { name: /Kampfberichte/i })).toBeVisible()
+    await expect(page.getByRole('navigation').getByRole('button', { name: /Bank/i })).toBeVisible()
+    await expect(page.getByRole('navigation').getByRole('button', { name: /Kampfberichte/i })).toBeVisible()
     await expect(page.getByRole('navigation').locator('text=/Admin|Verwaltung/i').first()).toBeVisible()
   })
 
@@ -43,14 +43,14 @@ test.describe('Navigation — Hamburger Drawer', () => {
     await loginAs(page, MEMBER_USER, MEMBER_PASS)
     await page.locator('button[aria-label="Menü öffnen"]').click()
     await expect(page.getByRole('navigation').locator('text=/Admin|Verwaltung/i')).not.toBeVisible()
-    await expect(page.getByRole('button', { name: /Freigaben/i })).not.toBeVisible()
-    await expect(page.getByRole('button', { name: /Warnungen/i })).not.toBeVisible()
+    await expect(page.getByRole('navigation').getByRole('button', { name: /Freigaben/i })).not.toBeVisible()
+    await expect(page.getByRole('navigation').getByRole('button', { name: /Warnungen/i })).not.toBeVisible()
   })
 
   test('Tab-Navigation funktioniert', async ({ page }) => {
     await loginAs(page, ADMIN_USER, ADMIN_PASS)
     await page.locator('button[aria-label="Menü öffnen"]').click()
-    await page.getByRole('button', { name: /Ranking/i }).click()
+    await page.getByRole('navigation').getByRole('button', { name: /Ranking/i }).click()
     await expect(page.getByRole('button', { name: '🏠 Home' })).not.toBeVisible()
   })
 
