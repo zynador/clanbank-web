@@ -33,15 +33,18 @@ test.describe('Ankündigungen', () => {
 
   test('Ankündigung erstellen und löschen', async ({ page }) => {
     await loginAs(page, ADMIN_USER, ADMIN_PASS)
+    const title = 'ZTEST ' + Date.now()
     await page.locator('text=/\\+ Ankündigung erstellen/i').click()
     await page.locator('input[placeholder*="Titel"]').waitFor({ state: 'visible', timeout: 5000 })
-    await page.locator('input[placeholder*="Titel"]').fill('TEST LOESCHEN')
+    await page.locator('input[placeholder*="Titel"]').fill(title)
     await page.getByRole('button', { name: 'Veröffentlichen' }).click()
     await page.locator('input[placeholder*="Titel"]').waitFor({ state: 'hidden', timeout: 5000 })
-    await expect(page.locator('button:has-text("✕")').first()).toBeVisible({ timeout: 5000 })
-    const countBefore = await page.locator('button:has-text("✕")').count()
-    await page.locator('button:has-text("✕")').last().click()
-    await expect(page.locator('button:has-text("✕")')).toHaveCount(countBefore - 1, { timeout: 5000 })
+    // Ankündigung sichtbar
+    await expect(page.locator('text=' + title)).toBeVisible({ timeout: 5000 })
+    // ✕ direkt neben diesem Eintrag klicken
+    await page.locator('text=' + title).locator('xpath=ancestor::div[contains(@class,"rounded-lg")]//button[contains(text(),"✕")]').click()
+    // Eintrag verschwunden
+    await expect(page.locator('text=' + title)).not.toBeVisible({ timeout: 5000 })
   })
 
   test('Angepinnte Ankündigung erscheint zuerst', async ({ page }) => {
