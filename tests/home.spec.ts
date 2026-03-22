@@ -14,6 +14,7 @@ async function loginAs(page: any, user: string, pass: string) {
   const closeBtn = page.locator('button[aria-label="Schließen"]')
   if (await closeBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
     await closeBtn.click()
+    await page.locator('div.fixed.inset-0.z-50').waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {})
   }
 }
 
@@ -25,28 +26,28 @@ test.describe('HomeTab', () => {
 
   test('Begrüssungstext mit Spielernamen', async ({ page }) => {
     await loginAs(page, ADMIN_USER, ADMIN_PASS)
-    await expect(page.locator('text=/Willkommen|Welcome/i')).toBeVisible()
+    await expect(page.locator('text=/Willkommen|Welcome/i').first()).toBeVisible()
   })
 
   test('Persönlicher Status wird angezeigt', async ({ page }) => {
     await loginAs(page, ADMIN_USER, ADMIN_PASS)
-    await expect(page.locator('text=/Clanbank/i')).toBeVisible()
+    await expect(page.locator('text=/Clanbank/i').first()).toBeVisible()
   })
 
   test('Admin sieht Clanbank-Rückstand Block', async ({ page }) => {
     await loginAs(page, ADMIN_USER, ADMIN_PASS)
-    await expect(page.locator('text=/Wand der Schande|Rückstand/i')).toBeVisible()
+    await expect(page.locator('text=⚠️ Clanbank-Rückstand')).toBeVisible()
   })
 
   test('Mitglied sieht KEINEN Clanbank-Rückstand Block', async ({ page }) => {
     await loginAs(page, MEMBER_USER, MEMBER_PASS)
-    await expect(page.locator('text=/Wand der Schande/i')).not.toBeVisible()
+    await expect(page.locator('text=⚠️ Clanbank-Rückstand')).not.toBeVisible()
   })
 
   test('Schnellzugriff-Buttons vorhanden', async ({ page }) => {
     await loginAs(page, ADMIN_USER, ADMIN_PASS)
-    await expect(page.locator('text=/💰|Bank/i').first()).toBeVisible()
-    await expect(page.locator('text=/🎯|FCU/i').first()).toBeVisible()
+    await expect(page.locator('button:has-text("Bank")').first()).toBeVisible()
+    await expect(page.locator('button:has-text("FCU")').first()).toBeVisible()
   })
 
   test('Schnellzugriff navigiert korrekt', async ({ page }) => {
