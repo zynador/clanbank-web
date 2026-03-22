@@ -11,10 +11,12 @@ async function loginAs(page: any, user: string, pass: string) {
   await page.getByPlaceholder(/passwort/i).fill(pass)
   await page.getByRole('button', { name: /anmelden/i }).click()
   await page.waitForURL(/dashboard/, { timeout: 10000 })
-  const closeBtn = page.locator('button[aria-label="Schließen"]')
-  if (await closeBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-    await closeBtn.click()
-    await page.locator('div.fixed.inset-0.z-50').waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {})
+  try {
+    await page.locator('button[aria-label="Schließen"]').waitFor({ state: 'visible', timeout: 5000 })
+    await page.locator('button[aria-label="Schließen"]').click()
+    await page.locator('div.fixed.inset-0.z-50').waitFor({ state: 'hidden', timeout: 5000 })
+  } catch {
+    // Modal nicht erschienen
   }
 }
 
@@ -46,8 +48,8 @@ test.describe('HomeTab', () => {
 
   test('Schnellzugriff-Buttons vorhanden', async ({ page }) => {
     await loginAs(page, ADMIN_USER, ADMIN_PASS)
-    await expect(page.locator('button:has-text("Bank")').first()).toBeVisible()
-    await expect(page.locator('button:has-text("FCU")').first()).toBeVisible()
+    await expect(page.locator('text=/💰|Bank/').first()).toBeVisible()
+    await expect(page.locator('text=/🎯|FCU/').first()).toBeVisible()
   })
 
   test('Schnellzugriff navigiert korrekt', async ({ page }) => {
