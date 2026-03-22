@@ -33,18 +33,17 @@ test.describe('Ankündigungen', () => {
 
   test('Ankündigung erstellen und löschen', async ({ page }) => {
     await loginAs(page, ADMIN_USER, ADMIN_PASS)
-    // Anzahl vorhandener Ankündigungen zählen
-    const countBefore = await page.locator('button:has-text("✕")').count()
-    // Neue Ankündigung erstellen
     await page.locator('text=/\\+ Ankündigung erstellen/i').click()
     await page.locator('input[placeholder*="Titel"]').fill('TEST LOESCHEN')
     await page.getByRole('button', { name: /Speichern|Veröffentlichen|Publish|Erstellen/i }).last().click()
-    // Eine neue ✕-Schaltfläche ist erschienen
-    await expect(page.locator('button:has-text("✕")')).toHaveCount(countBefore + 1, { timeout: 5000 })
-    // Letzte ✕-Schaltfläche klicken
+    // Warten bis Ankündigung erscheint
+    await expect(page.locator('text=TEST LOESCHEN')).toBeVisible({ timeout: 5000 })
+    // Anzahl ✕-Buttons nach Erstellen zählen
+    const countAfter = await page.locator('button:has-text("✕")').count()
+    // Letzten ✕-Button klicken (neueste Ankündigung)
     await page.locator('button:has-text("✕")').last().click()
-    // Wieder auf ursprüngliche Anzahl zurück
-    await expect(page.locator('button:has-text("✕")')).toHaveCount(countBefore, { timeout: 5000 })
+    // Ein ✕-Button weniger
+    await expect(page.locator('button:has-text("✕")')).toHaveCount(countAfter - 1, { timeout: 5000 })
   })
 
   test('Angepinnte Ankündigung erscheint zuerst', async ({ page }) => {
