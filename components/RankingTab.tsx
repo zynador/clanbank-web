@@ -61,15 +61,19 @@ export default function RankingTab({ lang }: { lang: Lang }) {
   const [filterMonth, setFilterMonth] = useState<number | null>(null)
   const [filterKw, setFilterKw] = useState<number | null>(null)
   const [raidleiterIds, setRaidleiterIds] = useState<Set<string>>(new Set())
+  const [testIds, setTestIds] = useState<Set<string>>(new Set())
   const { getExemptionForUser } = useExemptions()
 
   useEffect(() => {
     supabase
       .from('profiles')
-      .select('id')
-      .eq('is_raidleiter', true)
+      .select('id, is_raidleiter, is_test')
       .then(({ data }) => {
-        if (data) setRaidleiterIds(new Set((data as { id: string }[]).map(r => r.id)))
+        if (data) {
+          const profiles = data as { id: string; is_raidleiter: boolean; is_test: boolean }[]
+          setRaidleiterIds(new Set(profiles.filter(p => p.is_raidleiter).map(p => p.id)))
+          setTestIds(new Set(profiles.filter(p => p.is_test).map(p => p.id)))
+        }
       })
   }, [])
 
@@ -88,10 +92,12 @@ export default function RankingTab({ lang }: { lang: Lang }) {
   }
 
   function sorted(list: RankingRow[]) {
+    // Testaccounts und Raidleiter herausfiltern
+    const visible = list.filter(r => !testIds.has(r.user_id) && !raidleiterIds.has(r.user_id))
     if (sort === 'value') {
-      return [...list].sort((a, b) => b.total_deposit - a.total_deposit)
+      return [...visible].sort((a, b) => b.total_deposit - a.total_deposit)
     }
-    return [...list].sort((a, b) =>
+    return [...visible].sort((a, b) =>
       (a.ingame_name || a.username).localeCompare(b.ingame_name || b.username)
     )
   }
@@ -224,9 +230,8 @@ export default function RankingTab({ lang }: { lang: Lang }) {
         <div className="space-y-2">
           {sortedRows.map((row, idx) => {
             const exemption = getExemptionForUser(row.user_id)
-            const isRl = raidleiterIds.has(row.user_id)
             const met = metCount(row)
-            const berechtigt = isRl || met >= 3
+            const berechtigt = met >= 3
             const totalThr = row.threshold_per_res * 5
             const totalPct = pct(row.total_deposit, totalThr)
             const rankLabel = sort === 'value' ? String(idx + 1) : '–'
@@ -256,11 +261,6 @@ export default function RankingTab({ lang }: { lang: Lang }) {
                     <span className="text-sm font-medium text-zinc-200 flex-1">
                       {row.ingame_name || row.username}
                     </span>
-                    {isRl && (
-                      <span className="text-xs px-2 py-0.5 rounded-full border bg-yellow-500/15 text-yellow-400 border-yellow-500/20 shrink-0">
-                        ⚔️ RL
-                      </span>
-                    )}
                     <ExemptionBadge exemption={exemption} />
                     <span className="text-xs text-zinc-500 shrink-0">
                       {fmtMio(row.total_deposit)} / {fmtMio(totalThr)}
@@ -305,15 +305,9 @@ export default function RankingTab({ lang }: { lang: Lang }) {
 
                   {/* Berechtigungs-Zeile */}
                   <div className="flex items-center gap-2 pt-1 border-t border-zinc-800/60">
-                    {isRl ? (
-                      <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 border border-yellow-500/20">
-                        {'⚔️ ' + t.rlBefreit[lang]}
-                      </span>
-                    ) : (
-                      <span className={'text-xs font-medium px-2 py-0.5 rounded-full ' + (berechtigt ? 'bg-green-900/40 text-green-400 border border-green-800/40' : 'bg-red-900/30 text-red-400 border border-red-800/30')}>
-                        {berechtigt ? t.berechtigt[lang] : t.nichtBerecht[lang]}
-                      </span>
-                    )}
+                    <span className={'text-xs font-medium px-2 py-0.5 rounded-full ' + (berechtigt ? 'bg-green-900/40 text-green-400 border border-green-800/40' : 'bg-red-900/30 text-red-400 border border-red-800/30')}>
+                      {berechtigt ? t.berechtigt[lang] : t.nichtBerecht[lang]}
+                    </span>
                     <span className="text-xs text-zinc-500">
                       {met} / 5 {lang === 'de' ? 'Ressourcen erfüllt' : 'resources met'}
                     </span>
