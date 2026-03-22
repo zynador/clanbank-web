@@ -145,7 +145,6 @@ export default function HomeTab({ lang, onNavigate }: Props) {
       .from('profiles')
       .select('id, ingame_name, is_raidleiter')
       .eq('clan_id', profile.clan_id)
-      .is('deleted_at', null)
 
     // Raidleiter in JS herausfiltern (NULL = kein Raidleiter)
     const profiles = (allProfiles ?? []).filter(p => !(p as any).is_raidleiter)
