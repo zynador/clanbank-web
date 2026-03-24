@@ -76,7 +76,7 @@ export default function FCUUploadPanel({ lang, eventId, onBack, onDone }: Props)
 
       const { error: upErr } = await supabase.storage
         .from('screenshots')
-        .upload(path, file, { upsert: true })
+        .upload(path, file, { upsert: false })
       if (upErr) throw new Error(upErr.message)
 
       const { data: urlData } = supabase.storage
