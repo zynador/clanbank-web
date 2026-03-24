@@ -131,7 +131,9 @@ export default function FCUUploadPanel({ lang, eventId, onBack, onDone }: Props)
     if (fileArray.length === 0) return
     const newSlots: Slot[] = fileArray.map((_, i) => makeSlot(i))
     setSlots(newSlots)
-    await Promise.all(fileArray.map((file, i) => handleFile(i, file)))
+    for (let i = 0; i < fileArray.length; i++) {
+      await handleFile(i, fileArray[i])
+    }
   }
 
   function addSlot() {
