@@ -207,6 +207,59 @@ Regeln:
 }
 
 // ─────────────────────────────────────────────
+// MODUS 4: FCU Rangliste
+// ─────────────────────────────────────────────
+async function handleFcuOcr(base64: string, contentType: string) {
+  const prompt = `Du analysierst einen Screenshot einer FCU-Rangliste aus "The Grand Mafia".
+
+Das Bild zeigt eine Tabelle mit Rängen, Spielernamen und Punktzahlen.
+
+AUFGABE:
+Lies alle sichtbaren Zeilen der Rangliste aus.
+
+SPIELERNAME-BEREINIGUNG:
+- Entferne Präfixe wie "#171", "[1Ca]", Clan-Tags in eckigen Klammern
+- Behalte nur den reinen Spielernamen
+
+ZAHLENFORMAT:
+- "2.753" = 2753 (Tausenderpunkt entfernen)
+- "1.234.567" = 1234567
+
+IGNORIEREN:
+- Spalte "Annehmen" oder ähnliche Action-Spalten
+- Kopfzeile der Tabelle
+
+Antworte NUR mit einem JSON-Objekt (kein Markdown, keine Backticks):
+{"results":[{"rank":1,"ingame_name":"Spielername","points":12345}]}
+
+Regeln:
+- rank = Platznummer (Zahl)
+- ingame_name = bereinigter Spielername
+- points = Punktzahl als ganze Zahl
+- Falls keine Zeilen erkennbar: {"results":[]}`;
+
+  const response = await callClaude(base64, contentType, prompt);
+  const text = response.content?.[0]?.text?.trim() ?? "";
+
+  const match = text.match(/\{[\s\S]*"results"[\s\S]*\}/);
+  if (!match) throw new Error("Kein JSON in Antwort: " + text.slice(0, 300));
+
+  let parsed: Array<{ rank: number; ingame_name: string; points: number }> = [];
+  try {
+    const raw = JSON.parse(match[0]);
+    parsed = (raw.results ?? []).map((item: { rank: unknown; ingame_name: unknown; points: unknown }) => ({
+      rank:        Number(item.rank),
+      ingame_name: String(item.ingame_name ?? "").trim(),
+      points:      Number(item.points) || 0,
+    })).filter((item: { ingame_name: string }) => item.ingame_name.length > 0);
+  } catch {
+    throw new Error("JSON-Parse-Fehler: " + text.slice(0, 300));
+  }
+
+  return NextResponse.json({ results: parsed });
+}
+
+// ─────────────────────────────────────────────
 // Gemeinsame Claude-Haiku Hilfsfunktion
 // ─────────────────────────────────────────────
 async function callClaude(base64: string, contentType: string, prompt: string) {
@@ -261,6 +314,9 @@ export async function POST(req: NextRequest) {
     }
     if (mode === "battle_detail") {
       return await handleBattleDetailOcr(base64, contentType);
+    }
+    if (mode === "fcu") {
+      return await handleFcuOcr(base64, contentType);
     }
 
     return await handleDepositOcr(base64, contentType);
