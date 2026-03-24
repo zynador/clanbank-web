@@ -146,7 +146,7 @@ export default function FCUEventTab({ lang }: Props) {
           {!showForm ? (
             <button
               onClick={() => setShowForm(true)}
-              className="w-full py-2 border border-dashed border-gray-400 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
+              className="w-full py-2 border border-dashed border-gray-400 rounded-lg text-sm text-gray-300 hover:bg-gray-800"
             >
               + {t.newEvent}
             </button>
