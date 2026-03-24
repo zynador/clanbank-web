@@ -62,7 +62,6 @@ export default function FCUResultsEditor({ lang, eventId, onBack }: Props) {
     setLoading(true)
     setFeedback('')
 
-    // Event-Info laden
     const { data: evData } = await supabase
       .from('fcu_events')
       .select('event_name, event_date, status')
@@ -70,7 +69,6 @@ export default function FCUResultsEditor({ lang, eventId, onBack }: Props) {
       .single()
     setEventInfo(evData)
 
-    // Erst prüfen ob schon DB-Ergebnisse existieren
     const { data: dbRows } = await supabase
       .from('fcu_results')
       .select('rank, ingame_name, points, profile_id')
@@ -83,18 +81,17 @@ export default function FCUResultsEditor({ lang, eventId, onBack }: Props) {
       return
     }
 
-    // Fallback: OCR-Ergebnisse aus sessionStorage
     const key = 'fcu_ocr_' + eventId
     const stored = sessionStorage.getItem(key)
     if (stored) {
       try {
         const parsed = JSON.parse(stored)
         setRows(parsed.map((r: { rank: number; ingame_name: string; points: number }) => ({
-          rank:       r.rank,
+          rank:        r.rank,
           ingame_name: r.ingame_name,
-          points:     r.points,
-          profile_id: null,
-          dirty:      true,
+          points:      r.points,
+          profile_id:  null,
+          dirty:       true,
         })))
       } catch { /* leer */ }
     }
@@ -137,7 +134,6 @@ export default function FCUResultsEditor({ lang, eventId, onBack }: Props) {
       return
     }
 
-    // sessionStorage aufräumen
     sessionStorage.removeItem('fcu_ocr_' + eventId)
     await loadData()
     setFeedback(lang === 'de' ? '✅ Gespeichert.' : '✅ Saved.')
@@ -192,7 +188,7 @@ export default function FCUResultsEditor({ lang, eventId, onBack }: Props) {
           placeholder={t.searchHint}
           value={search}
           onChange={e => setSearch(e.target.value)}
-          className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+          className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-gray-900 placeholder-gray-400"
         />
       )}
 
@@ -233,10 +229,10 @@ export default function FCUResultsEditor({ lang, eventId, onBack }: Props) {
                     type="text"
                     value={row.ingame_name}
                     onChange={e => updateName(row.rank, e.target.value)}
-                    className="w-full text-xs border-b border-gray-200 bg-transparent focus:outline-none focus:border-blue-400 py-0.5"
+                    className="w-full text-xs text-gray-900 border-b border-gray-200 bg-transparent focus:outline-none focus:border-blue-400 py-0.5"
                   />
                 ) : (
-                  <span className="text-xs truncate block">{row.ingame_name}</span>
+                  <span className="text-xs text-gray-800 truncate block">{row.ingame_name}</span>
                 )}
               </div>
 
@@ -247,10 +243,10 @@ export default function FCUResultsEditor({ lang, eventId, onBack }: Props) {
                     type="number"
                     value={row.points}
                     onChange={e => updatePoints(row.rank, Number(e.target.value))}
-                    className="w-full text-xs text-right border-b border-gray-200 bg-transparent focus:outline-none focus:border-blue-400 py-0.5"
+                    className="w-full text-xs text-right text-gray-900 border-b border-gray-200 bg-transparent focus:outline-none focus:border-blue-400 py-0.5"
                   />
                 ) : (
-                  <span className="text-xs">{row.points.toLocaleString('de-DE')}</span>
+                  <span className="text-xs text-gray-800">{row.points.toLocaleString('de-DE')}</span>
                 )}
               </div>
 
