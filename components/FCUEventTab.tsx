@@ -157,13 +157,13 @@ export default function FCUEventTab({ lang }: Props) {
                 placeholder={t.namePlaceholder}
                 value={eventName}
                 onChange={e => setEventName(e.target.value)}
-                className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-gray-900 placeholder-gray-400"
               />
               <input
                 type="date"
                 value={eventDate}
                 onChange={e => setEventDate(e.target.value)}
-                className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-gray-900"
               />
               {feedback && <p className="text-red-600 text-sm">{feedback}</p>}
               <div className="flex gap-2">
@@ -176,7 +176,7 @@ export default function FCUEventTab({ lang }: Props) {
                 </button>
                 <button
                   onClick={() => { setShowForm(false); setFeedback('') }}
-                  className="flex-1 border border-gray-300 rounded py-2 text-sm"
+                  className="flex-1 border border-gray-300 rounded py-2 text-sm text-gray-700"
                 >
                   {t.cancel}
                 </button>
