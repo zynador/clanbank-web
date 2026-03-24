@@ -197,8 +197,8 @@ export default function FCUEventTab({ lang }: Props) {
             <div key={ev.id} className="bg-white border border-gray-200 rounded-lg p-4">
               <div className="flex items-start justify-between mb-2">
                 <div>
-                  <p className="font-medium text-sm">{ev.event_name}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">
+                  <p className="font-medium text-sm text-gray-900">{ev.event_name}</p>
+                  <p className="text-xs text-gray-600 mt-0.5">
                     {new Date(ev.event_date).toLocaleDateString('de-DE')}
                   </p>
                 </div>
