@@ -2,7 +2,6 @@
 
 import { useRef, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
-import { useAuth } from '@/lib/auth-context'
 
 type Lang = 'de' | 'en'
 
@@ -43,24 +42,25 @@ function makeSlot(id: number): Slot {
 }
 
 export default function FCUUploadPanel({ lang, eventId, onBack, onDone }: Props) {
-  const { profile } = useAuth()
   const [slots, setSlots] = useState<Slot[]>([makeSlot(0)])
   const [feedback, setFeedback] = useState('')
   const fileRefs = useRef<Record<number, HTMLInputElement | null>>({})
   const multiFileRef = useRef<HTMLInputElement | null>(null)
 
   const t = {
-    title:      lang === 'de' ? 'Screenshots hochladen' : 'Upload Screenshots',
-    hint:       lang === 'de' ? 'Lade alle scrollbaren Seiten der FCU-Rangliste hoch.' : 'Upload all scrolled pages of the FCU ranking.',
-    addSlot:    lang === 'de' ? '+ Weiterer Screenshot' : '+ Add Screenshot',
-    multiUpload: lang === 'de' ? '📂 Alle auf einmal auswählen' : '📂 Select all at once',
-    next:       lang === 'de' ? 'Weiter zu Ergebnissen →' : 'Continue to Results →',
-    back:       lang === 'de' ? '← Zurück' : '← Back',
-    uploading:  lang === 'de' ? 'Wird hochgeladen...' : 'Uploading...',
-    ocr:        lang === 'de' ? 'OCR läuft...' : 'Running OCR...',
-    rows:       lang === 'de' ? 'Zeilen erkannt' : 'rows detected',
-    error:      lang === 'de' ? 'Fehler' : 'Error',
-    select:     lang === 'de' ? 'Bild auswählen' : 'Select image',
+    title:       lang === 'de' ? 'Screenshots hochladen' : 'Upload Screenshots',
+    hint:        lang === 'de' ? 'Lade alle scrollbaren Seiten der FCU-Rangliste hoch.' : 'Upload all scrolled pages of the FCU ranking.',
+    addSlot:     lang === 'de' ? '+ Weiterer Screenshot' : '+ Add Screenshot',
+    multiUpload: lang === 'de' ? '📂 Alle auf einmal auswählen (Desktop)' : '📂 Select all at once (Desktop)',
+    multiHint:   lang === 'de' ? 'Auf iPhone: Screens einzeln über die Slots hochladen — neuer Slot erscheint automatisch.' : 'On iPhone: upload one by one — a new slot appears automatically.',
+    next:        lang === 'de' ? 'Weiter zu Ergebnissen →' : 'Continue to Results →',
+    back:        lang === 'de' ? '← Zurück' : '← Back',
+    uploading:   lang === 'de' ? 'Wird hochgeladen...' : 'Uploading...',
+    ocr:         lang === 'de' ? 'OCR läuft...' : 'Running OCR...',
+    rows:        lang === 'de' ? 'Zeilen erkannt' : 'rows detected',
+    error:       lang === 'de' ? 'Fehler' : 'Error',
+    select:      lang === 'de' ? 'Bild auswählen' : 'Select image',
+    replace:     lang === 'de' ? 'Ersetzen' : 'Replace',
   }
 
   function updateSlot(id: number, patch: Partial<Slot>) {
@@ -111,22 +111,26 @@ export default function FCUUploadPanel({ lang, eventId, onBack, onDone }: Props)
       sessionStorage.setItem(key, JSON.stringify(merged))
 
       updateSlot(slotId, { status: 'done', rowCount: rows.length })
+
+      // iPhone-Fix: nach erfolgreichem Upload automatisch neuen Slot anhängen
+      setSlots(prev => {
+        const isLast = prev[prev.length - 1].id === slotId
+        if (isLast) return [...prev, makeSlot(prev.length)]
+        return prev
+      })
+
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Fehler'
       updateSlot(slotId, { status: 'error', error: msg })
     }
   }
 
-  // Multi-File: alle Dateien auf einmal — Slots werden dynamisch erstellt
+  // Desktop: Alle Dateien auf einmal
   async function handleMultiFiles(files: FileList) {
     const fileArray = Array.from(files)
     if (fileArray.length === 0) return
-
-    // Slots anlegen für alle Dateien
     const newSlots: Slot[] = fileArray.map((_, i) => makeSlot(i))
     setSlots(newSlots)
-
-    // Alle parallel verarbeiten
     await Promise.all(fileArray.map((file, i) => handleFile(i, file)))
   }
 
@@ -154,7 +158,7 @@ export default function FCUUploadPanel({ lang, eventId, onBack, onDone }: Props)
 
       <p className="text-sm text-gray-500">{t.hint}</p>
 
-      {/* Multi-Upload Button */}
+      {/* Desktop: Multi-Upload */}
       <input
         type="file"
         accept="image/*"
@@ -174,8 +178,9 @@ export default function FCUUploadPanel({ lang, eventId, onBack, onDone }: Props)
       >
         {t.multiUpload}
       </button>
+      <p className="text-xs text-gray-400 text-center -mt-2">{t.multiHint}</p>
 
-      {/* Einzelne Slots */}
+      {/* Slots */}
       <div className="space-y-2">
         {slots.map((slot, idx) => (
           <div key={slot.id} className="bg-white border border-gray-200 rounded-lg p-3">
@@ -229,7 +234,7 @@ export default function FCUUploadPanel({ lang, eventId, onBack, onDone }: Props)
                   onClick={() => updateSlot(slot.id, { status: 'empty', file: null, url: '', hash: '', rowCount: 0 })}
                   className="text-xs text-gray-400 hover:text-gray-600"
                 >
-                  ↩ {lang === 'de' ? 'Ersetzen' : 'Replace'}
+                  ↩ {t.replace}
                 </button>
               </div>
             )}
