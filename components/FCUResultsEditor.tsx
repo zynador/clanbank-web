@@ -130,7 +130,12 @@ export default function FCUResultsEditor({ lang, eventId, onBack }: Props) {
     setSaving(false)
 
     if (error || !data?.success) {
-      setFeedback(data?.message || (lang === 'de' ? 'Fehler beim Speichern.' : 'Error saving.'))
+      console.error('save_fcu_results error:', JSON.stringify(error), JSON.stringify(data))
+      setFeedback(
+        data?.message ||
+        error?.message ||
+        (lang === 'de' ? 'Fehler beim Speichern.' : 'Error saving.')
+      )
       return
     }
 
@@ -222,7 +227,7 @@ export default function FCUResultsEditor({ lang, eventId, onBack }: Props) {
                   : row.rank}
               </div>
 
-              {/* Name — editierbar für Admin bei draft */}
+              {/* Name */}
               <div className="col-span-7">
                 {isAdmin && !isConfirmed ? (
                   <input
@@ -236,7 +241,7 @@ export default function FCUResultsEditor({ lang, eventId, onBack }: Props) {
                 )}
               </div>
 
-              {/* Punkte — editierbar für Admin bei draft */}
+              {/* Punkte */}
               <div className="col-span-3 text-right">
                 {isAdmin && !isConfirmed ? (
                   <input
@@ -250,7 +255,7 @@ export default function FCUResultsEditor({ lang, eventId, onBack }: Props) {
                 )}
               </div>
 
-              {/* Profilmatch-Indikator */}
+              {/* Profilmatch */}
               <div className="col-span-1 text-center text-xs">
                 {row.profile_id ? (
                   <span className="text-green-500">✓</span>
@@ -272,7 +277,7 @@ export default function FCUResultsEditor({ lang, eventId, onBack }: Props) {
         </p>
       )}
 
-      {/* Speichern — nur Admin, nur bei draft */}
+      {/* Speichern */}
       {isAdmin && !isConfirmed && rows.length > 0 && (
         <button
           onClick={handleSave}
