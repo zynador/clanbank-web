@@ -94,11 +94,11 @@ export default function FCUUploadPanel({ lang, eventId, onBack, onDone }: Props)
       const ocrData = await ocrRes.json()
       const rows: OcrRow[] = ocrData.results ?? []
 
-      await supabase.from('fcu_event_screens').upsert({
-        fcu_event_id: eventId,
-        slot_index:   slotId,
-        url,
-        hash,
+      await supabase.rpc('save_fcu_event_screen', {
+        p_fcu_event_id: eventId,
+        p_slot_index:   slotId,
+        p_url:          url,
+        p_hash:         hash,
       })
 
       const key = 'fcu_ocr_' + eventId
