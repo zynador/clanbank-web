@@ -90,9 +90,15 @@ export default function FCUUploadPanel({ lang, eventId, onBack, onDone }: Props)
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageUrl: url, mode: 'fcu' }),
       })
-      if (!ocrRes.ok) throw new Error('OCR fehlgeschlagen')
-      const ocrData = await ocrRes.json()
-      const rows: OcrRow[] = ocrData.results ?? []
+      if (!ocrRes.ok) {
+  const errText = await ocrRes.text()
+  throw new Error('OCR ' + ocrRes.status + ': ' + errText.slice(0, 150))
+}
+const ocrData = await ocrRes.json()
+if (!ocrData.results) {
+  throw new Error('Kein results-Feld: ' + JSON.stringify(ocrData).slice(0, 150))
+}
+const rows: OcrRow[] = ocrData.results ?? []
 
       await supabase.rpc('save_fcu_event_screen', {
         p_fcu_event_id: eventId,
