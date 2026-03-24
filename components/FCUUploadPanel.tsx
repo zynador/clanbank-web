@@ -45,14 +45,15 @@ function makeSlot(id: number): Slot {
 export default function FCUUploadPanel({ lang, eventId, onBack, onDone }: Props) {
   const { profile } = useAuth()
   const [slots, setSlots] = useState<Slot[]>([makeSlot(0)])
-  const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState('')
   const fileRefs = useRef<Record<number, HTMLInputElement | null>>({})
+  const multiFileRef = useRef<HTMLInputElement | null>(null)
 
   const t = {
     title:      lang === 'de' ? 'Screenshots hochladen' : 'Upload Screenshots',
     hint:       lang === 'de' ? 'Lade alle scrollbaren Seiten der FCU-Rangliste hoch.' : 'Upload all scrolled pages of the FCU ranking.',
     addSlot:    lang === 'de' ? '+ Weiterer Screenshot' : '+ Add Screenshot',
+    multiUpload: lang === 'de' ? '📂 Alle auf einmal auswählen' : '📂 Select all at once',
     next:       lang === 'de' ? 'Weiter zu Ergebnissen →' : 'Continue to Results →',
     back:       lang === 'de' ? '← Zurück' : '← Back',
     uploading:  lang === 'de' ? 'Wird hochgeladen...' : 'Uploading...',
@@ -60,7 +61,6 @@ export default function FCUUploadPanel({ lang, eventId, onBack, onDone }: Props)
     rows:       lang === 'de' ? 'Zeilen erkannt' : 'rows detected',
     error:      lang === 'de' ? 'Fehler' : 'Error',
     select:     lang === 'de' ? 'Bild auswählen' : 'Select image',
-    saveError:  lang === 'de' ? 'Fehler beim Speichern.' : 'Error saving.',
   }
 
   function updateSlot(id: number, patch: Partial<Slot>) {
@@ -69,7 +69,6 @@ export default function FCUUploadPanel({ lang, eventId, onBack, onDone }: Props)
 
   async function handleFile(slotId: number, file: File) {
     updateSlot(slotId, { file, status: 'uploading', error: '' })
-
     try {
       const hash = await sha256(file)
       const ext = file.name.split('.').pop() || 'jpg'
@@ -78,28 +77,23 @@ export default function FCUUploadPanel({ lang, eventId, onBack, onDone }: Props)
       const { error: upErr } = await supabase.storage
         .from('screenshots')
         .upload(path, file, { upsert: true })
-
       if (upErr) throw new Error(upErr.message)
 
       const { data: urlData } = supabase.storage
         .from('screenshots')
         .getPublicUrl(path)
-
       const url = urlData.publicUrl
       updateSlot(slotId, { url, hash, status: 'ocr' })
 
-      // OCR
       const ocrRes = await fetch('/api/ocr', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageUrl: url, mode: 'fcu' }),
       })
-
       if (!ocrRes.ok) throw new Error('OCR fehlgeschlagen')
       const ocrData = await ocrRes.json()
       const rows: OcrRow[] = ocrData.results ?? []
 
-      // Screen in DB speichern
       await supabase.from('fcu_event_screens').upsert({
         fcu_event_id: eventId,
         slot_index:   slotId,
@@ -107,24 +101,33 @@ export default function FCUUploadPanel({ lang, eventId, onBack, onDone }: Props)
         hash,
       })
 
-      // OCR-Ergebnisse in sessionStorage mergen
       const key = 'fcu_ocr_' + eventId
       const existing: OcrRow[] = JSON.parse(sessionStorage.getItem(key) || '[]')
       const merged = [...existing]
       for (const row of rows) {
-        if (!merged.find(r => r.rank === row.rank)) {
-          merged.push(row)
-        }
+        if (!merged.find(r => r.rank === row.rank)) merged.push(row)
       }
       merged.sort((a, b) => a.rank - b.rank)
       sessionStorage.setItem(key, JSON.stringify(merged))
 
       updateSlot(slotId, { status: 'done', rowCount: rows.length })
-
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Fehler'
       updateSlot(slotId, { status: 'error', error: msg })
     }
+  }
+
+  // Multi-File: alle Dateien auf einmal — Slots werden dynamisch erstellt
+  async function handleMultiFiles(files: FileList) {
+    const fileArray = Array.from(files)
+    if (fileArray.length === 0) return
+
+    // Slots anlegen für alle Dateien
+    const newSlots: Slot[] = fileArray.map((_, i) => makeSlot(i))
+    setSlots(newSlots)
+
+    // Alle parallel verarbeiten
+    await Promise.all(fileArray.map((file, i) => handleFile(i, file)))
   }
 
   function addSlot() {
@@ -139,10 +142,6 @@ export default function FCUUploadPanel({ lang, eventId, onBack, onDone }: Props)
   const busyCount = slots.filter(s => s.status === 'uploading' || s.status === 'ocr').length
   const canProceed = doneCount > 0 && busyCount === 0
 
-  function handleProceed() {
-    onDone()
-  }
-
   return (
     <div className="p-4 space-y-4">
 
@@ -155,6 +154,28 @@ export default function FCUUploadPanel({ lang, eventId, onBack, onDone }: Props)
 
       <p className="text-sm text-gray-500">{t.hint}</p>
 
+      {/* Multi-Upload Button */}
+      <input
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        ref={multiFileRef}
+        onChange={e => {
+          if (e.target.files && e.target.files.length > 0) {
+            handleMultiFiles(e.target.files)
+          }
+        }}
+      />
+      <button
+        onClick={() => multiFileRef.current?.click()}
+        disabled={busyCount > 0}
+        className="w-full py-3 bg-blue-50 border border-blue-300 rounded-lg text-sm text-blue-700 font-medium hover:bg-blue-100 disabled:opacity-40"
+      >
+        {t.multiUpload}
+      </button>
+
+      {/* Einzelne Slots */}
       <div className="space-y-2">
         {slots.map((slot, idx) => (
           <div key={slot.id} className="bg-white border border-gray-200 rounded-lg p-3">
@@ -166,9 +187,7 @@ export default function FCUUploadPanel({ lang, eventId, onBack, onDone }: Props)
                 <button
                   onClick={() => removeSlot(slot.id)}
                   className="text-xs text-red-400 hover:text-red-600"
-                >
-                  ✕
-                </button>
+                >✕</button>
               )}
             </div>
 
@@ -207,9 +226,7 @@ export default function FCUUploadPanel({ lang, eventId, onBack, onDone }: Props)
                   {'✅ ' + slot.rowCount + ' ' + t.rows}
                 </div>
                 <button
-                  onClick={() => {
-                    updateSlot(slot.id, { status: 'empty', file: null, url: '', hash: '', rowCount: 0 })
-                  }}
+                  onClick={() => updateSlot(slot.id, { status: 'empty', file: null, url: '', hash: '', rowCount: 0 })}
                   className="text-xs text-gray-400 hover:text-gray-600"
                 >
                   ↩ {lang === 'de' ? 'Ersetzen' : 'Replace'}
@@ -228,7 +245,8 @@ export default function FCUUploadPanel({ lang, eventId, onBack, onDone }: Props)
 
       <button
         onClick={addSlot}
-        className="w-full py-2 border border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:bg-gray-50"
+        disabled={busyCount > 0}
+        className="w-full py-2 border border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:bg-gray-50 disabled:opacity-40"
       >
         {t.addSlot}
       </button>
@@ -236,7 +254,7 @@ export default function FCUUploadPanel({ lang, eventId, onBack, onDone }: Props)
       {feedback && <p className="text-red-600 text-sm">{feedback}</p>}
 
       <button
-        onClick={handleProceed}
+        onClick={onDone}
         disabled={!canProceed}
         className="w-full py-3 bg-blue-600 text-white rounded-lg text-sm font-medium disabled:opacity-40"
       >
