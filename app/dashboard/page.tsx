@@ -16,6 +16,7 @@ import WelcomeModal from '@/components/WelcomeModal'
 import HelpButton from '@/components/HelpButton'
 import HomeTab from '@/components/HomeTab'
 import FCUEventTab from '@/components/FCUEventTab'
+import MembersTab from '@/components/MembersTab'
 
 type Tab =
   | 'home'
@@ -23,6 +24,7 @@ type Tab =
   | 'battle'
   | 'ranking'
   | 'fcu'
+  | 'mitglieder'
   | 'freigabe'
   | 'vorschlaege'
   | 'warnungen'
@@ -83,7 +85,7 @@ function DashboardContent() {
   }, [isOfficerOrAdmin])
 
   useEffect(() => {
-    if (!isAdmin) return
+    if (!isOfficerOrAdmin) return
     supabase
       .from('starter_members')
       .select('id', { count: 'exact', head: true })
@@ -91,7 +93,7 @@ function DashboardContent() {
       .then(({ count }) => {
         if (typeof count === 'number') setPendingClaimsCount(count)
       })
-  }, [isAdmin])
+  }, [isOfficerOrAdmin])
 
   function toggleLang() {
     const next = lang === 'de' ? 'en' : 'de'
@@ -105,19 +107,20 @@ function DashboardContent() {
   }
 
   const t = {
-    home:        lang === 'de' ? 'Home'          : 'Home',
-    deposits:    lang === 'de' ? 'Bank'           : 'Bank',
-    battle:      lang === 'de' ? 'Kampfberichte'  : 'Battle Reports',
-    ranking:     lang === 'de' ? 'Ranking'        : 'Ranking',
-    fcu:         lang === 'de' ? 'FCU'            : 'FCU',
-    freigabe:    lang === 'de' ? 'Freigaben'      : 'Approvals',
-    vorschlaege: lang === 'de' ? 'Vorschläge'     : 'Suggestions',
-    warnungen:   lang === 'de' ? 'Warnungen'      : 'Warnings',
-    verwaltung:  lang === 'de' ? 'Admin'          : 'Admin',
-    logout:      lang === 'de' ? 'Abmelden'       : 'Sign out',
+    home:         lang === 'de' ? 'Home'                    : 'Home',
+    deposits:     lang === 'de' ? 'Bank'                    : 'Bank',
+    battle:       lang === 'de' ? 'Kampfberichte'           : 'Battle Reports',
+    ranking:      lang === 'de' ? 'Ranking'                 : 'Ranking',
+    fcu:          lang === 'de' ? 'FCU'                     : 'FCU',
+    mitglieder:   lang === 'de' ? 'Mitglieder'              : 'Members',
+    freigabe:     lang === 'de' ? 'Freigaben'               : 'Approvals',
+    vorschlaege:  lang === 'de' ? 'Vorschläge'              : 'Suggestions',
+    warnungen:    lang === 'de' ? 'Warnungen'               : 'Warnings',
+    verwaltung:   lang === 'de' ? 'Admin'                   : 'Admin',
+    logout:       lang === 'de' ? 'Abmelden'                : 'Sign out',
     upload_title: lang === 'de' ? 'Kampfbericht hochladen'  : 'Upload Battle Report',
     payout_title: lang === 'de' ? 'Auszahlungsberechnung'   : 'Payout Calculation',
-    pending:     lang === 'de' ? '⏳ Ausstehende Freigaben' : '⏳ Pending Approvals',
+    pending:      lang === 'de' ? '⏳ Ausstehende Freigaben': '⏳ Pending Approvals',
   }
 
   const tabLabel: Record<Tab, string> = {
@@ -126,6 +129,7 @@ function DashboardContent() {
     battle:      t.battle,
     ranking:     t.ranking,
     fcu:         t.fcu,
+    mitglieder:  t.mitglieder,
     freigabe:    t.freigabe,
     vorschlaege: t.vorschlaege,
     warnungen:   t.warnungen,
@@ -138,6 +142,7 @@ function DashboardContent() {
     battle:      '⚔️',
     ranking:     '🏆',
     fcu:         '🎯',
+    mitglieder:  '👥',
     freigabe:    '✅',
     vorschlaege: '💡',
     warnungen:   '⚠️',
@@ -150,6 +155,7 @@ function DashboardContent() {
     ...(canSeeAuszahlungen ? ['battle' as Tab] : []),
     'ranking',
     'fcu',
+    ...(isOfficerOrAdmin ? ['mitglieder' as Tab] : []),
     ...(isOfficerOrAdmin ? ['freigabe' as Tab] : []),
     'vorschlaege',
     ...(isOfficerOrAdmin ? ['warnungen' as Tab] : []),
@@ -157,8 +163,8 @@ function DashboardContent() {
   ]
 
   function badgeFor(tab: Tab): number {
-    if (tab === 'warnungen') return alertsCount
-    if (tab === 'verwaltung') return pendingClaimsCount
+    if (tab === 'warnungen')   return alertsCount
+    if (tab === 'mitglieder')  return pendingClaimsCount
     return 0
   }
 
@@ -198,7 +204,6 @@ function DashboardContent() {
             >
               {'🚪'}
             </button>
-            {/* Hamburger */}
             <button
               onClick={() => setDrawerOpen(true)}
               className="flex flex-col gap-1 p-2 rounded hover:bg-gray-800"
@@ -210,7 +215,6 @@ function DashboardContent() {
             </button>
           </div>
         </div>
-        {/* Aktiver Tab als Breadcrumb */}
         <div className="max-w-2xl mx-auto px-4 pb-2 flex items-center gap-2">
           <span className="text-sm text-gray-400">
             {tabIcon[activeTab] + ' ' + tabLabel[activeTab]}
@@ -221,10 +225,7 @@ function DashboardContent() {
       {/* Drawer Overlay */}
       {drawerOpen && (
         <div className="fixed inset-0 z-30 flex">
-          {/* Panel */}
           <div className="w-64 bg-[#161822] border-r border-gray-700 flex flex-col h-full overflow-y-auto">
-
-            {/* User Info */}
             <div className="px-4 pt-5 pb-4 border-b border-gray-700">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-full bg-teal-900 flex items-center justify-center text-sm font-medium text-teal-300">
@@ -239,7 +240,6 @@ function DashboardContent() {
               </div>
             </div>
 
-            {/* Nav Items */}
             <nav className="flex-1 px-2 py-3 space-y-0.5">
               {visibleTabs.map(tab => {
                 const badge = badgeFor(tab)
@@ -268,7 +268,6 @@ function DashboardContent() {
               })}
             </nav>
 
-            {/* Footer */}
             <div className="px-2 py-3 border-t border-gray-700 space-y-0.5">
               <button
                 onClick={() => { setDrawerOpen(false); setShowWelcome(true) }}
@@ -287,7 +286,6 @@ function DashboardContent() {
             </div>
           </div>
 
-          {/* Backdrop */}
           <div
             className="flex-1 bg-black/50"
             onClick={() => setDrawerOpen(false)}
@@ -299,10 +297,7 @@ function DashboardContent() {
       <main className="max-w-2xl mx-auto">
 
         {activeTab === 'home' && (
-          <HomeTab
-            lang={lang}
-            onNavigate={(tab) => navigate(tab as Tab)}
-          />
+          <HomeTab lang={lang} onNavigate={(tab) => navigate(tab as Tab)} />
         )}
 
         {activeTab === 'deposits' && (
@@ -342,6 +337,15 @@ function DashboardContent() {
 
         {activeTab === 'fcu' && (
           <FCUEventTab lang={lang} />
+        )}
+
+        {activeTab === 'mitglieder' && isOfficerOrAdmin && (
+          <section className="bg-[#161822] border border-gray-800 rounded-xl m-4 p-5">
+            <h2 className="text-base font-medium text-gray-300 mb-4">
+              {'👥 ' + t.mitglieder}
+            </h2>
+            <MembersTab lang={lang} />
+          </section>
         )}
 
         {activeTab === 'freigabe' && isOfficerOrAdmin && (
