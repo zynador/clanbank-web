@@ -91,7 +91,7 @@ export default function MembersTab({ lang }: { lang: Lang }) {
   const handleRaidleiter = async (m: MemberEntry) => {
     if (!m.profile_id) return
     const { data, error } = await supabase.rpc('set_raidleiter_flag', {
-      p_profile_id: m.profile_id,
+      p_target_user_id: m.profile_id,
       p_value: !m.is_raidleiter,
     })
     if (error || !(data as any)?.success) {
