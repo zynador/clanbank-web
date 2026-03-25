@@ -1,6 +1,6 @@
 # ClanBank — Codestruktur
 
-> **Letzte Aktualisierung:** 22.03.2026 | Fahrplan V26
+> **Letzte Aktualisierung:** 25.03.2026 | Fahrplan V27
 > **Raw-URL für neue Chat-Sessions:**
 > `https://raw.githubusercontent.com/zynador/clanbank-web/main/CODESTRUKTUR.md`
 
@@ -33,6 +33,7 @@ clanbank-web/
 │   ├── BattleReportUpload.tsx
 │   ├── DepositsTab.tsx
 │   ├── ExemptionBadge.tsx
+│   ├── ExemptionModal.tsx
 │   ├── FCUEventTab.tsx           ← FCU Haupt-Container (Event-Liste, Navigation)
 │   ├── FCUResultsEditor.tsx      ← OCR-Ergebnisse prüfen, Namen korrigieren, speichern
 │   ├── FCURankingView.tsx        ← Gesamtranking über alle FCU Events
@@ -41,7 +42,9 @@ clanbank-web/
 │   ├── HomeTab.tsx               ← Startseite (Status, Backlog, Ankündigungen, Schnellzugriff)
 │   ├── InfoTooltip.tsx
 │   ├── Logo.tsx                  ← KEINE Props
+│   ├── MembersTab.tsx            ← Mitgliederliste (Suchfeld, Match-Dot, Filter)
 │   ├── PayoutCalculation.tsx
+│   ├── ProfileMatchPanel.tsx     ← Fuzzy-Matching ungematchter Profile mit Starter-Einträgen
 │   ├── RankingTab.tsx
 │   ├── ScreenshotThumb.tsx
 │   ├── ScreenshotUpload.tsx
@@ -49,6 +52,8 @@ clanbank-web/
 │   ├── StarterMembersPanel.tsx
 │   ├── SuggestionBox.tsx
 │   └── WelcomeModal.tsx
+├── hooks/
+│   └── useExemptions.ts          ← Custom Hook für member_exemptions
 ├── lib/
 │   ├── auth-context.tsx          ← useAuth() Hook
 │   └── supabaseClient.ts         ← supabase Client (IMMER von hier importieren)
@@ -99,6 +104,29 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 - **Backlog-Logik:** ISO-Kalenderwochen, keine externen Abhängigkeiten
 - **Filter:** Raidleiter (`is_raidleiter = true`) und Testaccounts (`is_test = true`) werden clientseitig herausgefiltert
 - **Raidleiter-Status:** `loadMyStatus()` prüft `is_raidleiter` zuerst → setzt sofort auf "auf dem Laufenden"
+
+---
+
+### `MembersTab.tsx`
+- **Props:** `lang: Lang`
+- **Sichtbar für:** `admin` und `offizier`
+- **Key-Features:**
+  - Suchfeld (ingame_name + display_name, mit Clear-Button)
+  - Match-Dot am Avatar (grün = profile + starter verknüpft, blau = nur Profil, grau = nur Starter)
+  - Legende unterhalb der Filter
+  - Filter: Alle / Aktiv / Ausstehend / Ausgetreten / Nicht gematcht (N)
+  - Karten-Layout mit Expand-on-click und Aktions-Grid
+- **Abhängigkeiten:** `ExemptionModal`, `ExemptionBadge`, `useExemptions`
+- **RPC:** `get_members_list`
+
+---
+
+### `ProfileMatchPanel.tsx`
+- **Props:** `lang: Lang`
+- **Sichtbar für:** `admin`
+- **Zweck:** Zeigt ungematchte Profile (kein Starter-Eintrag) und Starter-Einträge (kein Profil) nebeneinander. Admin wählt manuell eine Verknüpfung per Score-Badge (Fuzzy-Match).
+- **RPCs:** `get_unmatched_profiles`, `link_profile_to_starter`
+- **Eingebettet in:** `AdminPanel.tsx`
 
 ---
 
@@ -240,7 +268,7 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 
 ### `AdminPanel.tsx`
 - **Props:** `lang: Lang`
-- **Key-Sektionen:** Mitgliederverwaltung, Raidleiter-Flag, Starter-Members, Clan-Code MAFIA2026 (immer sichtbar)
+- **Key-Sektionen:** Mitgliederverwaltung, Raidleiter-Flag, Starter-Members, ProfileMatchPanel, Clan-Code MAFIA2026 (immer sichtbar)
 
 ---
 
@@ -294,7 +322,9 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 | role | enum | `admin` / `offizier` / `mitglied` |
 | is_raidleiter | boolean | Flag (nicht Rolle), Admin+Offizier können setzen |
 | is_test | boolean | Testaccounts (Playwright) — aus allen UI-Listen gefiltert |
-| deleted_at | timestamptz | Soft-Delete |
+| left_clan_at | timestamptz | Soft-Delete (kein deleted_at!) |
+
+**Achtung:** `profiles` hat KEIN `deleted_at` — Soft-Delete läuft über `left_clan_at`
 
 #### `deposits`
 | Spalte | Typ | Hinweis |
@@ -309,6 +339,29 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 | screenshot_hash | text | SHA-256, Duplikatschutz |
 | input_manual | boolean | true → pending (Offizier-Prüfung nötig) |
 | deleted_at | timestamptz | Soft-Delete |
+
+#### `starter_members`
+| Spalte | Typ | Hinweis |
+|--------|-----|---------|
+| id | uuid PK | |
+| clan_id | uuid FK | |
+| ingame_name | text | aus CSV-Import |
+| display_name | text | |
+| role | enum | mitglied / offizier / admin |
+| status | enum | `unclaimed` / `claimed` / `confirmed` / `rejected` |
+| claimed_by | uuid | → profiles.id (nullable) |
+| left_clan_at | timestamptz | Soft-Delete (kein deleted_at!) |
+
+**Achtung:** `starter_members` hat KEIN `deleted_at` — Soft-Delete läuft über `left_clan_at`
+
+#### `member_exemptions`
+| Spalte | Typ | Hinweis |
+|--------|-----|---------|
+| id | uuid PK | |
+| user_id | uuid FK | → profiles.id |
+| clan_id | uuid FK | |
+| reason | text | |
+| is_active | boolean | aktive Ausnahmen: `WHERE is_active = true` (kein deleted_at) |
 
 #### `fcu_events`
 | Spalte | Typ | Hinweis |
@@ -350,8 +403,8 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 | content | text | nullable |
 | pinned | boolean | Default: false |
 
-#### Weitere Tabellen (unverändert seit V21)
-`starter_members`, `suggestions`, `security_alerts`, `battle_reports`, `battle_report_screens`, `battle_casualties`, `payouts`, `member_exemptions`, `audit_log`
+#### Weitere Tabellen (unverändert)
+`suggestions`, `security_alerts`, `battle_reports`, `battle_report_screens`, `battle_casualties`, `payouts`, `audit_log`
 
 ### Views
 - **`active_deposits`** — filtert approved + nicht-deleted Deposits
@@ -369,7 +422,39 @@ get_my_clan_id() → uuid
 get_my_role()    → text
 ```
 
-### FCU (neu seit V24)
+### Mitglieder
+```sql
+get_members_list(p_clan_id uuid)
+  → TABLE(source, profile_id, starter_id, ingame_name, display_name, role,
+           is_raidleiter, is_test, left_clan_at, reg_status, has_exemption)
+  -- LATERAL JOIN: claimed_by = p.id ODER ingame_name-Fallback
+  -- Zweite Query: Starter ohne Profil (NOT EXISTS auf profiles mit gleichem ingame_name)
+
+get_unmatched_profiles(p_clan_id uuid)
+  → TABLE(profile_id, ingame_name, display_name, starter_candidates jsonb)
+  -- Profile ohne starter_id-Verknüpfung + mögliche Starter-Matches per Fuzzy-Score
+
+link_profile_to_starter(p_profile_id uuid, p_starter_id uuid)
+  → { success, message }
+  -- Setzt starter_members.claimed_by = p_profile_id, status = 'confirmed'
+
+add_clan_member(p_clan_id uuid, p_ingame_name text)
+  → { success, message }
+
+mark_member_left(p_profile_id uuid, p_starter_id uuid)
+  → { success, message }
+
+reactivate_member(p_profile_id uuid, p_starter_id uuid)
+  → { success, message }
+
+set_member_start_kw(p_user_id uuid, p_start_kw int, p_start_year int)
+  → { success, message }
+
+set_raidleiter_flag(p_target_user_id uuid, p_value boolean)
+  → { success, message }
+```
+
+### FCU
 ```sql
 create_fcu_event(p_clan_id, p_event_name, p_event_date)
   → { success, message, fcu_event_id }
@@ -434,6 +519,7 @@ type Tab =
   | 'battle'      // BattleReportUpload + PayoutCalculation
   | 'ranking'     // RankingTab
   | 'fcu'         // FCUEventTab
+  | 'members'     // MembersTab (offizier + admin)
   | 'freigabe'    // ApprovalQueue (offizier + admin)
   | 'vorschlaege' // SuggestionBox
   | 'warnungen'   // SecurityAlerts (offizier + admin)
@@ -572,6 +658,7 @@ sessionStorage.removeItem('fcu_ocr_' + eventId)
 | FCU Ergebnisse sehen | ✅ | ✅ | ✅ (confirmed) |
 | Ankündigungen erstellen | ✅ | ❌ | ❌ |
 | Wand der Schande sehen | ✅ | ✅ | ❌ |
+| Mitgliederliste sehen | ✅ | ✅ | ❌ |
 | AdminPanel | ✅ | ❌ | ❌ |
 | Kampfbericht hochladen | ✅ | ✅ | ❌ |
 
@@ -595,9 +682,14 @@ sessionStorage.removeItem('fcu_ocr_' + eventId)
 | Mehrere GitHub-Tabs | Können sich überschreiben — immer nur ein Tab |
 | Playwright: WelcomeModal blockiert Klicks | `waitFor({ state: 'visible' })` + `waitFor({ state: 'hidden' })` in loginAs() |
 | Playwright: Strict mode violation | Drawer-Buttons per `getByRole('navigation')` einschränken |
-| Playwright: Ankündigungen limit(5) voll | Formular-Schliessung als Erfolgsindikator verwenden, nicht Titel in Liste suchen |
-| `profiles` hat kein `deleted_at` | `.is('deleted_at', null)` auf profiles-Query weglassen |
-| `is_raidleiter` / `is_test` PostgREST-Filter | `.eq(false)` und `.neq(true)` schließen NULL aus — immer JS-seitig filtern: `.filter(p => !p.is_raidleiter && !p.is_test)` |
+| Playwright: Ankündigungen limit(5) voll | Formular-Schliessung als Erfolgsindikator verwenden |
+| `profiles` hat kein `deleted_at` | Soft-Delete läuft über `left_clan_at` — `.is('deleted_at', null)` weglassen |
+| `starter_members` hat kein `deleted_at` | Ebenso — Soft-Delete über `left_clan_at` |
+| `member_exemptions`: aktive Ausnahmen filtern | `WHERE is_active = true` — kein deleted_at |
+| `is_raidleiter` / `is_test` PostgREST-Filter | `.eq(false)` schließt NULL aus — JS-seitig filtern: `.filter(p => !p.is_raidleiter && !p.is_test)` |
+| UNION ALL mit ORDER BY | In Subquery wrappen: `SELECT * FROM (...) AS sub ORDER BY ...` |
+| get_members_list: manuell verknüpfte Profile nicht erkannt | LATERAL JOIN mit Fallback: `claimed_by = p.id OR (claimed_by IS NULL AND ingame_name = p.ingame_name)` |
+| Starter-Duplikate in Mitgliederliste | `NOT EXISTS` auf profiles mit gleichem ingame_name in zweiter Query |
 
 ---
 
