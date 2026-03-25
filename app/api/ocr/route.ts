@@ -218,8 +218,17 @@ AUFGABE:
 Lies alle sichtbaren Zeilen der Rangliste aus.
 
 SPIELERNAME-BEREINIGUNG:
-- Entferne Präfixe wie "#171", "[1Ca]", Clan-Tags in eckigen Klammern
+- Entferne Rang-Nummern am Anfang (z.B. "#171", "1.", "42")
+- Entferne Clan-Tags in eckigen Klammern EGAL welches Kürzel (z.B. "[1Ca]", "[ABC]", "[XYZ]")
 - Behalte nur den reinen Spielernamen
+
+SONDERZEICHEN UND UNICODE:
+- Lies Spielernamen EXAKT wie sie im Bild erscheinen
+- Japanische und chinesische Zeichen (z.B. 尺, ㄖ, ツ, ウ) exakt übernehmen
+- Dekorative Unicode-Zeichen (z.B. ✫, ✯, ⫷, ⫸, ༒, ❄) exakt übernehmen
+- Sonderzeichen wie «, », ≪, ≫, ∆, ϟ exakt übernehmen
+- Zeichen NICHT vereinfachen, ersetzen oder weglassen
+- Falls ein Name mit "..." endet weil er abgeschnitten ist: "..." beibehalten
 
 ZAHLENFORMAT:
 - "2.753" = 2753 (Tausenderpunkt entfernen)
@@ -234,7 +243,7 @@ Antworte NUR mit einem JSON-Objekt (kein Markdown, keine Backticks):
 
 Regeln:
 - rank = Platznummer (Zahl)
-- ingame_name = bereinigter Spielername
+- ingame_name = bereinigter Spielername exakt wie im Bild
 - points = Punktzahl als ganze Zahl
 - Falls keine Zeilen erkennbar: {"results":[]}`;
 
