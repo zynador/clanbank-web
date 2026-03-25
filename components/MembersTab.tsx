@@ -7,7 +7,7 @@ import ExemptionBadge from '@/components/ExemptionBadge'
 import { useExemptions } from '@/hooks/useExemptions'
 
 type Lang = 'de' | 'en'
-type FilterType = 'all' | 'active' | 'pending' | 'left'
+type FilterType = 'all' | 'active' | 'pending' | 'left' | 'unmatched'
 
 interface MemberEntry {
   source: string
@@ -31,11 +31,21 @@ const actionBtn = (color: string): React.CSSProperties => ({
   background: 'transparent', cursor: 'pointer', width: '100%', color,
 })
 
+// Grün  = profile_id + starter_id gesetzt (vollständig verknüpft)
+// Blau  = nur profile_id (registriert, aber kein Starter-Eintrag)
+// Grau  = nur starter_id (noch nicht registriert / nicht gematcht)
+function getMatchStatus(m: MemberEntry): 'matched' | 'profile_only' | 'starter_only' {
+  if (m.profile_id && m.starter_id) return 'matched'
+  if (m.profile_id && !m.starter_id) return 'profile_only'
+  return 'starter_only'
+}
+
 export default function MembersTab({ lang }: { lang: Lang }) {
   const { profile } = useAuth()
   const [members, setMembers] = useState<MemberEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<FilterType>('all')
+  const [searchTerm, setSearchTerm] = useState('')
   const [feedback, setFeedback] = useState('')
   const [feedbackType, setFeedbackType] = useState<'success' | 'error'>('success')
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -79,12 +89,20 @@ export default function MembersTab({ lang }: { lang: Lang }) {
     pending:    members.filter(m => !m.left_clan_at && m.reg_status === 'pending').length,
     unreg:      members.filter(m => !m.left_clan_at && m.reg_status === 'unclaimed').length,
     left:       members.filter(m => !!m.left_clan_at).length,
+    unmatched:  members.filter(m => !m.left_clan_at && getMatchStatus(m) === 'starter_only').length,
   }
 
   const filtered = members.filter(m => {
-    if (filter === 'active')  return !m.left_clan_at
-    if (filter === 'pending') return !m.left_clan_at && m.reg_status === 'pending'
-    if (filter === 'left')    return !!m.left_clan_at
+    if (filter === 'active')    { if (m.left_clan_at) return false }
+    if (filter === 'pending')   { if (m.left_clan_at || m.reg_status !== 'pending') return false }
+    if (filter === 'left')      { if (!m.left_clan_at) return false }
+    if (filter === 'unmatched') { if (m.left_clan_at || getMatchStatus(m) !== 'starter_only') return false }
+    if (searchTerm.trim()) {
+      const s = searchTerm.toLowerCase()
+      const nameMatch = m.ingame_name.toLowerCase().includes(s)
+      const displayMatch = (m.display_name || '').toLowerCase().includes(s)
+      if (!nameMatch && !displayMatch) return false
+    }
     return true
   })
 
@@ -98,9 +116,18 @@ export default function MembersTab({ lang }: { lang: Lang }) {
 
   const regBadge = (m: MemberEntry) => {
     if (m.left_clan_at)                return { bg: 'var(--color-background-danger)',    color: 'var(--color-text-danger)',    label: d(lang, 'Ausgetreten', 'Left') }
-    if (m.reg_status === 'registered') return { bg: 'var(--color-background-success)',   color: 'var(--color-text-success)',   label: d(lang, '✓ Registriert', '✓ Registered') }
+    if (m.reg_status === 'registered') return { bg: 'var(--color-background-success)',   color: 'var(--color-text-success)',   label: d(lang, '\u2713 Registriert', '\u2713 Registered') }
     if (m.reg_status === 'pending')    return { bg: 'var(--color-background-warning)',   color: 'var(--color-text-warning)',   label: d(lang, 'Claim ausstehend', 'Claim pending') }
     return { bg: 'var(--color-background-secondary)', color: 'var(--color-text-secondary)', label: d(lang, 'Nicht registriert', 'Not registered') }
+  }
+
+  // Farbiger Dot am Avatar zeigt Match-Status auf einen Blick
+  const matchDot = (m: MemberEntry) => {
+    if (m.left_clan_at) return null
+    const ms = getMatchStatus(m)
+    if (ms === 'matched')      return { color: '#22c55e', title: d(lang, 'Gematcht', 'Matched') }
+    if (ms === 'profile_only') return { color: '#60a5fa', title: d(lang, 'Kein Starter-Eintrag', 'No starter entry') }
+    return { color: '#94a3b8', title: d(lang, 'Nicht gematcht', 'Not matched') }
   }
 
   function startEdit(m: MemberEntry) {
@@ -191,15 +218,59 @@ export default function MembersTab({ lang }: { lang: Lang }) {
         ))}
       </div>
 
+      {/* Suchfeld */}
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
+        <input
+          type="text"
+          placeholder={d(lang, '\uD83D\uDD0D Suchen...', '\uD83D\uDD0D Search...')}
+          value={searchTerm}
+          onChange={e => setSearchTerm(e.target.value)}
+          style={{ flex: 1, fontSize: '13px', padding: '6px 10px' }}
+        />
+        {searchTerm !== '' && (
+          <button onClick={() => setSearchTerm('')} style={{
+            fontSize: '13px', padding: '6px 10px', cursor: 'pointer',
+            borderRadius: 'var(--border-radius-md)', border: '0.5px solid var(--color-border-secondary)',
+            background: 'transparent', color: 'var(--color-text-secondary)',
+          }}>x</button>
+        )}
+      </div>
+
       {/* Filter */}
       <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px' }}>
-        {([['all', d(lang,'Alle','All')], ['active', d(lang,'Aktiv','Active')], ['pending', d(lang,'Ausstehend','Pending')], ['left', d(lang,'Ausgetreten','Left')]] as [FilterType, string][]).map(([key, label]) => (
-          <button key={key} onClick={() => setFilter(key)} style={{
-            fontSize: '12px', padding: '4px 12px', borderRadius: '99px', cursor: 'pointer',
-            border: filter === key ? '1px solid var(--color-border-primary)' : '0.5px solid var(--color-border-secondary)',
-            background: filter === key ? 'var(--color-background-primary)' : 'transparent',
-            color: filter === key ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-          }}>{label}</button>
+        {([
+          ['all',       d(lang, 'Alle', 'All')],
+          ['active',    d(lang, 'Aktiv', 'Active')],
+          ['pending',   d(lang, 'Ausstehend', 'Pending')],
+          ['left',      d(lang, 'Ausgetreten', 'Left')],
+          ['unmatched', d(lang, 'Nicht gematcht', 'Unmatched') + (stats.unmatched > 0 ? ' (' + stats.unmatched + ')' : '')],
+        ] as [FilterType, string][]).map(([key, label]) => {
+          const isUnmatchedKey = key === 'unmatched'
+          const active = filter === key
+          return (
+            <button key={key} onClick={() => setFilter(key)} style={{
+              fontSize: '12px', padding: '4px 12px', borderRadius: '99px', cursor: 'pointer',
+              border: active ? '1px solid var(--color-border-primary)' : '0.5px solid var(--color-border-secondary)',
+              background: active ? 'var(--color-background-primary)' : 'transparent',
+              color: isUnmatchedKey && stats.unmatched > 0
+                ? 'var(--color-text-warning)'
+                : active ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+            }}>{label}</button>
+          )
+        })}
+      </div>
+
+      {/* Match-Legende */}
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '10px', flexWrap: 'wrap' }}>
+        {[
+          { color: '#22c55e', label: d(lang, 'Gematcht', 'Matched') },
+          { color: '#60a5fa', label: d(lang, 'Kein Starter-Eintrag', 'No starter entry') },
+          { color: '#94a3b8', label: d(lang, 'Nicht gematcht', 'Not matched') },
+        ].map((l, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: l.color, flexShrink: 0 }} />
+            <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>{l.label}</span>
+          </div>
         ))}
       </div>
 
@@ -225,6 +296,7 @@ export default function MembersTab({ lang }: { lang: Lang }) {
         const isLeft = !!m.left_clan_at
         const rb = roleBadge(m.role)
         const sb = regBadge(m)
+        const dot = matchDot(m)
         const initials = m.ingame_name.slice(0, 2).toUpperCase()
         const leftDate = m.left_clan_at ? new Date(m.left_clan_at).toLocaleDateString('de-DE') : ''
 
@@ -236,12 +308,24 @@ export default function MembersTab({ lang }: { lang: Lang }) {
             {/* Header */}
             <div onClick={() => setExpandedId(isExpanded ? null : key)}
               style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', cursor: 'pointer' }}>
-              <div style={{
-                width: '38px', height: '38px', borderRadius: '50%', flexShrink: 0,
-                background: isLeft ? 'var(--color-background-secondary)' : 'var(--color-background-info)',
-                color: isLeft ? 'var(--color-text-secondary)' : 'var(--color-text-info)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 500,
-              }}>{initials}</div>
+
+              {/* Avatar + Match-Dot */}
+              <div style={{ position: 'relative', flexShrink: 0 }}>
+                <div style={{
+                  width: '38px', height: '38px', borderRadius: '50%',
+                  background: isLeft ? 'var(--color-background-secondary)' : 'var(--color-background-info)',
+                  color: isLeft ? 'var(--color-text-secondary)' : 'var(--color-text-info)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 500,
+                }}>{initials}</div>
+                {dot && (
+                  <div title={dot.title} style={{
+                    position: 'absolute', bottom: 0, right: 0,
+                    width: '11px', height: '11px', borderRadius: '50%',
+                    background: dot.color, border: '2px solid var(--color-background-primary)',
+                  }} />
+                )}
+              </div>
+
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{
                   fontSize: '15px', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
@@ -249,12 +333,12 @@ export default function MembersTab({ lang }: { lang: Lang }) {
                   color: isLeft ? 'var(--color-text-secondary)' : 'var(--color-text-primary)',
                 }}>{m.ingame_name}</div>
                 <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>
-                  {m.display_name ? '@' + m.display_name : '—'}
-                  {isLeft ? ' · ' + d(lang, 'ausgetreten ', 'left ') + leftDate : ''}
+                  {m.display_name ? '@' + m.display_name : '\u2014'}
+                  {isLeft ? ' \u00b7 ' + d(lang, 'ausgetreten ', 'left ') + leftDate : ''}
                 </div>
               </div>
               <span style={{ fontSize: '14px', color: 'var(--color-text-secondary)', flexShrink: 0 }}>
-                {isExpanded ? '▲' : '▼'}
+                {isExpanded ? '\u25b2' : '\u25bc'}
               </span>
             </div>
 
@@ -262,7 +346,9 @@ export default function MembersTab({ lang }: { lang: Lang }) {
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', padding: '0 12px 10px' }}>
               <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '99px', background: rb.bg, color: rb.color }}>{rb.label}</span>
               {m.is_raidleiter && (
-                <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '99px', background: '#FAEEDA', color: '#633806', border: '0.5px solid #EF9F27' }}>✕ Raidleiter</span>
+                <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '99px', background: '#FAEEDA', color: '#633806', border: '0.5px solid #EF9F27' }}>
+                  {'\u2716 Raidleiter'}
+                </span>
               )}
               <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '99px', background: sb.bg, color: sb.color }}>{sb.label}</span>
               {!isLeft && m.profile_id && (
@@ -335,7 +421,7 @@ export default function MembersTab({ lang }: { lang: Lang }) {
                       {m.reg_status === 'pending' && isAdmin && (
                         <>
                           <button onClick={() => handleConfirmClaim(m)} style={actionBtn('var(--color-text-success)')}>
-                            {d(lang, 'Claim bestätigen', 'Confirm claim')}
+                            {d(lang, 'Claim best\u00e4tigen', 'Confirm claim')}
                           </button>
                           <button onClick={() => handleRejectClaim(m)} style={actionBtn('var(--color-text-danger)')}>
                             {d(lang, 'Claim ablehnen', 'Reject claim')}
@@ -374,7 +460,9 @@ export default function MembersTab({ lang }: { lang: Lang }) {
 
       {!loading && filtered.length === 0 && (
         <div style={{ textAlign: 'center', color: 'var(--color-text-secondary)', padding: '2rem', fontSize: '13px' }}>
-          {d(lang, 'Keine Einträge in dieser Kategorie.', 'No entries in this category.')}
+          {searchTerm !== ''
+            ? d(lang, 'Keine Ergebnisse f\u00fcr \u201e' + searchTerm + '\u201c', 'No results for "' + searchTerm + '"')
+            : d(lang, 'Keine Eintr\u00e4ge in dieser Kategorie.', 'No entries in this category.')}
         </div>
       )}
 
@@ -385,7 +473,7 @@ export default function MembersTab({ lang }: { lang: Lang }) {
           borderRadius: 'var(--border-radius-lg)', padding: '12px', marginTop: '8px',
         }}>
           <div style={{ fontSize: '13px', fontWeight: 500, marginBottom: '8px' }}>
-            {d(lang, 'Neues Mitglied hinzufügen', 'Add new member')}
+            {d(lang, 'Neues Mitglied hinzuf\u00fcgen', 'Add new member')}
           </div>
           <input type="text" placeholder={d(lang, 'Ingame-Name', 'In-game name')} value={newName}
             onChange={e => setNewName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleAddMember() }}
@@ -396,7 +484,7 @@ export default function MembersTab({ lang }: { lang: Lang }) {
               borderRadius: 'var(--border-radius-md)', border: '0.5px solid var(--color-border-secondary)',
               background: 'var(--color-background-success)', color: 'var(--color-text-success)',
             }}>
-              {adding ? '...' : d(lang, 'Hinzufügen', 'Add')}
+              {adding ? '...' : d(lang, 'Hinzuf\u00fcgen', 'Add')}
             </button>
             <button onClick={() => { setShowAddForm(false); setNewName('') }} style={{
               padding: '8px 16px', fontSize: '13px', cursor: 'pointer',
@@ -413,7 +501,7 @@ export default function MembersTab({ lang }: { lang: Lang }) {
           border: '0.5px dashed var(--color-border-secondary)', borderRadius: 'var(--border-radius-lg)',
           background: 'transparent', color: 'var(--color-text-secondary)',
         }}>
-          {'+ ' + d(lang, 'Neues Mitglied hinzufügen', 'Add new member')}
+          {'+ ' + d(lang, 'Neues Mitglied hinzuf\u00fcgen', 'Add new member')}
         </button>
       )}
 
