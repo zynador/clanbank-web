@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 
 type Lang = 'de' | 'en'
@@ -44,6 +44,7 @@ function makeSlot(id: number): Slot {
 export default function FCUUploadPanel({ lang, eventId, onBack, onDone }: Props) {
   const [slots, setSlots] = useState<Slot[]>([makeSlot(0)])
   const [feedback, setFeedback] = useState('')
+  const [loadingExisting, setLoadingExisting] = useState(true)
   const fileRefs = useRef<Record<number, HTMLInputElement | null>>({})
   const multiFileRef = useRef<HTMLInputElement | null>(null)
 
@@ -58,10 +59,41 @@ export default function FCUUploadPanel({ lang, eventId, onBack, onDone }: Props)
     uploading:   lang === 'de' ? 'Wird hochgeladen...' : 'Uploading...',
     ocr:         lang === 'de' ? 'OCR läuft...' : 'Running OCR...',
     rows:        lang === 'de' ? 'Zeilen erkannt' : 'rows detected',
+    existing:    lang === 'de' ? 'Bereits hochgeladen' : 'Already uploaded',
     error:       lang === 'de' ? 'Fehler' : 'Error',
     select:      lang === 'de' ? 'Bild auswählen' : 'Select image',
     replace:     lang === 'de' ? 'Ersetzen' : 'Replace',
+    retry:       lang === 'de' ? 'Erneut versuchen' : 'Retry',
+    view:        lang === 'de' ? '🔍 Ansehen' : '🔍 View',
   }
+
+  // Beim Öffnen: bestehende Screens aus DB laden
+  useEffect(() => {
+    async function loadExisting() {
+      setLoadingExisting(true)
+      const { data } = await supabase
+        .from('fcu_event_screens')
+        .select('slot_index, url, hash')
+        .eq('fcu_event_id', eventId)
+        .order('slot_index', { ascending: true })
+
+      if (data && data.length > 0) {
+        const existingSlots: Slot[] = data.map(s => ({
+          id:       s.slot_index,
+          file:     null,
+          url:      s.url,
+          hash:     s.hash,
+          status:   'done' as SlotStatus,
+          rowCount: 0,
+          error:    '',
+        }))
+        existingSlots.push(makeSlot(existingSlots.length))
+        setSlots(existingSlots)
+      }
+      setLoadingExisting(false)
+    }
+    loadExisting()
+  }, [eventId])
 
   function updateSlot(id: number, patch: Partial<Slot>) {
     setSlots(prev => prev.map(s => s.id === id ? { ...s, ...patch } : s))
@@ -74,10 +106,13 @@ export default function FCUUploadPanel({ lang, eventId, onBack, onDone }: Props)
       const ext = file.name.split('.').pop() || 'jpg'
       const path = 'fcu/' + eventId + '/' + slotId + '_' + hash.slice(0, 8) + '.' + ext
 
+      // "already exists" abfangen und weitermachen
       const { error: upErr } = await supabase.storage
         .from('screenshots')
         .upload(path, file, { upsert: false })
-      if (upErr) throw new Error(upErr.message)
+      if (upErr && !upErr.message.includes('already exists')) {
+        throw new Error(upErr.message)
+      }
 
       const { data: urlData } = supabase.storage
         .from('screenshots')
@@ -91,14 +126,14 @@ export default function FCUUploadPanel({ lang, eventId, onBack, onDone }: Props)
         body: JSON.stringify({ imageUrl: url, mode: 'fcu' }),
       })
       if (!ocrRes.ok) {
-  const errText = await ocrRes.text()
-  throw new Error('OCR ' + ocrRes.status + ': ' + errText.slice(0, 150))
-}
-const ocrData = await ocrRes.json()
-if (!ocrData.results) {
-  throw new Error('Kein results-Feld: ' + JSON.stringify(ocrData).slice(0, 150))
-}
-const rows: OcrRow[] = ocrData.results ?? []
+        const errText = await ocrRes.text()
+        throw new Error('OCR ' + ocrRes.status + ': ' + errText.slice(0, 150))
+      }
+      const ocrData = await ocrRes.json()
+      if (!ocrData.results) {
+        throw new Error('Kein results-Feld: ' + JSON.stringify(ocrData).slice(0, 150))
+      }
+      const rows: OcrRow[] = ocrData.results ?? []
 
       await supabase.rpc('save_fcu_event_screen', {
         p_fcu_event_id: eventId,
@@ -118,7 +153,7 @@ const rows: OcrRow[] = ocrData.results ?? []
 
       updateSlot(slotId, { status: 'done', rowCount: rows.length })
 
-      // iPhone-Fix: nach erfolgreichem Upload automatisch neuen Slot anhängen
+      // iPhone-Fix: automatisch neuen Slot anhängen
       setSlots(prev => {
         const isLast = prev[prev.length - 1].id === slotId
         if (isLast) return [...prev, makeSlot(prev.length)]
@@ -131,7 +166,7 @@ const rows: OcrRow[] = ocrData.results ?? []
     }
   }
 
-  // Desktop: Alle Dateien auf einmal
+  // Desktop: sequenziell mit 1.5s Pause gegen Rate Limit
   async function handleMultiFiles(files: FileList) {
     const fileArray = Array.from(files)
     if (fileArray.length === 0) return
@@ -141,8 +176,8 @@ const rows: OcrRow[] = ocrData.results ?? []
       await handleFile(i, fileArray[i])
       if (i < fileArray.length - 1) {
         await new Promise(resolve => setTimeout(resolve, 1500))
-  }
-}
+      }
+    }
   }
 
   function addSlot() {
@@ -157,6 +192,10 @@ const rows: OcrRow[] = ocrData.results ?? []
   const busyCount = slots.filter(s => s.status === 'uploading' || s.status === 'ocr').length
   const canProceed = doneCount > 0 && busyCount === 0
 
+  if (loadingExisting) {
+    return <div className="p-4 text-sm text-gray-400">...</div>
+  }
+
   return (
     <div className="p-4 space-y-4">
 
@@ -169,7 +208,6 @@ const rows: OcrRow[] = ocrData.results ?? []
 
       <p className="text-sm text-gray-500">{t.hint}</p>
 
-      {/* Desktop: Multi-Upload */}
       <input
         type="file"
         accept="image/*"
@@ -191,7 +229,6 @@ const rows: OcrRow[] = ocrData.results ?? []
       </button>
       <p className="text-xs text-gray-400 text-center -mt-2">{t.multiHint}</p>
 
-      {/* Slots */}
       <div className="space-y-2">
         {slots.map((slot, idx) => (
           <div key={slot.id} className="bg-white border border-gray-200 rounded-lg p-3">
@@ -237,22 +274,56 @@ const rows: OcrRow[] = ocrData.results ?? []
             )}
 
             {slot.status === 'done' && (
-              <div className="flex items-center justify-between">
-                <div className="text-sm text-green-700">
-                  {'✅ ' + slot.rowCount + ' ' + t.rows}
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-sm text-green-700 flex-1">
+                  {slot.rowCount > 0
+                    ? '✅ ' + slot.rowCount + ' ' + t.rows
+                    : '✅ ' + t.existing}
                 </div>
-                <button
-                  onClick={() => updateSlot(slot.id, { status: 'empty', file: null, url: '', hash: '', rowCount: 0 })}
-                  className="text-xs text-gray-400 hover:text-gray-600"
-                >
-                  ↩ {t.replace}
-                </button>
+                <div className="flex gap-2 items-center">
+                  {slot.url && (
+                    
+                      href={slot.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-blue-500 hover:text-blue-700"
+                    >
+                      {t.view}
+                    </a>
+                  )}
+                  <button
+                    onClick={() => updateSlot(slot.id, { status: 'empty', file: null, url: '', hash: '', rowCount: 0 })}
+                    className="text-xs text-gray-400 hover:text-gray-600"
+                  >
+                    ↩ {t.replace}
+                  </button>
+                </div>
               </div>
             )}
 
             {slot.status === 'error' && (
-              <div className="text-sm text-red-600 py-1">
-                {'⚠️ ' + t.error + ': ' + slot.error}
+              <div className="space-y-1">
+                <div className="text-sm text-red-600 py-1">
+                  {'⚠️ ' + t.error + ': ' + slot.error}
+                </div>
+                <div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    ref={el => { fileRefs.current[slot.id] = el }}
+                    onChange={e => {
+                      const f = e.target.files?.[0]
+                      if (f) handleFile(slot.id, f)
+                    }}
+                  />
+                  <button
+                    onClick={() => fileRefs.current[slot.id]?.click()}
+                    className="text-xs text-blue-500 hover:text-blue-700"
+                  >
+                    {'🔄 ' + t.retry}
+                  </button>
+                </div>
               </div>
             )}
           </div>
