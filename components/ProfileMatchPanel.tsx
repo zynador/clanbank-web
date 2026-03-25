@@ -1,137 +1,264 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
-import InfoTooltip from '@/components/InfoTooltip'
-import StarterMembersPanel from '@/components/StarterMembersPanel'
-import ProfileMatchPanel from '@/components/ProfileMatchPanel'
+import { useAuth } from '@/lib/auth-context'
 
 type Lang = 'de' | 'en'
 
-export default function AdminPanel() {
-  const [lang, setLang] = useState<Lang>('de')
-  const [inviteCode, setInviteCode] = useState<string | null>(null)
-  const [generatingCode, setGeneratingCode] = useState(false)
-  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+interface UnmatchedProfile {
+  id: string
+  ingame_name: string
+  display_name: string | null
+  role: string
+  created_at: string
+}
+
+interface UnclaimedStarter {
+  id: string
+  ingame_name: string
+  status: string
+}
+
+interface ScoredMatch {
+  starter: UnclaimedStarter
+  score: number
+  reason: string
+}
+
+interface ProfileMatchPanelProps {
+  lang: Lang
+}
+
+const tl = (lang: Lang, de: string, en: string): string => lang === 'de' ? de : en
+
+function normalize(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim()
+}
+
+function tokenOverlap(a: string, b: string): number {
+  const tokensA = normalize(a).split(' ').filter(Boolean)
+  const tokensB = normalize(b).split(' ').filter(Boolean)
+  if (tokensA.length === 0 || tokensB.length === 0) return 0
+  const matches = tokensA.filter(tok => tokensB.includes(tok)).length
+  return matches / Math.max(tokensA.length, tokensB.length)
+}
+
+function charOverlap(a: string, b: string): number {
+  const na = normalize(a)
+  const nb = normalize(b)
+  if (na.length === 0 || nb.length === 0) return 0
+  let matches = 0
+  const used: boolean[] = new Array(nb.length).fill(false) as boolean[]
+  for (const ch of na) {
+    const chars = nb.split('')
+    const idx = chars.findIndex((c: string, i: number) => !used[i] && c === ch)
+    if (idx !== -1) { matches++; used[idx] = true }
+  }
+  return matches / Math.max(na.length, nb.length)
+}
+
+function scoreMatch(profileName: string, starterName: string): { score: number; reason: string } {
+  const pn = profileName.toLowerCase()
+  const sn = starterName.toLowerCase()
+  const np = normalize(profileName)
+  const ns = normalize(starterName)
+
+  if (np === ns) return { score: 100, reason: 'Exakter Match' }
+  if (sn.includes(pn) || pn.includes(sn)) return { score: 82, reason: 'Name enthalten' }
+  if (ns.includes(np) || np.includes(ns)) return { score: 78, reason: 'Name enthalten (normalisiert)' }
+
+  const tScore = tokenOverlap(profileName, starterName)
+  if (tScore >= 0.5) return { score: Math.round(55 + tScore * 25), reason: 'Token-Übereinstimmung' }
+
+  const cScore = charOverlap(profileName, starterName)
+  if (cScore >= 0.6) return { score: Math.round(cScore * 55), reason: 'Zeichen-Ähnlichkeit' }
+
+  return { score: 0, reason: '' }
+}
+
+function getTopMatches(profile: UnmatchedProfile, starters: UnclaimedStarter[]): ScoredMatch[] {
+  return starters
+    .map((s: UnclaimedStarter): ScoredMatch => {
+      const { score, reason } = scoreMatch(profile.ingame_name, s.ingame_name)
+      return { starter: s, score, reason }
+    })
+    .filter((m: ScoredMatch) => m.score >= 40)
+    .sort((a: ScoredMatch, b: ScoredMatch) => b.score - a.score)
+    .slice(0, 3)
+}
+
+function scoreBadgeColor(score: number): string {
+  if (score >= 90) return 'bg-green-600 text-white'
+  if (score >= 70) return 'bg-yellow-600 text-white'
+  return 'bg-orange-700 text-white'
+}
+
+export default function ProfileMatchPanel({ lang }: ProfileMatchPanelProps) {
+  const { profile } = useAuth()
+  const [profiles, setProfiles] = useState<UnmatchedProfile[]>([])
+  const [starters, setStarters] = useState<UnclaimedStarter[]>([])
+  const [loading, setLoading] = useState<boolean>(true)
+  const [feedback, setFeedback] = useState<string | null>(null)
+  const [linking, setLinking] = useState<string | null>(null)
+  const [expandedProfile, setExpandedProfile] = useState<string | null>(null)
+  const [manualSelect, setManualSelect] = useState<Record<string, string>>({})
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('clanbank_lang')
-      if (saved === 'en' || saved === 'de') setLang(saved)
-    } catch {}
-  }, [])
+    if (profile?.clan_id) loadData()
+  }, [profile])
 
-  useEffect(() => {
-    if (feedback) {
-      const timer = setTimeout(() => setFeedback(null), 4000)
-      return () => clearTimeout(timer)
+  async function loadData(): Promise<void> {
+    setLoading(true)
+    const { data, error } = await supabase.rpc('get_unmatched_profiles', {
+      p_clan_id: profile!.clan_id
+    })
+    setLoading(false)
+    if (error || !data?.success) {
+      setFeedback(data?.message || 'Fehler beim Laden')
+      return
     }
-  }, [feedback])
-
-  async function handleGenerateCode() {
-    setGeneratingCode(true)
-    const { data, error } = await supabase.rpc('generate_invite_code')
-    if (error) {
-      setFeedback({ type: 'error', text: 'Fehler: ' + error.message })
-    } else {
-      setInviteCode(data as string)
-    }
-    setGeneratingCode(false)
+    setProfiles((data.unmatched_profiles as UnmatchedProfile[]) || [])
+    setStarters((data.unclaimed_starters as UnclaimedStarter[]) || [])
   }
 
-  const t = {
-    code_title:  { de: 'Einladungscode',                   en: 'Invitation Code' },
-    active_code: { de: 'Aktiver Clan-Code:',               en: 'Active clan code:' },
-    tip_code: {
-      de: '⚠️ Normalerweise nicht nötig! Der allgemeine Clan-Code MAFIA2026 ist bereits aktiv und gilt für alle neuen Spieler. Einen neuen Code nur generieren wenn MAFIA2026 kompromittiert wurde.',
-      en: '⚠️ Usually not needed! The general clan code MAFIA2026 is already active for all new players. Only generate a new code if MAFIA2026 has been compromised.',
-    },
-    copy:      { de: 'Kopieren',           en: 'Copy' },
-    copied:    { de: 'Code kopiert!',      en: 'Code copied!' },
-    generate:  { de: 'Notfall: Neuen Code generieren', en: 'Emergency: Generate new code' },
-    generating:{ de: 'Erstelle...',        en: 'Generating...' },
-    tip_generate: {
-      de: '⚠️ Nur im Notfall nutzen! Für normale Registrierungen einfach den Code MAFIA2026 weitergeben — der funktioniert immer.',
-      en: '⚠️ Emergency use only! For normal registrations just share the code MAFIA2026 — that always works.',
-    },
+  async function handleLink(profileId: string, starterId: string): Promise<void> {
+    setLinking(profileId)
+    const { data, error } = await supabase.rpc('link_profile_to_starter', {
+      p_profile_id: profileId,
+      p_starter_id: starterId
+    })
+    setLinking(null)
+    if (error || !data?.success) {
+      setFeedback(data?.message || 'Fehler beim Verknüpfen')
+      return
+    }
+    setFeedback(tl(lang, 'Erfolgreich verknüpft!', 'Successfully linked!'))
+    setExpandedProfile(null)
+    await loadData()
   }
+
+  if (!profile || !['admin', 'offizier'].includes(profile.role)) return null
 
   return (
-    <div className="space-y-6">
+    <div className="mt-6">
+      <h3 className="font-semibold text-lg mb-1">
+        {'🔗 ' + tl(lang, 'Profil-Abgleich', 'Profile Matching')}
+      </h3>
+      <p className="text-sm text-gray-400 mb-4">
+        {tl(lang,
+          'Profile ohne Starter-Eintrag — automatischer Abgleich mit Wahrscheinlichkeit',
+          'Profiles without starter entry — automatic matching with probability score'
+        )}
+      </p>
 
-      {/* Feedback */}
       {feedback && (
-        <div className={`px-4 py-3 rounded-lg text-sm ${
-          feedback.type === 'success'
-            ? 'bg-green-500/10 text-green-400 border border-green-500/20'
-            : 'bg-red-500/10 text-red-400 border border-red-500/20'
-        }`}>
-          {feedback.text}
+        <div className="mb-4 px-3 py-2 rounded bg-blue-900/30 text-blue-300 text-sm">
+          {feedback}
+          <button className="ml-3 text-blue-400 underline text-xs" onClick={() => setFeedback(null)}>
+            {tl(lang, 'Schließen', 'Close')}
+          </button>
         </div>
       )}
 
-      {/* Einladungscode */}
-      <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-5">
-        <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider mb-4 flex items-center">
-          {t.code_title[lang]}
-          <InfoTooltip de={t.tip_code.de} en={t.tip_code.en} lang={lang} position="bottom" />
-        </h3>
-
-        <div className="flex items-center gap-3 mb-4">
-          <span className="text-xs text-zinc-400">{t.active_code[lang]}</span>
-          <code className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-emerald-400 font-mono text-lg tracking-widest">
-            MAFIA2026
-          </code>
-          <button
-            onClick={() => {
-              navigator.clipboard.writeText('MAFIA2026')
-              setFeedback({ type: 'success', text: t.copied[lang] })
-            }}
-            className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 text-sm rounded-lg transition-colors"
-          >
-            {'📋 ' + t.copy[lang]}
-          </button>
+      {loading ? (
+        <p className="text-gray-400 text-sm">{'⏳ ' + tl(lang, 'Lade...', 'Loading...')}</p>
+      ) : profiles.length === 0 ? (
+        <div className="px-4 py-3 rounded bg-green-900/20 text-green-400 text-sm">
+          {'✅ ' + tl(lang, 'Alle Profile sind verknüpft.', 'All profiles are linked.')}
         </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {profiles.map((p: UnmatchedProfile) => {
+            const matches = getTopMatches(p, starters)
+            const isExpanded = expandedProfile === p.id
+            const selectedStarterId = manualSelect[p.id] || ''
 
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="inline-flex items-center gap-1">
-            <button
-              onClick={handleGenerateCode}
-              disabled={generatingCode}
-              className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-zinc-300 text-sm font-medium rounded-lg transition-colors"
-            >
-              {generatingCode ? t.generating[lang] : t.generate[lang]}
-            </button>
-            <InfoTooltip de={t.tip_generate.de} en={t.tip_generate.en} lang={lang} position="bottom" />
-          </span>
+            return (
+              <div key={p.id} className="rounded-lg border border-white/10 bg-white/5 p-4">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div>
+                    <span className="font-medium">{p.ingame_name}</span>
+                    <span className="ml-2 text-xs text-gray-400 capitalize">{p.role}</span>
+                    {matches.length > 0 ? (
+                      <span className="ml-2 text-xs bg-yellow-700/40 text-yellow-300 px-2 py-0.5 rounded-full">
+                        {matches.length + ' ' + tl(lang, 'Vorschlag', 'suggestion') + (matches.length > 1 ? (lang === 'de' ? 'e' : 's') : '')}
+                      </span>
+                    ) : (
+                      <span className="ml-2 text-xs bg-gray-700/40 text-gray-400 px-2 py-0.5 rounded-full">
+                        {tl(lang, 'Kein Vorschlag', 'No suggestion')}
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setExpandedProfile(isExpanded ? null : p.id)}
+                    className="text-xs text-blue-400 underline"
+                  >
+                    {isExpanded ? tl(lang, 'Einklappen', 'Collapse') : tl(lang, 'Verknüpfen', 'Link')}
+                  </button>
+                </div>
 
-          {inviteCode && (
-            <div className="flex items-center gap-2">
-              <code className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-emerald-400 font-mono text-lg tracking-widest">
-                {inviteCode}
-              </code>
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(inviteCode)
-                  setFeedback({ type: 'success', text: t.copied[lang] })
-                }}
-                className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm rounded-lg transition-colors"
-              >
-                {'📋 ' + t.copy[lang]}
-              </button>
-            </div>
-          )}
+                {isExpanded && (
+                  <div className="mt-3 flex flex-col gap-2">
+                    {matches.length > 0 && (
+                      <>
+                        <p className="text-xs text-gray-400 mb-1">
+                          {'🤖 ' + tl(lang, 'Automatische Vorschläge:', 'Automatic suggestions:')}
+                        </p>
+                        {matches.map((m: ScoredMatch) => (
+                          <div key={m.starter.id}
+                            className="flex items-center justify-between gap-2 bg-white/5 rounded px-3 py-2"
+                          >
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={'text-xs px-2 py-0.5 rounded-full font-mono ' + scoreBadgeColor(m.score)}>
+                                {m.score + '%'}
+                              </span>
+                              <span className="text-sm">{m.starter.ingame_name}</span>
+                              <span className="text-xs text-gray-500">{m.reason}</span>
+                            </div>
+                            <button
+                              onClick={() => handleLink(p.id, m.starter.id)}
+                              disabled={linking === p.id}
+                              className="text-xs bg-green-700 hover:bg-green-600 text-white px-3 py-1 rounded disabled:opacity-50"
+                            >
+                              {linking === p.id ? '⏳' : '✅ ' + tl(lang, 'Verknüpfen', 'Link')}
+                            </button>
+                          </div>
+                        ))}
+                      </>
+                    )}
+
+                    <div className="mt-2">
+                      <p className="text-xs text-gray-400 mb-1">
+                        {'🔍 ' + tl(lang, 'Manuell auswählen:', 'Select manually:')}
+                      </p>
+                      <div className="flex gap-2">
+                        <select
+                          value={selectedStarterId}
+                          onChange={(e) => setManualSelect((prev) => ({ ...prev, [p.id]: e.target.value }))}
+                          className="flex-1 text-sm rounded bg-white/10 border border-white/20 px-2 py-1 text-white"
+                        >
+                          <option value="">{'— ' + tl(lang, 'Starter wählen', 'Select starter') + ' —'}</option>
+                          {starters.map((s: UnclaimedStarter) => (
+                            <option key={s.id} value={s.id}>{s.ingame_name}</option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={() => { if (selectedStarterId) handleLink(p.id, selectedStarterId) }}
+                          disabled={!selectedStarterId || linking === p.id}
+                          className="text-xs bg-blue-700 hover:bg-blue-600 text-white px-3 py-1 rounded disabled:opacity-50"
+                        >
+                          {tl(lang, 'Verknüpfen', 'Link')}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
-      </div>
-
-      {/* Starter-Mitglieder */}
-      <StarterMembersPanel lang={lang} />
-
-      {/* Profil-Abgleich */}
-      <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-5">
-        <ProfileMatchPanel lang={lang} />
-      </div>
-
+      )}
     </div>
   )
 }
