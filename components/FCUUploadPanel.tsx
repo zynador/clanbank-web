@@ -139,7 +139,10 @@ const rows: OcrRow[] = ocrData.results ?? []
     setSlots(newSlots)
     for (let i = 0; i < fileArray.length; i++) {
       await handleFile(i, fileArray[i])
-    }
+      if (i < fileArray.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1500))
+  }
+}
   }
 
   function addSlot() {
