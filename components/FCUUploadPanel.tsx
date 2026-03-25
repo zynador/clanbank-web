@@ -281,15 +281,13 @@ export default function FCUUploadPanel({ lang, eventId, onBack, onDone }: Props)
                     : '✅ ' + t.existing}
                 </div>
                 <div className="flex gap-2 items-center">
-                  {slot.url && (
-                    
-                      href={slot.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                   {slot.url && (
+                    <button
+                      onClick={() => window.open(slot.url, '_blank')}
                       className="text-xs text-blue-500 hover:text-blue-700"
                     >
                       {t.view}
-                    </a>
+                    </button>
                   )}
                   <button
                     onClick={() => updateSlot(slot.id, { status: 'empty', file: null, url: '', hash: '', rowCount: 0 })}
