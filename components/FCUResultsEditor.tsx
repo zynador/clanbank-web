@@ -178,7 +178,7 @@ export default function FCUResultsEditor({ lang, eventId, onBack }: Props) {
       {rows.length > 0 && (
         <div className="flex gap-3 text-xs text-gray-500">
           <span>{rows.length + ' ' + t.total}</span>
-          {unmatchedCount > 0 && isAdmin && (
+          {unmatchedCount > 0 && isAdmin && isConfirmed && (
             <span className="text-amber-600">
               {'⚠️ ' + unmatchedCount + (lang === 'de' ? ' ohne Profilmatch' : ' unmatched')}
             </span>
@@ -237,7 +237,7 @@ export default function FCUResultsEditor({ lang, eventId, onBack }: Props) {
                     className="w-full text-xs text-gray-900 border-b border-gray-200 bg-transparent focus:outline-none focus:border-blue-400 py-0.5"
                   />
                 ) : (
-                  <span className="text-xs text-gray-800 truncate block">{row.ingame_name}</span>
+                  <span className="text-xs text-gray-800 break-all">{row.ingame_name}</span>
                 )}
               </div>
 
