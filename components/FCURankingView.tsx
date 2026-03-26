@@ -65,10 +65,10 @@ export default function FCURankingView({ lang, onBack }: Props) {
       ) + 1
     : 0
 
-  function formatPoints(n: number): string {
-    if (n >= 1000000) return (n / 1000000).toFixed(1).replace('.', ',') + ' Mio'
-    if (n >= 1000) return (n / 1000).toFixed(0) + ' K'
-    return n.toString()
+  f function formatPoints(n: number): string {
+    if (n >= 1000000) return (n / 1000000).toFixed(2).replace('.', ',') + ' Mio'
+    if (n >= 1000) return (n / 1000).toFixed(2).replace('.', ',') + ' K'
+    return n.toFixed(2).replace('.', ',')
   }
 
   return (
