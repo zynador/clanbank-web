@@ -1,13 +1,12 @@
 # ClanBank — Codestruktur
 
-> **Letzte Aktualisierung:** 26.03.2026 | Fahrplan V30
+> **Letzte Aktualisierung:** 26.03.2026 | Fahrplan V31
 > **Raw-URL für neue Chat-Sessions:**
 > `https://raw.githubusercontent.com/zynador/clanbank-web/main/CODESTRUKTUR.md`
 
 ---
 
 ## 1. Projektstruktur (Verzeichnisse)
-
 ```
 clanbank-web/
 ├── .github/
@@ -15,8 +14,11 @@ clanbank-web/
 │       └── playwright.yml        ← GitHub Actions E2E-Tests (bei jedem Push auf main)
 ├── app/
 │   ├── api/
-│   │   └── ocr/
-│   │       └── route.ts          ← Claude Haiku Vision OCR (alle Modi)
+│   │   ├── ocr/
+│   │   │   └── route.ts          ← Claude Haiku Vision OCR (alle Modi)
+│   │   └── admin/
+│   │       └── reset-password/
+│   │           └── route.ts      ← Passwort-Reset (Service Role Key, nur Admin)
 │   ├── dashboard/
 │   │   └── page.tsx              ← Haupt-App nach Login (Hamburger Drawer)
 │   ├── login/
@@ -277,7 +279,12 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 
 ### `AdminPanel.tsx`
 - **Props:** `lang: Lang`
-- **Key-Sektionen:** Mitgliederverwaltung, Raidleiter-Flag, Starter-Members, ProfileMatchPanel, Clan-Code MAFIA2026 (immer sichtbar)
+- **Key-Sektionen:**
+  - Einladungscode (MAFIA2026 immer sichtbar, Notfall-Code generieren)
+  - **Passwort zurücksetzen** (V31): Mitglieder-Dropdown, Passwort-Input mit Sichtbarkeits-Toggle + Kopieren-Button, ruft `/api/admin/reset-password` auf
+  - Starter-Members (StarterMembersPanel)
+  - ProfileMatchPanel
+- **Mitglieder-Dropdown Filter:** is_test via excludeIds Set (JS-seitig, nicht PostgREST `.eq(false)`)
 
 ---
 
@@ -309,6 +316,16 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
   - Rückgabe: `{ results: [{rank, ingame_name, points}] }`
 - **Slot-Positionen (deposit-Mode):** Slot 1=Cash, Slot 2=Arms, Slot 3=Cargo, Slot 4=Metal (2. von rechts), Slot 5=Diamond (ganz rechts)
 - **Bekannte Einschränkung:** Cargo auf Desktop-Screenshots < 600px Breite gelegentlich nicht erkannt
+
+---
+
+### `app/api/admin/reset-password/route.ts`
+- **Methode:** POST
+- **Auth:** Bearer Token aus `supabase.auth.getSession()` — serverseitig via `get_my_role()` RPC auf Admin geprüft
+- **Env:** `SUPABASE_SERVICE_ROLE_KEY` — Sensitive Variable in Vercel Projekt-Settings (nicht Team-Ebene)
+- **Funktion:** `adminClient.auth.admin.updateUserById(targetUserId, { password: newPassword })`
+- **Validierung:** `newPassword.length >= 6`, `targetUserId` muss gesetzt sein
+- **Sichtbar für:** nur Admin (serverseitige Rollenprüfung via `get_my_role()`)
 
 ---
 
@@ -534,7 +551,6 @@ mark_payout_paid(p_battle_report_id) → { success, message }
 ---
 
 ## 6. Navigation (Hamburger Drawer)
-
 ```typescript
 type Tab =
   | 'home'        // HomeTab (Standard)
@@ -676,6 +692,20 @@ const excludeIds = new Set((testProfiles ?? []).map((p: any) => p.id))
 // Dann im Loop: if (excludeIds.has(d.user_id)) continue
 ```
 
+### Passwort-Reset (Admin)
+```typescript
+// Immer serverseitig über API-Route — niemals Service Role Key im Frontend
+const { data: { session } } = await supabase.auth.getSession()
+const res = await fetch('/api/admin/reset-password', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer ' + (session?.access_token ?? ''),
+  },
+  body: JSON.stringify({ targetUserId, newPassword }),
+})
+```
+
 ### Template Literals vermeiden (Turbopack)
 ```typescript
 // ❌ const text = `Hallo ${name}`
@@ -683,8 +713,7 @@ const excludeIds = new Set((testProfiles ?? []).map((p: any) => p.id))
 ```
 
 ### Datei-Editierung
-- **< 300 Zeilen** → vollständige Datei
-- **> 300 Zeilen** → vollständige Datei (bevorzugt) oder str_replace-Paare
+- Immer vollständige Datei liefern (keine str_replace-Snippets)
 
 ### Kein lucide-react
 ```typescript
@@ -707,6 +736,7 @@ const excludeIds = new Set((testProfiles ?? []).map((p: any) => p.id))
 | Mitgliederliste sehen | ✅ | ✅ | ❌ |
 | AdminPanel | ✅ | ❌ | ❌ |
 | Kampfbericht hochladen | ✅ | ✅ | ❌ |
+| Passwort-Reset | ✅ | ❌ | ❌ |
 
 **Auth-Pattern:**
 - Fake-Email: `username@clanbank.local`
@@ -733,7 +763,7 @@ const excludeIds = new Set((testProfiles ?? []).map((p: any) => p.id))
 | `profiles` hat kein `deleted_at` | Soft-Delete läuft über `left_clan_at` — `.is('deleted_at', null)` weglassen |
 | `starter_members` hat kein `deleted_at` | Ebenso — Soft-Delete über `left_clan_at` |
 | `member_exemptions`: aktive Ausnahmen filtern | `WHERE is_active = true` — kein deleted_at |
-| `is_raidleiter` / `is_test` PostgREST-Filter | `.eq(false)` schließt NULL aus — JS-seitig filtern via excludeIds Set (siehe Key-Patterns) |
+| `is_test` / `is_raidleiter` PostgREST `.eq(false)` | Schließt NULL-Werte aus — immer JS-seitig filtern: `is_test=true` laden → excludeIds Set → clientseitig ausschließen |
 | UNION ALL mit ORDER BY | In Subquery wrappen: `SELECT * FROM (...) AS sub ORDER BY ...` |
 | get_members_list: manuell verknüpfte Profile nicht erkannt | LATERAL JOIN mit Fallback: `claimed_by = p.id OR (claimed_by IS NULL AND ingame_name = p.ingame_name)` |
 | Starter-Duplikate in Mitgliederliste | `NOT EXISTS` auf profiles mit gleichem ingame_name in zweiter Query |
@@ -742,6 +772,7 @@ const excludeIds = new Set((testProfiles ?? []).map((p: any) => p.id))
 | `get_fcu_overall_ranking` Typ-Konflikt | `total_points` ist `numeric` nicht `bigint` — DROP FUNCTION zuerst, dann neu anlegen |
 | FCUResultsEditor zeigt OCR-Namen | profileMap-Lookup nach loadData nötig: `profiles.ingame_name` für gematchte Spieler laden |
 | formatPoints inkonsistent zwischen Komponenten | Immer identische Implementierung verwenden (siehe Key-Patterns) — nie `toFixed(1)` für FCU-Punkte |
+| `SUPABASE_SERVICE_ROLE_KEY` fehlt in Vercel | In Vercel → Projekt-Settings (nicht Team) → Environment Variables als Sensitive Variable eintragen — Redeploy nötig |
 
 ---
 
