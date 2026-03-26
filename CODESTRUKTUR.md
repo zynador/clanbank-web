@@ -1,6 +1,6 @@
 # ClanBank — Codestruktur
 
-> **Letzte Aktualisierung:** 26.03.2026 | Fahrplan V29
+> **Letzte Aktualisierung:** 26.03.2026 | Fahrplan V30
 > **Raw-URL für neue Chat-Sessions:**
 > `https://raw.githubusercontent.com/zynador/clanbank-web/main/CODESTRUKTUR.md`
 
@@ -39,7 +39,7 @@ clanbank-web/
 │   ├── FCURankingView.tsx        ← Gesamtranking über alle FCU Events
 │   ├── FCUUploadPanel.tsx        ← Multi-Screenshot Upload + OCR pro Screen
 │   ├── HelpButton.tsx
-│   ├── HomeTab.tsx               ← Startseite (Status, Backlog, Ankündigungen, Schnellzugriff)
+│   ├── HomeTab.tsx               ← Startseite (Status, Backlog, Ankündigungen, Doppel-Podest Ranking)
 │   ├── InfoTooltip.tsx
 │   ├── Logo.tsx                  ← KEINE Props
 │   ├── MembersTab.tsx            ← Mitgliederliste (Suchfeld, Match-Dot, Filter)
@@ -99,11 +99,16 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
   - Wand der Schande (Admin + Offizier): Grid-Layout mit kompakten Mitgliederkarten (2–5 nebeneinander)
   - Klick auf Karte → Detail-Panel mit Gesamteinzahlungen + Ressourcen-Balken (lazy loaded)
   - `AnnouncementWidget` eingebettet
-  - Stats-Kacheln: letzter FCU-Rang + Clan-Einzahlungsquote
+  - **Doppel-Podest Ranking:** Bank-Ranking + FCU-Ranking nebeneinander (Top 3 Podest + Plätze 4–5 als Zeilen). Ersetzt die alten Stats-Kacheln.
   - Schnellzugriff auf alle 4 Hauptbereiche via `onNavigate`
 - **Backlog-Logik:** ISO-Kalenderwochen, keine externen Abhängigkeiten
 - **Filter:** Raidleiter (`is_raidleiter = true`) und Testaccounts (`is_test = true`) werden clientseitig herausgefiltert
 - **Raidleiter-Status:** `loadMyStatus()` prüft `is_raidleiter` zuerst → setzt sofort auf "auf dem Laufenden"
+- **Neue Hilfsfunktionen (V30):**
+  - `loadBankRanking()` — deposits-Query, filtert is_test + is_raidleiter via `excludeIds` Set, gruppiert nach user_id, Top 5
+  - `loadFcuRanking()` — ruft `get_fcu_overall_ranking` RPC auf, Top 5
+  - `avatarColor(name)` — hash-basierte Farbzuweisung (5 Farben: teal/blue/amber/purple/rose)
+  - `formatPoints(n)` — identisch zu FCURankingView: `>= 1 Mio` → `x,xx Mio`, `>= 1000` → `x,xx K`, sonst `x,xx`
 
 ---
 
@@ -136,6 +141,7 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 - **Key-Functions:** `create_announcement` RPC, `delete_announcement` RPC
 - **Anzeige:** max. 5 Einträge, angepinnte zuerst, relative Zeitanzeige
 - **Formular:** kein `<form>`-Tag — Submit via `onClick={handleSave}` auf Button "Veröffentlichen"
+- **Hinweis:** Playwright-Tests hinterlassen Test-Ankündigungen (ANGEPINNT TEST, TEST LOESCHEN) — nach Testläufen manuell über Admin-UI löschen
 
 ---
 
@@ -177,7 +183,7 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 - **Props:** `lang: Lang`, `onBack: () => void`
 - **Key-Functions:** `get_fcu_overall_ranking` RPC, Top-3 Podest, eigener Rang hervorgehoben
 - **Sortierung:** höchste Gesamtpunktzahl = Platz 1 (total_points DESC)
-- **Anzeige:** `formatPoints()` kürzt Zahlen (z.B. 2,75 K, 1,2 Mio)
+- **Anzeige:** `formatPoints()` kürzt Zahlen (z.B. 2,75 K, 1,2 Mio) — **identische Implementierung in HomeTab.tsx verwenden**
 
 ---
 
@@ -478,6 +484,7 @@ get_fcu_overall_ranking(p_clan_id)
   -- Gruppierung nach profile_id (nicht ingame_name) — verhindert Duplikate
   -- Sortierung: total_points DESC, event_count DESC
   -- Profilname via COALESCE(p.ingame_name, group_key)
+  -- Wird auch in HomeTab.tsx für das FCU-Podest-Widget verwendet
 
 reopen_fcu_event(p_fcu_event_id uuid)
   → { success, message }
@@ -646,6 +653,29 @@ sessionStorage.setItem('fcu_ocr_' + eventId, JSON.stringify(mergedRows))
 sessionStorage.removeItem('fcu_ocr_' + eventId)
 ```
 
+### formatPoints (FCU-Punkte — überall identisch verwenden)
+```typescript
+function formatPoints(n: number): string {
+  if (n >= 1000000) return (n / 1000000).toFixed(2).replace('.', ',') + ' Mio'
+  if (n >= 1000) return (n / 1000).toFixed(2).replace('.', ',') + ' K'
+  return n.toFixed(2).replace('.', ',')
+}
+// Verwendung: formatPoints(entry.total_points) + ' Pkt.'  (DE) / ' pts' (EN)
+// Identisch in FCURankingView.tsx und HomeTab.tsx implementiert
+```
+
+### Bank-Ranking Filter (is_test + is_raidleiter)
+```typescript
+// Separate Query für exclude-Liste, dann clientseitig filtern
+const { data: testProfiles } = await supabase
+  .from('profiles')
+  .select('id')
+  .eq('clan_id', profile.clan_id)
+  .or('is_test.eq.true,is_raidleiter.eq.true')
+const excludeIds = new Set((testProfiles ?? []).map((p: any) => p.id))
+// Dann im Loop: if (excludeIds.has(d.user_id)) continue
+```
+
 ### Template Literals vermeiden (Turbopack)
 ```typescript
 // ❌ const text = `Hallo ${name}`
@@ -654,7 +684,7 @@ sessionStorage.removeItem('fcu_ocr_' + eventId)
 
 ### Datei-Editierung
 - **< 300 Zeilen** → vollständige Datei
-- **> 300 Zeilen** → str_replace-Paare
+- **> 300 Zeilen** → vollständige Datei (bevorzugt) oder str_replace-Paare
 
 ### Kein lucide-react
 ```typescript
@@ -699,10 +729,11 @@ sessionStorage.removeItem('fcu_ocr_' + eventId)
 | Playwright: WelcomeModal blockiert Klicks | `waitFor({ state: 'visible' })` + `waitFor({ state: 'hidden' })` in loginAs() |
 | Playwright: Strict mode violation | Drawer-Buttons per `getByRole('navigation')` einschränken |
 | Playwright: Ankündigungen limit(5) voll | Formular-Schliessung als Erfolgsindikator verwenden |
+| Playwright: hinterlässt Test-Ankündigungen | Nach Testläufen manuell über Admin-UI löschen (× auf jede Test-Karte) |
 | `profiles` hat kein `deleted_at` | Soft-Delete läuft über `left_clan_at` — `.is('deleted_at', null)` weglassen |
 | `starter_members` hat kein `deleted_at` | Ebenso — Soft-Delete über `left_clan_at` |
 | `member_exemptions`: aktive Ausnahmen filtern | `WHERE is_active = true` — kein deleted_at |
-| `is_raidleiter` / `is_test` PostgREST-Filter | `.eq(false)` schließt NULL aus — JS-seitig filtern: `.filter(p => !p.is_raidleiter && !p.is_test)` |
+| `is_raidleiter` / `is_test` PostgREST-Filter | `.eq(false)` schließt NULL aus — JS-seitig filtern via excludeIds Set (siehe Key-Patterns) |
 | UNION ALL mit ORDER BY | In Subquery wrappen: `SELECT * FROM (...) AS sub ORDER BY ...` |
 | get_members_list: manuell verknüpfte Profile nicht erkannt | LATERAL JOIN mit Fallback: `claimed_by = p.id OR (claimed_by IS NULL AND ingame_name = p.ingame_name)` |
 | Starter-Duplikate in Mitgliederliste | `NOT EXISTS` auf profiles mit gleichem ingame_name in zweiter Query |
@@ -710,6 +741,7 @@ sessionStorage.removeItem('fcu_ocr_' + eventId)
 | FCU `–` bedeutet nicht kein Match | `–` = kein profile_id-Link (Starter-Match oder Fallback), `✓` = profile_id gesetzt |
 | `get_fcu_overall_ranking` Typ-Konflikt | `total_points` ist `numeric` nicht `bigint` — DROP FUNCTION zuerst, dann neu anlegen |
 | FCUResultsEditor zeigt OCR-Namen | profileMap-Lookup nach loadData nötig: `profiles.ingame_name` für gematchte Spieler laden |
+| formatPoints inkonsistent zwischen Komponenten | Immer identische Implementierung verwenden (siehe Key-Patterns) — nie `toFixed(1)` für FCU-Punkte |
 
 ---
 
