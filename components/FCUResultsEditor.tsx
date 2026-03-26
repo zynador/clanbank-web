@@ -32,6 +32,7 @@ export default function FCUResultsEditor({ lang, eventId, onBack }: Props) {
   const [eventInfo, setEventInfo] = useState<EventInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [reopening, setReopening] = useState(false)
   const [feedback, setFeedback] = useState('')
   const [search, setSearch] = useState('')
 
@@ -52,6 +53,8 @@ export default function FCUResultsEditor({ lang, eventId, onBack }: Props) {
     searchHint:  lang === 'de' ? 'Name suchen...' : 'Search name...',
     unmatched:   lang === 'de' ? 'Kein Profil gefunden' : 'No profile match',
     total:       lang === 'de' ? 'Einträge' : 'entries',
+    reopen:      lang === 'de' ? '✏️ Bearbeiten' : '✏️ Edit',
+    reopening:   lang === 'de' ? 'Wird geöffnet...' : 'Opening...',
   }
 
   useEffect(() => {
@@ -134,6 +137,18 @@ export default function FCUResultsEditor({ lang, eventId, onBack }: Props) {
     ))
   }
 
+  async function handleReopen() {
+    setReopening(true)
+    setFeedback("")
+    const { data, error } = await supabase.rpc("reopen_fcu_event", { p_fcu_event_id: eventId })
+    setReopening(false)
+    if (error || !data?.success) {
+      setFeedback(data?.message || (lang === "de" ? "Fehler beim Öffnen." : "Error reopening."))
+      return
+    }
+    await loadData()
+  }
+
   async function handleSave() {
     if (rows.length === 0) return
     setSaving(true)
@@ -189,11 +204,22 @@ export default function FCUResultsEditor({ lang, eventId, onBack }: Props) {
             </p>
           )}
         </div>
-        {isConfirmed && (
-          <span className="ml-auto text-xs bg-green-900/40 text-green-300 border border-green-600/40 px-2 py-0.5 rounded-full font-medium">
-            {t.confirmed}
-          </span>
-        )}
+        <div className="ml-auto flex items-center gap-2">
+          {isConfirmed && (
+            <span className="text-xs bg-green-900/40 text-green-300 border border-green-600/40 px-2 py-0.5 rounded-full font-medium">
+              {t.confirmed}
+            </span>
+          )}
+          {isConfirmed && isAdmin && (
+            <button
+              onClick={handleReopen}
+              disabled={reopening}
+              className="text-xs bg-white/10 hover:bg-white/20 text-white px-3 py-1 rounded-full border border-white/20 disabled:opacity-40"
+            >
+              {reopening ? t.reopening : t.reopen}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Statistik-Zeile */}
