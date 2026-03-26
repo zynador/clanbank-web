@@ -2,16 +2,31 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
+import { useAuth } from '@/lib/auth-context'
 import InfoTooltip from '@/components/InfoTooltip'
 import StarterMembersPanel from '@/components/StarterMembersPanel'
 
 type Lang = 'de' | 'en'
 
+type Member = {
+  id: string
+  ingame_name: string
+  display_name: string
+}
+
 export default function AdminPanel() {
+  const { user } = useAuth()
   const [lang, setLang] = useState<Lang>('de')
   const [inviteCode, setInviteCode] = useState<string | null>(null)
   const [generatingCode, setGeneratingCode] = useState(false)
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
+  // Passwort-Reset
+  const [members, setMembers] = useState<Member[]>([])
+  const [selectedUserId, setSelectedUserId] = useState<string>('')
+  const [newPassword, setNewPassword] = useState<string>('')
+  const [resetting, setResetting] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   useEffect(() => {
     try {
@@ -27,15 +42,52 @@ export default function AdminPanel() {
     }
   }, [feedback])
 
-  async function handleGenerateCode() {
-    setGeneratingCode(true)
-    const { data, error } = await supabase.rpc('generate_invite_code')
-    if (error) {
-      setFeedback({ type: 'error', text: 'Fehler: ' + error.message })
-    } else {
-      setInviteCode(data as string)
+  useEffect(() => {
+    loadMembers()
+  }, [])
+
+  async function loadMembers() {
+    const { data: clanData } = await supabase.rpc('get_my_clan_id')
+    if (!clanData) return
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, ingame_name, display_name')
+      .eq('clan_id', clanData)
+      .is('left_clan_at', null)
+      .eq('is_test', false)
+      .order('ingame_name')
+    if (!error && data) setMembers(data as Member[])
+  }
+
+  async function handleResetPassword() {
+    if (!selectedUserId || !newPassword || newPassword.length < 6) {
+      setFeedback({ type: 'error', text: lang === 'de' ? 'Mitglied wählen + Passwort mind. 6 Zeichen.' : 'Select member + password min. 6 chars.' })
+      return
     }
-    setGeneratingCode(false)
+
+    setResetting(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/admin/reset-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + (session?.access_token ?? ''),
+        },
+        body: JSON.stringify({ targetUserId: selectedUserId, newPassword }),
+      })
+      const result = await res.json()
+      if (result.success) {
+        setFeedback({ type: 'success', text: lang === 'de' ? '✅ Passwort gesetzt. Bitte an Spieler weitergeben.' : '✅ Password set. Share it with the player.' })
+        setNewPassword('')
+        setSelectedUserId('')
+      } else {
+        setFeedback({ type: 'error', text: result.message })
+      }
+    } catch {
+      setFeedback({ type: 'error', text: lang === 'de' ? 'Serverfehler.' : 'Server error.' })
+    }
+    setResetting(false)
   }
 
   const t = {
@@ -52,6 +104,16 @@ export default function AdminPanel() {
     tip_generate: {
       de: '⚠️ Nur im Notfall nutzen! Für normale Registrierungen einfach den Code MAFIA2026 weitergeben — der funktioniert immer.',
       en: '⚠️ Emergency use only! For normal registrations just share the code MAFIA2026 — that always works.',
+    },
+    pw_title:   { de: 'Passwort zurücksetzen', en: 'Reset Password' },
+    pw_select:  { de: 'Mitglied wählen…',      en: 'Select member…' },
+    pw_label:   { de: 'Neues Passwort',         en: 'New password' },
+    pw_button:  { de: 'Passwort setzen',        en: 'Set password' },
+    pw_setting: { de: 'Setze…',                 en: 'Setting…' },
+    pw_copy:    { de: 'Passwort kopieren',       en: 'Copy password' },
+    pw_tip: {
+      de: 'Setzt das Passwort eines Mitglieds direkt. Das neue Passwort per Discord o.ä. weitergeben. Das Mitglied sollte es danach selbst ändern.',
+      en: 'Sets a member\'s password directly. Share the new password via Discord etc. The member should change it afterwards.',
     },
   }
 
@@ -120,6 +182,64 @@ export default function AdminPanel() {
               </button>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Passwort zurücksetzen */}
+      <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-5">
+        <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider mb-4 flex items-center gap-1">
+          🔑 {t.pw_title[lang]}
+          <InfoTooltip de={t.pw_tip.de} en={t.pw_tip.en} lang={lang} position="bottom" />
+        </h3>
+
+        <div className="space-y-3">
+          <select
+            value={selectedUserId}
+            onChange={e => setSelectedUserId(e.target.value)}
+            className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-200 text-sm focus:outline-none focus:border-zinc-500"
+          >
+            <option value="">{t.pw_select[lang]}</option>
+            {members.map(m => (
+              <option key={m.id} value={m.id}>
+                {m.ingame_name || m.display_name}
+              </option>
+            ))}
+          </select>
+
+          <div className="flex gap-2">
+            <input
+              type={showPassword ? 'text' : 'password'}
+              placeholder={t.pw_label[lang]}
+              value={newPassword}
+              onChange={e => setNewPassword(e.target.value)}
+              className="flex-1 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-200 text-sm focus:outline-none focus:border-zinc-500 placeholder:text-zinc-600"
+            />
+            <button
+              onClick={() => setShowPassword(v => !v)}
+              className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-400 text-sm hover:bg-zinc-700 transition-colors"
+            >
+              {showPassword ? '🙈' : '👁️'}
+            </button>
+            {newPassword && (
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(newPassword)
+                  setFeedback({ type: 'success', text: t.pw_copy[lang] + ' ✓' })
+                }}
+                className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-400 text-sm hover:bg-zinc-700 transition-colors"
+              >
+                📋
+              </button>
+            )}
+          </div>
+
+          <button
+            onClick={handleResetPassword}
+            disabled={resetting || !selectedUserId || newPassword.length < 6}
+            className="w-full px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            {resetting ? t.pw_setting[lang] : '🔑 ' + t.pw_button[lang]}
+          </button>
         </div>
       </div>
 
