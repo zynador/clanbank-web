@@ -59,12 +59,22 @@ export default function AdminPanel() {
     if (!error && data) setMembers(data as Member[])
   }
 
+  async function handleGenerateCode() {
+    setGeneratingCode(true)
+    const { data, error } = await supabase.rpc('generate_invite_code')
+    if (error) {
+      setFeedback({ type: 'error', text: 'Fehler: ' + error.message })
+    } else {
+      setInviteCode(data as string)
+    }
+    setGeneratingCode(false)
+  }
+
   async function handleResetPassword() {
     if (!selectedUserId || !newPassword || newPassword.length < 6) {
       setFeedback({ type: 'error', text: lang === 'de' ? 'Mitglied wählen + Passwort mind. 6 Zeichen.' : 'Select member + password min. 6 chars.' })
       return
     }
-
     setResetting(true)
     try {
       const { data: { session } } = await supabase.auth.getSession()
