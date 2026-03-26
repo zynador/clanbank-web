@@ -18,6 +18,7 @@ type RankingRow = {
   rank_sum: number
   avg_rank: number
   best_rank: number
+  total_points: number
 }
 
 export default function FCURankingView({ lang, onBack }: Props) {
@@ -27,17 +28,16 @@ export default function FCURankingView({ lang, onBack }: Props) {
   const [search, setSearch] = useState('')
 
   const t = {
-    title:      lang === 'de' ? 'FCU Gesamtranking' : 'FCU Overall Ranking',
-    back:       lang === 'de' ? '← Zurück' : '← Back',
-    name:       lang === 'de' ? 'Spieler' : 'Player',
-    events:     lang === 'de' ? 'Events' : 'Events',
-    rankSum:    lang === 'de' ? 'Rang-Summe' : 'Rank Sum',
-    avgRank:    lang === 'de' ? 'Ø Rang' : 'Avg Rank',
-    bestRank:   lang === 'de' ? 'Bester' : 'Best',
-    noData:     lang === 'de' ? 'Noch keine bestätigten Events.' : 'No confirmed events yet.',
-    searchHint: lang === 'de' ? 'Spieler suchen...' : 'Search player...',
-    hint:       lang === 'de' ? 'Niedrigste Rang-Summe = Bester Platz' : 'Lowest rank sum = best position',
-    myRank:     lang === 'de' ? 'Mein Rang' : 'My Rank',
+    title:       lang === 'de' ? 'FCU Gesamtranking' : 'FCU Overall Ranking',
+    back:        lang === 'de' ? '← Zurück' : '← Back',
+    name:        lang === 'de' ? 'Spieler' : 'Player',
+    events:      lang === 'de' ? 'Events' : 'Events',
+    totalPoints: lang === 'de' ? 'Punkte' : 'Points',
+    bestRank:    lang === 'de' ? 'Bester' : 'Best',
+    noData:      lang === 'de' ? 'Noch keine bestätigten Events.' : 'No confirmed events yet.',
+    searchHint:  lang === 'de' ? 'Spieler suchen...' : 'Search player...',
+    hint:        lang === 'de' ? 'Höchste Gesamtpunktzahl = Bester Platz' : 'Highest total points = best position',
+    myRank:      lang === 'de' ? 'Mein Rang' : 'My Rank',
   }
 
   useEffect(() => {
@@ -64,6 +64,12 @@ export default function FCURankingView({ lang, onBack }: Props) {
         r.profile_id === profile.id
       ) + 1
     : 0
+
+  function formatPoints(n: number): string {
+    if (n >= 1000000) return (n / 1000000).toFixed(1).replace('.', ',') + ' Mio'
+    if (n >= 1000) return (n / 1000).toFixed(0) + ' K'
+    return n.toString()
+  }
 
   return (
     <div className="p-4 space-y-4">
@@ -113,7 +119,7 @@ export default function FCURankingView({ lang, onBack }: Props) {
                 <div className="text-2xl">{medal}</div>
                 <div className="text-xs font-medium mt-1 truncate text-white">{row.ingame_name}</div>
                 <div className="text-xs text-gray-300 mt-0.5">
-                  {lang === 'de' ? 'Summe: ' : 'Sum: '}{row.rank_sum}
+                  {formatPoints(row.total_points)} {lang === 'de' ? 'Pkt.' : 'pts'}
                 </div>
                 <div className="text-xs text-gray-400">
                   {row.event_count + (lang === 'de' ? ' Events' : ' events')}
@@ -148,7 +154,7 @@ export default function FCURankingView({ lang, onBack }: Props) {
             <div className="col-span-1">#</div>
             <div className="col-span-5">{t.name}</div>
             <div className="col-span-2 text-center">{t.events}</div>
-            <div className="col-span-2 text-center">{t.rankSum}</div>
+            <div className="col-span-2 text-center">{t.totalPoints}</div>
             <div className="col-span-2 text-center">{t.bestRank}</div>
           </div>
 
@@ -189,9 +195,9 @@ export default function FCURankingView({ lang, onBack }: Props) {
                   {row.event_count}
                 </div>
 
-                {/* Rang-Summe */}
+                {/* Punkte */}
                 <div className="col-span-2 text-center text-xs font-medium text-white">
-                  {row.rank_sum}
+                  {formatPoints(row.total_points)}
                 </div>
 
                 {/* Bester Rang */}
