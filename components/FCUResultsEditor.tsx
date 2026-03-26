@@ -76,7 +76,30 @@ export default function FCUResultsEditor({ lang, eventId, onBack }: Props) {
       .order('rank', { ascending: true })
 
     if (dbRows && dbRows.length > 0) {
-      setRows(dbRows.map(r => ({ ...r, dirty: false })))
+      // Profilnamen für gematchte Spieler laden
+      const profileIds = dbRows
+        .filter(r => r.profile_id)
+        .map(r => r.profile_id as string)
+
+      let profileMap: Record<string, string> = {}
+      if (profileIds.length > 0) {
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('id, ingame_name')
+          .in('id', profileIds)
+        if (profileData) {
+          profileData.forEach(p => {
+            profileMap[p.id] = p.ingame_name
+          })
+        }
+      }
+
+      setRows(dbRows.map(r => ({
+        ...r,
+        // Profilname verwenden wenn vorhanden, sonst OCR-Name
+        ingame_name: (r.profile_id && profileMap[r.profile_id]) ? profileMap[r.profile_id] : r.ingame_name,
+        dirty: false,
+      })))
       setLoading(false)
       return
     }
@@ -130,7 +153,6 @@ export default function FCUResultsEditor({ lang, eventId, onBack }: Props) {
     setSaving(false)
 
     if (error || !data?.success) {
-      console.error('save_fcu_results error:', JSON.stringify(error), JSON.stringify(data))
       setFeedback(
         data?.message ||
         error?.message ||
@@ -156,19 +178,19 @@ export default function FCUResultsEditor({ lang, eventId, onBack }: Props) {
 
       {/* Header */}
       <div className="flex items-center gap-3">
-        <button onClick={onBack} className="text-sm text-gray-500 hover:text-gray-700">
+        <button onClick={onBack} className="text-sm text-gray-400 hover:text-gray-200">
           {t.back}
         </button>
         <div>
-          <h2 className="text-lg font-semibold">{t.title}</h2>
+          <h2 className="text-lg font-semibold text-white">{t.title}</h2>
           {eventInfo && (
-            <p className="text-xs text-gray-500 mt-0.5">
+            <p className="text-xs text-gray-400 mt-0.5">
               {eventInfo.event_name + ' · ' + new Date(eventInfo.event_date).toLocaleDateString('de-DE')}
             </p>
           )}
         </div>
         {isConfirmed && (
-          <span className="ml-auto text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full font-medium">
+          <span className="ml-auto text-xs bg-green-900/40 text-green-300 border border-green-600/40 px-2 py-0.5 rounded-full font-medium">
             {t.confirmed}
           </span>
         )}
@@ -176,10 +198,10 @@ export default function FCUResultsEditor({ lang, eventId, onBack }: Props) {
 
       {/* Statistik-Zeile */}
       {rows.length > 0 && (
-        <div className="flex gap-3 text-xs text-gray-500">
+        <div className="flex gap-3 text-xs text-gray-400">
           <span>{rows.length + ' ' + t.total}</span>
           {unmatchedCount > 0 && isAdmin && isConfirmed && (
-            <span className="text-amber-600">
+            <span className="text-amber-400">
               {'⚠️ ' + unmatchedCount + (lang === 'de' ? ' ohne Profilmatch' : ' unmatched')}
             </span>
           )}
@@ -193,7 +215,7 @@ export default function FCUResultsEditor({ lang, eventId, onBack }: Props) {
           placeholder={t.searchHint}
           value={search}
           onChange={e => setSearch(e.target.value)}
-          className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-gray-900 placeholder-gray-400"
+          className="w-full border border-white/20 rounded px-3 py-2 text-sm bg-white/5 text-white placeholder-gray-500 focus:outline-none focus:border-white/40"
         />
       )}
 
@@ -201,11 +223,11 @@ export default function FCUResultsEditor({ lang, eventId, onBack }: Props) {
       {loading ? (
         <p className="text-sm text-gray-400">...</p>
       ) : rows.length === 0 ? (
-        <p className="text-sm text-gray-500">{t.noRows}</p>
+        <p className="text-sm text-gray-400">{t.noRows}</p>
       ) : (
         <div className="space-y-1">
           {/* Kopfzeile */}
-          <div className="grid grid-cols-12 gap-1 px-2 py-1 text-xs text-gray-400 font-medium">
+          <div className="grid grid-cols-12 gap-1 px-2 py-1 text-xs text-gray-500 font-medium">
             <div className="col-span-1">{t.rank}</div>
             <div className="col-span-7">{t.name}</div>
             <div className="col-span-3 text-right">{t.points}</div>
@@ -216,12 +238,14 @@ export default function FCUResultsEditor({ lang, eventId, onBack }: Props) {
             <div
               key={row.rank}
               className={
-                'grid grid-cols-12 gap-1 px-2 py-1.5 rounded items-center text-sm ' +
-                (row.rank <= 3 ? 'bg-amber-50 border border-amber-200' : 'bg-white border border-gray-100')
+                'grid grid-cols-12 gap-1 px-2 py-1.5 rounded items-center text-sm border ' +
+                (row.rank <= 3
+                  ? 'bg-amber-900/20 border-amber-600/30'
+                  : 'bg-white/5 border-white/10')
               }
             >
               {/* Rang */}
-              <div className="col-span-1 font-medium text-xs text-gray-600">
+              <div className="col-span-1 font-medium text-xs text-gray-300">
                 {row.rank <= 3
                   ? (row.rank === 1 ? '🥇' : row.rank === 2 ? '🥈' : '🥉')
                   : row.rank}
@@ -234,10 +258,10 @@ export default function FCUResultsEditor({ lang, eventId, onBack }: Props) {
                     type="text"
                     value={row.ingame_name}
                     onChange={e => updateName(row.rank, e.target.value)}
-                    className="w-full text-xs text-gray-900 border-b border-gray-200 bg-transparent focus:outline-none focus:border-blue-400 py-0.5"
+                    className="w-full text-xs text-white border-b border-white/20 bg-transparent focus:outline-none focus:border-blue-400 py-0.5"
                   />
                 ) : (
-                  <span className="text-xs text-gray-800 break-all">{row.ingame_name}</span>
+                  <span className="text-xs text-white break-all">{row.ingame_name}</span>
                 )}
               </div>
 
@@ -248,19 +272,19 @@ export default function FCUResultsEditor({ lang, eventId, onBack }: Props) {
                     type="number"
                     value={row.points}
                     onChange={e => updatePoints(row.rank, Number(e.target.value))}
-                    className="w-full text-xs text-right text-gray-900 border-b border-gray-200 bg-transparent focus:outline-none focus:border-blue-400 py-0.5"
+                    className="w-full text-xs text-right text-white border-b border-white/20 bg-transparent focus:outline-none focus:border-blue-400 py-0.5"
                   />
                 ) : (
-                  <span className="text-xs text-gray-800">{row.points.toLocaleString('de-DE')}</span>
+                  <span className="text-xs text-gray-200">{row.points.toLocaleString('de-DE')}</span>
                 )}
               </div>
 
               {/* Profilmatch */}
               <div className="col-span-1 text-center text-xs">
                 {row.profile_id ? (
-                  <span className="text-green-500">✓</span>
+                  <span className="text-green-400">✓</span>
                 ) : (
-                  <span className="text-gray-300">–</span>
+                  <span className="text-gray-600">–</span>
                 )}
               </div>
             </div>
@@ -271,7 +295,7 @@ export default function FCUResultsEditor({ lang, eventId, onBack }: Props) {
       {/* Feedback */}
       {feedback && (
         <p className={
-          'text-sm ' + (feedback.startsWith('✅') ? 'text-green-600' : 'text-red-600')
+          'text-sm ' + (feedback.startsWith('✅') ? 'text-green-400' : 'text-red-400')
         }>
           {feedback}
         </p>
