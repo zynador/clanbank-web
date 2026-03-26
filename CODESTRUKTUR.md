@@ -1,6 +1,6 @@
 # ClanBank — Codestruktur
 
-> **Letzte Aktualisierung:** 25.03.2026 | Fahrplan V27
+> **Letzte Aktualisierung:** 26.03.2026 | Fahrplan V29
 > **Raw-URL für neue Chat-Sessions:**
 > `https://raw.githubusercontent.com/zynador/clanbank-web/main/CODESTRUKTUR.md`
 
@@ -164,17 +164,20 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 - **Props:** `lang: Lang`, `eventId: string`, `onBack: () => void`
 - **Key-Functions:**
   - Lädt DB-Ergebnisse (falls vorhanden) sonst `sessionStorage`
+  - Nach DB-Laden: profileMap-Lookup — `profiles.ingame_name` für gematchte Spieler (statt OCR-Name)
   - Admin bei `draft`: Namen + Punkte inline editierbar
   - Profilmatch-Indikator (✓ / –)
   - `save_fcu_results` RPC → Namensabgleich serverseitig
   - `sessionStorage` nach Speichern geleert
+  - **Bearbeiten-Button** (nur Admin, nur bei `confirmed`): ruft `reopen_fcu_event` RPC auf → setzt status zurück auf `draft`
 
 ---
 
 ### `FCURankingView.tsx`
 - **Props:** `lang: Lang`, `onBack: () => void`
 - **Key-Functions:** `get_fcu_overall_ranking` RPC, Top-3 Podest, eigener Rang hervorgehoben
-- **Sortierung:** niedrigste Rang-Summe = Platz 1
+- **Sortierung:** höchste Gesamtpunktzahl = Platz 1 (total_points DESC)
+- **Anzeige:** `formatPoints()` kürzt Zahlen (z.B. 2,75 K, 1,2 Mio)
 
 ---
 
@@ -292,7 +295,9 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 | `fcu` | FCU-Rangliste — Rang, Name (ohne Präfix), Punkte (ohne Tausenderpunkt) |
 
 - **FCU-Besonderheiten:**
-  - Präfix `#171 [1Ca]` wird gestrippt
+  - Beliebige Clan-Tags (`[1Ca]`, `#171` etc.) werden gestrippt
+  - Sonderzeichen/Unicode im Namen exakt übernehmen (nicht normalisieren)
+  - `...` am Namensende beibehalten (wird für Prefix-Match genutzt)
   - `"2.753"` → `2753`
   - Spalte 4 "Annehmen" ignorieren
   - Rückgabe: `{ results: [{rank, ingame_name, points}] }`
@@ -350,6 +355,7 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 | role | enum | mitglied / offizier / admin |
 | status | enum | `unclaimed` / `claimed` / `confirmed` / `rejected` |
 | claimed_by | uuid | → profiles.id (nullable) |
+| ocr_alias | text | Alternative OCR-Schreibweise für Sonderzeichen-Namen (nullable) |
 | left_clan_at | timestamptz | Soft-Delete (kein deleted_at!) |
 
 **Achtung:** `starter_members` hat KEIN `deleted_at` — Soft-Delete läuft über `left_clan_at`
@@ -461,11 +467,21 @@ create_fcu_event(p_clan_id, p_event_name, p_event_date)
 
 save_fcu_results(p_fcu_event_id, p_results jsonb)
   → { success, message }
-  -- Namensabgleich: exakt → ILIKE prefix%
+  -- 6 Match-Stufen: (1) exakt profiles, (2) prefix profiles+...,
+  -- (3) exakt starter_members, (4) prefix starter_members+...,
+  -- (5) ocr_alias exakt+prefix, (6) prefix ohne ... (mind. 6 Zeichen)
+  -- ✓ im UI = profile_id Match | – = Starter-Match oder Fallback
   -- Setzt status auf 'confirmed'
 
 get_fcu_overall_ranking(p_clan_id)
-  → TABLE(ingame_name, profile_id, event_count, rank_sum, avg_rank, best_rank)
+  → TABLE(ingame_name, profile_id, event_count, rank_sum, avg_rank, best_rank, total_points numeric)
+  -- Gruppierung nach profile_id (nicht ingame_name) — verhindert Duplikate
+  -- Sortierung: total_points DESC, event_count DESC
+  -- Profilname via COALESCE(p.ingame_name, group_key)
+
+reopen_fcu_event(p_fcu_event_id uuid)
+  → { success, message }
+  -- Nur Admin. Setzt fcu_events.status = 'draft' → Editor wieder editierbar
 
 create_announcement(p_clan_id, p_title, p_content, p_pinned)
   → { success, message }
@@ -690,6 +706,10 @@ sessionStorage.removeItem('fcu_ocr_' + eventId)
 | UNION ALL mit ORDER BY | In Subquery wrappen: `SELECT * FROM (...) AS sub ORDER BY ...` |
 | get_members_list: manuell verknüpfte Profile nicht erkannt | LATERAL JOIN mit Fallback: `claimed_by = p.id OR (claimed_by IS NULL AND ingame_name = p.ingame_name)` |
 | Starter-Duplikate in Mitgliederliste | `NOT EXISTS` auf profiles mit gleichem ingame_name in zweiter Query |
+| FCU `ocr_alias`: muss tatsächlichen OCR-Output enthalten | Nicht phonetische Vereinfachung — exakt den String eintragen, den OCR ausgibt |
+| FCU `–` bedeutet nicht kein Match | `–` = kein profile_id-Link (Starter-Match oder Fallback), `✓` = profile_id gesetzt |
+| `get_fcu_overall_ranking` Typ-Konflikt | `total_points` ist `numeric` nicht `bigint` — DROP FUNCTION zuerst, dann neu anlegen |
+| FCUResultsEditor zeigt OCR-Namen | profileMap-Lookup nach loadData nötig: `profiles.ingame_name` für gematchte Spieler laden |
 
 ---
 
