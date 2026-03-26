@@ -39,21 +39,32 @@ type MemberDetail = {
   per_resource: Record<ResourceType, number>
 }
 
+type RankingEntry = {
+  user_id: string
+  ingame_name: string
+  total_amount: number
+}
+
+type FcuRankingEntry = {
+  ingame_name: string
+  total_points: number
+}
+
 const RESOURCES: ResourceType[] = ['cash', 'arms', 'cargo', 'metal', 'diamond']
 
 const RESOURCE_LABELS: Record<ResourceType, { emoji: string; label: string }> = {
-  cash:    { emoji: '💵', label: 'Cash' },
-  arms:    { emoji: '🔫', label: 'Arms' },
-  cargo:   { emoji: '📦', label: 'Cargo' },
-  metal:   { emoji: '⚙️', label: 'Metal' },
+  cash: { emoji: '💵', label: 'Cash' },
+  arms: { emoji: '🔫', label: 'Arms' },
+  cargo: { emoji: '📦', label: 'Cargo' },
+  metal: { emoji: '⚙️', label: 'Metal' },
   diamond: { emoji: '💎', label: 'Diamond' },
 }
 
 const RESOURCE_COLORS: Record<ResourceType, string> = {
-  cash:    'bg-yellow-100 text-yellow-800',
-  arms:    'bg-red-100 text-red-800',
-  cargo:   'bg-cyan-100 text-cyan-800',
-  metal:   'bg-gray-200 text-gray-700',
+  cash: 'bg-yellow-100 text-yellow-800',
+  arms: 'bg-red-100 text-red-800',
+  cargo: 'bg-cyan-100 text-cyan-800',
+  metal: 'bg-gray-200 text-gray-700',
   diamond: 'bg-purple-100 text-purple-800',
 }
 
@@ -93,30 +104,37 @@ export default function HomeTab({ lang, onNavigate }: Props) {
   const [detail, setDetail] = useState<MemberDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [threshold, setThreshold] = useState(0)
+  const [bankRanking, setBankRanking] = useState<RankingEntry[]>([])
+  const [fcuRanking, setFcuRanking] = useState<FcuRankingEntry[]>([])
 
   const isAdmin = profile?.role === 'admin'
   const isOfficer = profile?.role === 'offizier'
 
   const t = {
-    greeting:     lang === 'de' ? 'Willkommen' : 'Welcome',
-    statusOk:     lang === 'de' ? 'Clanbank: Du bist auf dem Laufenden' : 'Clanbank: You are up to date',
+    greeting: lang === 'de' ? 'Willkommen' : 'Welcome',
+    statusOk: lang === 'de' ? 'Clanbank: Du bist auf dem Laufenden' : 'Clanbank: You are up to date',
     statusBehind: lang === 'de' ? 'Clanbank: Du bist im Rückstand!' : 'Clanbank: You are behind!',
-    weeksBehind:  lang === 'de' ? 'Wochen fehlen' : 'weeks missing',
-    missingRes:   lang === 'de' ? 'Fehlende Ressourcen:' : 'Missing resources:',
+    weeksBehind: lang === 'de' ? 'Wochen fehlen' : 'weeks missing',
+    missingRes: lang === 'de' ? 'Fehlende Ressourcen:' : 'Missing resources:',
     backlogTitle: lang === 'de' ? 'Clanbank-Rückstand' : 'Clanbank backlog',
-    paid:         lang === 'de' ? 'bezahlt' : 'paid',
-    noBacklog:    lang === 'de' ? 'Alle Mitglieder haben eingezahlt.' : 'All members have paid.',
+    paid: lang === 'de' ? 'bezahlt' : 'paid',
+    noBacklog: lang === 'de' ? 'Alle Mitglieder haben eingezahlt.' : 'All members have paid.',
     quickActions: lang === 'de' ? 'Schnellzugriff' : 'Quick Actions',
-    deposit:      lang === 'de' ? 'Einzahlen' : 'Deposit',
-    battle:       lang === 'de' ? 'Kampfbericht' : 'Battle Report',
-    ranking:      lang === 'de' ? 'Ranking' : 'Ranking',
-    fcu:          lang === 'de' ? 'FCU' : 'FCU',
-    lastFcu:      lang === 'de' ? 'Letztes FCU' : 'Last FCU',
-    weeksShort:   lang === 'de' ? 'KW' : 'W',
-    close:        lang === 'de' ? '✕ schließen' : '✕ close',
-    totalAll:     lang === 'de' ? 'Gesamt eingezahlt' : 'Total deposited',
-    schwellwert:  lang === 'de' ? 'Schwellwert / Res.' : 'Threshold / res.',
-    behind:       lang === 'de' ? 'Rückstand' : 'behind',
+    deposit: lang === 'de' ? 'Einzahlen' : 'Deposit',
+    battle: lang === 'de' ? 'Kampfbericht' : 'Battle Report',
+    ranking: lang === 'de' ? 'Ranking' : 'Ranking',
+    fcu: lang === 'de' ? 'FCU' : 'FCU',
+    lastFcu: lang === 'de' ? 'Letztes FCU' : 'Last FCU',
+    weeksShort: lang === 'de' ? 'KW' : 'W',
+    close: lang === 'de' ? '✕ schließen' : '✕ close',
+    totalAll: lang === 'de' ? 'Gesamt eingezahlt' : 'Total deposited',
+    schwellwert: lang === 'de' ? 'Schwellwert / Res.' : 'Threshold / res.',
+    behind: lang === 'de' ? 'Rückstand' : 'behind',
+    bankRanking: lang === 'de' ? '🏦 Bank-Ranking' : '🏦 Bank Ranking',
+    fcuRanking: lang === 'de' ? '🎯 FCU-Ranking' : '🎯 FCU Ranking',
+    more: lang === 'de' ? '→ Mehr' : '→ More',
+    noData: lang === 'de' ? 'Noch keine Daten' : 'No data yet',
+    noFcuData: lang === 'de' ? 'Noch keine FCU-Daten' : 'No FCU data yet',
   }
 
   useEffect(() => {
@@ -127,7 +145,7 @@ export default function HomeTab({ lang, onNavigate }: Props) {
     setLoading(true)
     const kw = getISOWeek(new Date())
     setThreshold((kw - 2) * 5_000_000)
-    await Promise.all([loadMyStatus(), loadBacklog(), loadLastFcu()])
+    await Promise.all([loadMyStatus(), loadBacklog(), loadLastFcu(), loadBankRanking(), loadFcuRanking()])
     setLoading(false)
   }
 
@@ -141,7 +159,6 @@ export default function HomeTab({ lang, onNavigate }: Props) {
     const currentKw = getISOWeek(now)
     const since = new Date()
     since.setDate(since.getDate() - 28)
-
     const { data: myDeposits } = await supabase
       .from('deposits')
       .select('resource_type, created_at')
@@ -149,44 +166,36 @@ export default function HomeTab({ lang, onNavigate }: Props) {
       .eq('status', 'approved')
       .gte('created_at', since.toISOString())
       .is('deleted_at', null)
-
     const paid = new Set<string>()
     for (const d of myDeposits ?? []) {
       const kw = getISOWeek(new Date(d.created_at))
       paid.add(d.resource_type + '_' + kw)
     }
-
     const missing: ResourceType[] = []
     for (const res of RESOURCES) {
       if (!paid.has(res + '_' + currentKw) && !paid.has(res + '_' + (currentKw - 1))) {
         missing.push(res)
       }
     }
-
     let weeksBehind = 0
     for (let w = currentKw - 1; w >= currentKw - 4; w--) {
       const hasAny = RESOURCES.some(r => paid.has(r + '_' + w))
       if (!hasAny) weeksBehind++
       else break
     }
-
     setMyStatus({ weeks_behind: weeksBehind, missing_resources: missing })
   }
 
   async function loadBacklog() {
     if (!profile?.clan_id) return
-
     const { data: allProfiles } = await supabase
       .from('profiles')
       .select('id, ingame_name, is_raidleiter, is_test')
       .eq('clan_id', profile.clan_id)
-
     const profiles = (allProfiles ?? []).filter(p => !(p as any).is_raidleiter && !(p as any).is_test)
     setTotalMembers(profiles.length)
-
     const since = new Date()
     since.setDate(since.getDate() - 28)
-
     const { data: deposits } = await supabase
       .from('deposits')
       .select('user_id, resource_type, created_at')
@@ -194,43 +203,39 @@ export default function HomeTab({ lang, onNavigate }: Props) {
       .eq('status', 'approved')
       .gte('created_at', since.toISOString())
       .is('deleted_at', null)
-
     const now = new Date()
     const currentKw = getISOWeek(now)
-
     const paidSet = new Set<string>()
     for (const d of deposits ?? []) {
       const kw = getISOWeek(new Date(d.created_at))
       paidSet.add(d.user_id + '_' + d.resource_type + '_' + kw)
     }
-
     const behind: BacklogMember[] = []
     let paidThisKw = 0
-
     for (const p of profiles) {
       if (p.id === profile.id) continue
-
       let weeksBehind = 0
       for (let w = currentKw - 1; w >= currentKw - 4; w--) {
         const hasAny = RESOURCES.some(r => paidSet.has(p.id + '_' + r + '_' + w))
         if (!hasAny) weeksBehind++
         else break
       }
-
       const missing: ResourceType[] = []
       for (const res of RESOURCES) {
         const hasThisKw = paidSet.has(p.id + '_' + res + '_' + currentKw)
         const hasLastKw = paidSet.has(p.id + '_' + res + '_' + (currentKw - 1))
         if (!hasThisKw && !hasLastKw) missing.push(res)
       }
-
       if (weeksBehind === 0) paidThisKw++
-
       if (weeksBehind > 0 || missing.length > 0) {
-        behind.push({ user_id: p.id, ingame_name: p.ingame_name, weeks_behind: weeksBehind, missing_resources: missing })
+        behind.push({
+          user_id: p.id,
+          ingame_name: p.ingame_name,
+          weeks_behind: weeksBehind,
+          missing_resources: missing,
+        })
       }
     }
-
     setPaidCount(paidThisKw)
     behind.sort((a, b) => b.weeks_behind - a.weeks_behind)
     setBacklog(behind)
@@ -244,14 +249,12 @@ export default function HomeTab({ lang, onNavigate }: Props) {
     }
     setSelectedId(member.user_id)
     setDetailLoading(true)
-
     const { data } = await supabase
       .from('deposits')
       .select('resource_type, amount')
       .eq('user_id', member.user_id)
       .eq('status', 'approved')
       .is('deleted_at', null)
-
     const perResource: Record<ResourceType, number> = { cash: 0, arms: 0, cargo: 0, metal: 0, diamond: 0 }
     let totalAllTime = 0
     for (const d of data ?? []) {
@@ -261,14 +264,18 @@ export default function HomeTab({ lang, onNavigate }: Props) {
         totalAllTime += d.amount
       }
     }
-
-    setDetail({ user_id: member.user_id, ingame_name: member.ingame_name, weeks_behind: member.weeks_behind, total_all_time: totalAllTime, per_resource: perResource })
+    setDetail({
+      user_id: member.user_id,
+      ingame_name: member.ingame_name,
+      weeks_behind: member.weeks_behind,
+      total_all_time: totalAllTime,
+      per_resource: perResource,
+    })
     setDetailLoading(false)
   }
 
   async function loadLastFcu() {
     if (!profile?.clan_id) return
-
     const { data: events } = await supabase
       .from('fcu_events')
       .select('id, event_name')
@@ -276,18 +283,67 @@ export default function HomeTab({ lang, onNavigate }: Props) {
       .eq('status', 'confirmed')
       .order('event_date', { ascending: false })
       .limit(1)
-
     if (!events || events.length === 0) return
     const ev = events[0]
-
     const { data: result } = await supabase
       .from('fcu_results')
       .select('rank')
       .eq('fcu_event_id', ev.id)
       .eq('profile_id', profile.id)
       .single()
-
     setLastFcu({ event_name: ev.event_name, rank: result?.rank ?? null })
+  }
+
+  function avatarColor(name: string): { bg: string; text: string } {
+    const palette = [
+      { bg: 'bg-teal-100', text: 'text-teal-700' },
+      { bg: 'bg-blue-100', text: 'text-blue-700' },
+      { bg: 'bg-amber-100', text: 'text-amber-700' },
+      { bg: 'bg-purple-100', text: 'text-purple-700' },
+      { bg: 'bg-rose-100', text: 'text-rose-700' },
+    ]
+    return palette[(name.charCodeAt(0) || 0) % palette.length]
+  }
+
+  async function loadBankRanking() {
+    if (!profile?.clan_id) return
+    const { data: testProfiles } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('clan_id', profile.clan_id)
+      .or('is_test.eq.true,is_raidleiter.eq.true')
+    const excludeIds = new Set((testProfiles ?? []).map((p: any) => p.id))
+    const { data } = await supabase
+      .from('deposits')
+      .select('user_id, amount, profiles!deposits_user_id_fkey(ingame_name)')
+      .eq('clan_id', profile.clan_id)
+      .eq('status', 'approved')
+      .is('deleted_at', null)
+    if (!data) return
+    const totals: Record<string, { ingame_name: string; total: number }> = {}
+    for (const d of data) {
+      if (excludeIds.has(d.user_id)) continue
+      const name = (d as any).profiles?.ingame_name ?? '?'
+      if (!totals[d.user_id]) totals[d.user_id] = { ingame_name: name, total: 0 }
+      totals[d.user_id].total += d.amount
+    }
+    const sorted = Object.entries(totals)
+      .map(([user_id, v]) => ({ user_id, ingame_name: v.ingame_name, total_amount: v.total }))
+      .sort((a, b) => b.total_amount - a.total_amount)
+      .slice(0, 5)
+    setBankRanking(sorted)
+  }
+
+  async function loadFcuRanking() {
+    if (!profile?.clan_id) return
+    const { data } = await supabase.rpc('get_fcu_overall_ranking', { p_clan_id: profile.clan_id })
+    if (!data) return
+    setFcuRanking(
+      (data as any[]).slice(0, 5).map(d => ({
+        ingame_name: d.ingame_name as string,
+        total_points: Number(d.total_points),
+      }))
+    )
   }
 
   function getISOWeek(date: Date): number {
@@ -348,14 +404,12 @@ export default function HomeTab({ lang, onNavigate }: Props) {
       {/* Wand der Schande */}
       {(isAdmin || isOfficer) && (
         <div className={'rounded-xl p-3 space-y-3 border ' + (backlog.length > 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200')}>
-
           <div className="flex items-center justify-between">
             <p className="text-sm font-medium text-gray-800">{'⚠️ ' + t.backlogTitle}</p>
             {totalMembers > 0 && (
               <span className="text-xs text-gray-500">{paidCount + '/' + totalMembers + ' ' + t.paid}</span>
             )}
           </div>
-
           {backlog.length === 0 ? (
             <p className="text-xs text-green-700">{t.noBacklog}</p>
           ) : (
@@ -366,7 +420,8 @@ export default function HomeTab({ lang, onNavigate }: Props) {
                   <button
                     key={member.user_id}
                     onClick={() => loadDetail(member)}
-                    className={'text-left bg-white rounded-lg px-2.5 py-2 border transition-colors ' + (selectedId === member.user_id ? 'border-gray-400' : 'border-gray-100 hover:border-gray-300')}
+                    className={'text-left bg-white rounded-lg px-2.5 py-2 border transition-colors ' +
+                      (selectedId === member.user_id ? 'border-gray-400' : 'border-gray-100 hover:border-gray-300')}
                   >
                     <div className="flex items-center gap-1.5 mb-1.5">
                       <div className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center text-xs font-medium text-red-700 flex-shrink-0">
@@ -416,7 +471,6 @@ export default function HomeTab({ lang, onNavigate }: Props) {
                           {t.close}
                         </button>
                       </div>
-
                       <div className="grid grid-cols-2 gap-2">
                         <div className="bg-gray-50 rounded-lg px-3 py-2">
                           <p className="text-xs text-gray-500 mb-0.5">{t.totalAll}</p>
@@ -427,7 +481,6 @@ export default function HomeTab({ lang, onNavigate }: Props) {
                           <p className="text-lg font-semibold text-gray-800">{fmtMio(threshold)}</p>
                         </div>
                       </div>
-
                       <div className="space-y-2">
                         {RESOURCES.map(res => {
                           const val = detail.per_resource[res]
@@ -458,24 +511,157 @@ export default function HomeTab({ lang, onNavigate }: Props) {
       {/* Ankündigungen */}
       <AnnouncementWidget lang={lang} />
 
-      {/* Stats-Zeile */}
+      {/* Doppel-Podest Ranking */}
       <div className="grid grid-cols-2 gap-2">
-        {lastFcu && (
-          <div className="bg-white border border-gray-100 rounded-xl p-3">
-            <p className="text-xs text-gray-500">{t.lastFcu}</p>
-            <p className="text-lg font-semibold text-gray-800 mt-0.5">
-              {lastFcu.rank ? ('#' + lastFcu.rank) : '–'}
-            </p>
-            <p className="text-xs text-gray-400 truncate">{lastFcu.event_name}</p>
-          </div>
-        )}
+
+        {/* Bank-Ranking */}
         <div className="bg-white border border-gray-100 rounded-xl p-3">
-          <p className="text-xs text-gray-500">{lang === 'de' ? 'Clan' : 'Clan'}</p>
-          <p className="text-lg font-semibold text-gray-800 mt-0.5">
-            {totalMembers > 0 ? Math.round(paidCount / totalMembers * 100) + '%' : '–'}
-          </p>
-          <p className="text-xs text-gray-400">{lang === 'de' ? 'haben eingezahlt' : 'have paid'}</p>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-medium text-gray-500">{t.bankRanking}</p>
+            <button onClick={() => onNavigate('ranking')} className="text-xs text-teal-600 hover:underline">
+              {t.more}
+            </button>
+          </div>
+          {bankRanking.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-4">{t.noData}</p>
+          ) : (
+            <>
+              <div className="grid grid-cols-3 gap-1 items-end mb-2">
+                {[1, 0, 2].map((i: number) => {
+                  const entry = bankRanking[i]
+                  if (!entry) return <div key={i} />
+                  const ac = avatarColor(entry.ingame_name)
+                  const isGold = i === 0
+                  const isSilver = i === 1
+                  return (
+                    <div
+                      key={i}
+                      className={
+                        'rounded-lg p-1.5 text-center border ' +
+                        (isGold
+                          ? 'border-yellow-200 bg-yellow-50'
+                          : isSilver
+                          ? 'border-gray-200 bg-gray-50'
+                          : 'border-orange-100 bg-orange-50')
+                      }
+                    >
+                      <p
+                        className="text-xs mb-0.5"
+                        style={{ color: isGold ? '#b7950b' : isSilver ? '#7f8c8d' : '#a04000' }}
+                      >
+                        {(i + 1) + '.'}
+                      </p>
+                      <div className={isGold ? 'text-xl mb-1' : 'text-base mb-1'}>
+                        {isGold ? '🏆' : isSilver ? '🥈' : '🥉'}
+                      </div>
+                      <div
+                        className={
+                          'rounded-full mx-auto flex items-center justify-center font-medium mb-1 ' +
+                          ac.bg + ' ' + ac.text +
+                          (isGold ? ' w-6 h-6 text-xs' : ' w-5 h-5 text-xs')
+                        }
+                      >
+                        {entry.ingame_name.slice(0, 2).toUpperCase()}
+                      </div>
+                      <p className={'text-xs font-medium truncate ' + (isGold ? 'text-yellow-700' : 'text-gray-700')}>
+                        {entry.ingame_name}
+                      </p>
+                      <p className="text-xs text-gray-400">{fmtMio(entry.total_amount)}</p>
+                    </div>
+                  )
+                })}
+              </div>
+              {bankRanking.slice(3, 5).map((entry, idx) => {
+                const ac = avatarColor(entry.ingame_name)
+                return (
+                  <div key={entry.user_id} className="flex items-center gap-1.5 py-1 border-t border-gray-50">
+                    <span className="text-xs text-gray-400 w-3 flex-shrink-0">{(idx + 4) + '.'}</span>
+                    <div className={'w-5 h-5 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0 ' + ac.bg + ' ' + ac.text}>
+                      {entry.ingame_name.slice(0, 2).toUpperCase()}
+                    </div>
+                    <span className="flex-1 text-xs text-gray-700 truncate">{entry.ingame_name}</span>
+                    <span className="text-xs text-gray-400">{fmtMio(entry.total_amount)}</span>
+                  </div>
+                )
+              })}
+            </>
+          )}
         </div>
+
+        {/* FCU-Ranking */}
+        <div className="bg-white border border-gray-100 rounded-xl p-3">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-medium text-gray-500">{t.fcuRanking}</p>
+            <button onClick={() => onNavigate('fcu')} className="text-xs text-teal-600 hover:underline">
+              {t.more}
+            </button>
+          </div>
+          {fcuRanking.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-4">{t.noFcuData}</p>
+          ) : (
+            <>
+              <div className="grid grid-cols-3 gap-1 items-end mb-2">
+                {[1, 0, 2].map((i: number) => {
+                  const entry = fcuRanking[i]
+                  if (!entry) return <div key={i} />
+                  const ac = avatarColor(entry.ingame_name)
+                  const isGold = i === 0
+                  const isSilver = i === 1
+                  return (
+                    <div
+                      key={i}
+                      className={
+                        'rounded-lg p-1.5 text-center border ' +
+                        (isGold
+                          ? 'border-yellow-200 bg-yellow-50'
+                          : isSilver
+                          ? 'border-gray-200 bg-gray-50'
+                          : 'border-orange-100 bg-orange-50')
+                      }
+                    >
+                      <p
+                        className="text-xs mb-0.5"
+                        style={{ color: isGold ? '#b7950b' : isSilver ? '#7f8c8d' : '#a04000' }}
+                      >
+                        {(i + 1) + '.'}
+                      </p>
+                      <div className={isGold ? 'text-xl mb-1' : 'text-base mb-1'}>
+                        {isGold ? '🏆' : isSilver ? '🥈' : '🥉'}
+                      </div>
+                      <div
+                        className={
+                          'rounded-full mx-auto flex items-center justify-center font-medium mb-1 ' +
+                          ac.bg + ' ' + ac.text +
+                          (isGold ? ' w-6 h-6 text-xs' : ' w-5 h-5 text-xs')
+                        }
+                      >
+                        {entry.ingame_name.slice(0, 2).toUpperCase()}
+                      </div>
+                      <p className={'text-xs font-medium truncate ' + (isGold ? 'text-yellow-700' : 'text-gray-700')}>
+                        {entry.ingame_name}
+                      </p>
+                      <p className="text-xs text-gray-400">{entry.total_points.toFixed(1) + ' Pts'}</p>
+                    </div>
+                  )
+                })}
+              </div>
+              {fcuRanking.slice(3, 5).map((entry, idx) => {
+                const ac = avatarColor(entry.ingame_name)
+                return (
+                  <div key={entry.ingame_name} className="flex items-center gap-1.5 py-1 border-t border-gray-50">
+                    <span className="text-xs text-gray-400 w-3 flex-shrink-0">{(idx + 4) + '.'}</span>
+                    <div className={'w-5 h-5 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0 ' + ac.bg + ' ' + ac.text}>
+                      {entry.ingame_name.slice(0, 2).toUpperCase()}
+                    </div>
+                    <span className="flex-1 text-xs text-gray-700 truncate">{entry.ingame_name}</span>
+                    <span className="text-xs text-gray-400">{entry.total_points.toFixed(1) + ' Pts'}</span>
+                  </div>
+                )
+              })}
+            </>
+          )}
+        </div>
+
       </div>
 
       {/* Schnellzugriff */}
@@ -484,9 +670,9 @@ export default function HomeTab({ lang, onNavigate }: Props) {
         <div className="grid grid-cols-4 gap-2">
           {[
             { icon: '💰', label: t.deposit, tab: 'deposits' },
-            { icon: '⚔️', label: t.battle,  tab: 'battle'   },
-            { icon: '🏆', label: t.ranking, tab: 'ranking'  },
-            { icon: '🎯', label: t.fcu,     tab: 'fcu'      },
+            { icon: '⚔️', label: t.battle, tab: 'battle' },
+            { icon: '🏆', label: t.ranking, tab: 'ranking' },
+            { icon: '🎯', label: t.fcu, tab: 'fcu' },
           ].map(action => (
             <button
               key={action.tab}
