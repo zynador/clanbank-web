@@ -115,7 +115,9 @@ export default function BankImportPanel({ lang }: BankImportPanelProps) {
 
     try {
       // Dynamischer Import (vermeidet SSR-Probleme)
-      const XLSX = (await import('xlsx')).default
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const xlsxMod = await import('xlsx') as any
+      const XLSX = xlsxMod.default ?? xlsxMod
       const buffer = await file.arrayBuffer()
       const workbook = XLSX.read(buffer, { type: 'array' })
       const sheetName = workbook.SheetNames[0]
