@@ -49,14 +49,23 @@ export default function AdminPanel() {
   async function loadMembers() {
     const { data: clanData } = await supabase.rpc('get_my_clan_id')
     if (!clanData) return
+
+    const { data: testProfiles } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('clan_id', clanData)
+      .eq('is_test', true)
+    const excludeIds = new Set((testProfiles ?? []).map((p: any) => p.id))
+
     const { data, error } = await supabase
       .from('profiles')
       .select('id, ingame_name, display_name')
       .eq('clan_id', clanData)
       .is('left_clan_at', null)
-      .eq('is_test', false)
       .order('ingame_name')
-    if (!error && data) setMembers(data as Member[])
+    if (!error && data) {
+      setMembers((data as Member[]).filter(m => !excludeIds.has(m.id)))
+    }
   }
 
   async function handleGenerateCode() {
