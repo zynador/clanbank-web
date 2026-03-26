@@ -74,6 +74,12 @@ function fmtMio(n: number): string {
   return String(n)
 }
 
+function formatPoints(n: number): string {
+  if (n >= 1000000) return (n / 1000000).toFixed(2).replace('.', ',') + ' Mio'
+  if (n >= 1000) return (n / 1000).toFixed(2).replace('.', ',') + ' K'
+  return n.toFixed(2).replace('.', ',')
+}
+
 function kwBadgeColor(weeks: number): string {
   if (weeks >= 3) return 'text-red-600'
   if (weeks === 2) return 'text-orange-500'
@@ -135,6 +141,7 @@ export default function HomeTab({ lang, onNavigate }: Props) {
     more: lang === 'de' ? '→ Mehr' : '→ More',
     noData: lang === 'de' ? 'Noch keine Daten' : 'No data yet',
     noFcuData: lang === 'de' ? 'Noch keine FCU-Daten' : 'No FCU data yet',
+    pkt: lang === 'de' ? ' Pkt.' : ' pts',
   }
 
   useEffect(() => {
@@ -414,7 +421,6 @@ export default function HomeTab({ lang, onNavigate }: Props) {
             <p className="text-xs text-green-700">{t.noBacklog}</p>
           ) : (
             <>
-              {/* Grid */}
               <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))' }}>
                 {backlog.map(member => (
                   <button
@@ -445,7 +451,6 @@ export default function HomeTab({ lang, onNavigate }: Props) {
                 ))}
               </div>
 
-              {/* Detail Panel */}
               {selectedId && (
                 <div className="bg-white border border-gray-200 rounded-xl p-3 space-y-3">
                   {detailLoading ? (
@@ -640,7 +645,7 @@ export default function HomeTab({ lang, onNavigate }: Props) {
                       <p className={'text-xs font-medium truncate ' + (isGold ? 'text-yellow-700' : 'text-gray-700')}>
                         {entry.ingame_name}
                       </p>
-                      <p className="text-xs text-gray-400">{entry.total_points.toFixed(1) + ' Pts'}</p>
+                      <p className="text-xs text-gray-400">{formatPoints(entry.total_points) + t.pkt}</p>
                     </div>
                   )
                 })}
@@ -654,7 +659,7 @@ export default function HomeTab({ lang, onNavigate }: Props) {
                       {entry.ingame_name.slice(0, 2).toUpperCase()}
                     </div>
                     <span className="flex-1 text-xs text-gray-700 truncate">{entry.ingame_name}</span>
-                    <span className="text-xs text-gray-400">{entry.total_points.toFixed(1) + ' Pts'}</span>
+                    <span className="text-xs text-gray-400">{formatPoints(entry.total_points) + t.pkt}</span>
                   </div>
                 )
               })}
