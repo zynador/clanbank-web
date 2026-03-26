@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { useAuth } from '@/lib/auth-context'
 import InfoTooltip from '@/components/InfoTooltip'
 import StarterMembersPanel from '@/components/StarterMembersPanel'
+import BankImportPanel from '@/components/BankImportPanel'
 
 type Lang = 'de' | 'en'
 
@@ -264,6 +265,11 @@ export default function AdminPanel() {
 
       {/* Starter-Mitglieder */}
       <StarterMembersPanel lang={lang} />
+
+      {/* Bankstand-Import */}
+      <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-5">
+        <BankImportPanel lang={lang} />
+      </div>
 
     </div>
   )
