@@ -1,6 +1,6 @@
 # ClanBank — Codestruktur
 
-> **Letzte Aktualisierung:** 27.03.2026 | Fahrplan V33
+> **Letzte Aktualisierung:** 27.03.2026 | Fahrplan V34
 > **Raw-URL für neue Chat-Sessions:**
 > `https://raw.githubusercontent.com/zynador/clanbank-web/main/CODESTRUKTUR.md`
 
@@ -16,11 +16,16 @@ clanbank-web/
 │   ├── api/
 │   │   ├── ocr/
 │   │   │   └── route.ts          ← Claude Haiku Vision OCR (alle Modi)
-│   │   └── admin/
-│   │       └── reset-password/
-│   │           └── route.ts      ← Passwort-Reset (Service Role Key, nur Admin)
+│   │   ├── admin/
+│   │   │   └── reset-password/
+│   │   │       └── route.ts      ← Passwort-Reset (Service Role Key, nur Admin)
+│   │   └── demo/
+│   │       └── login/
+│   │           └── route.ts      ← Demo-Gastaccount erstellen + Session setzen (Service Role Key)
 │   ├── dashboard/
-│   │   └── page.tsx              ← Haupt-App nach Login (Hamburger Drawer)
+│   │   └── page.tsx              ← Haupt-App nach Login (Hamburger Drawer, tour_progress Check)
+│   ├── demo/
+│   │   └── page.tsx              ← Öffentliche Demo-Einstiegsseite (Rollenwahl, kein Auth-Check)
 │   ├── login/
 │   │   └── page.tsx              ← Login-Seite
 │   ├── register/
@@ -41,6 +46,7 @@ clanbank-web/
 │   ├── FCUResultsEditor.tsx      ← OCR-Ergebnisse prüfen, Namen korrigieren, speichern
 │   ├── FCURankingView.tsx        ← Gesamtranking über alle FCU Events
 │   ├── FCUUploadPanel.tsx        ← Multi-Screenshot Upload + OCR pro Screen
+│   ├── GuidedTour.tsx            ← Floating Tooltip + Highlight-Ring (NUR Member-Tour)
 │   ├── HelpButton.tsx
 │   ├── HistoricalDepositsPanel.tsx ← Admin: Status aller historical_deposits
 │   ├── HomeTab.tsx               ← Startseite (Status, Backlog, Ankündigungen, Doppel-Podest Ranking)
@@ -55,6 +61,7 @@ clanbank-web/
 │   ├── SecurityAlerts.tsx
 │   ├── StarterMembersPanel.tsx
 │   ├── SuggestionBox.tsx
+│   ├── TourButton.tsx            ← Schwebender ? Button unten rechts (Member-Tour Trigger)
 │   └── WelcomeModal.tsx
 ├── hooks/
 │   └── useExemptions.ts          ← Custom Hook für member_exemptions
@@ -106,6 +113,7 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
   - Schnellzugriff auf alle 4 Hauptbereiche via `onNavigate`
 - **loadBankRanking():** Nutzt `get_ranking_data` RPC (enthält historical_deposits) — NICHT direkter deposits-Query
 - **avatarColor():** ❌ Entfernt (V33) — keine Avatar-Kreise mehr
+- **data-tour-id Attribute:** `home-status`, `home-ranking-bank`, `home-ranking-fcu`, `home-backlog`
 
 ---
 
@@ -121,6 +129,53 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 - **Entfernt (V33):** Avatar-Kreis (38px), Match-Dot, Match-Legende, `matchDot()`-Funktion
 - **Abhängigkeiten:** `ExemptionModal`, `ExemptionBadge`, `useExemptions`
 - **RPC:** `get_members_list`
+- **data-tour-id Attribute:** `members-search`
+
+---
+
+### `DepositsTab.tsx`
+- **data-tour-id Attribute:** `deposits-list`, `deposits-add-btn`
+
+---
+
+### `FCUEventTab.tsx`
+- **Props:** `lang: Lang`
+- **Key-States:** `view: 'list' | 'upload' | 'results' | 'ranking'`, `activeEventId`
+- **data-tour-id Attribute:** `fcu-list`, `fcu-ranking-btn`
+
+---
+
+### `GuidedTour.tsx`
+- **Props:**
+  - `steps: TourStep[]` — rollengefiltertes Schritt-Array
+  - `onNavigate: (tab: string) => void` — Tab-Wechsel-Callback
+  - `onComplete: () => void` — Callback wenn Tour abgeschlossen
+  - `onSkip: () => void` — Callback wenn abgebrochen
+- **NUR für Member-Tour** — Demo-Nutzer haben keinen GuidedTour
+- **Mechanismus:** Floating Tooltip + Highlight-Ring (box-shadow Overlay Technik)
+- **Tooltip-Positionierung:** `getBoundingClientRect()` → rechts > links > unten > oben
+- **Scroll:** `scrollIntoView({ behavior: 'smooth', block: 'center' })` vor Tooltip-Render
+- **Keyboard:** ESC = abbrechen, Pfeil rechts = weiter, Pfeil links = zurück
+- **Backdrop:** Dunkles Overlay außerhalb Highlight-Bereich (`pointer-events: none`)
+
+```typescript
+interface TourStep {
+  id: string           // z.B. 'home-ranking'
+  targetId: string     // Wert des data-tour-id Attributs am Ziel-Element
+  tab: string          // Tab der vor dem Schritt aktiviert wird
+  title: string        // Tooltip-Überschrift
+  body: string         // Erklärungstext (2-3 Sätze)
+  roles: UserRole[]    // Rollen die diesen Schritt sehen
+}
+```
+
+---
+
+### `TourButton.tsx`
+- **Props:** `onClick: () => void`
+- **Darstellung:** Schwebender `?` Button, `position: fixed`, unten rechts
+- **Sichtbar:** Immer im Dashboard (für alle echten Rollen)
+- **Funktion:** Startet Member-Tour neu
 
 ---
 
@@ -136,6 +191,7 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 - **xlsx-Import:** `const xlsxMod = await import('xlsx') as any; const XLSX = xlsxMod.default ?? xlsxMod`
 - **RPC:** `import_historical_deposits`
 - **Eingebettet in:** `AdminPanel.tsx`
+- **data-tour-id:** `admin-bank-import`
 
 ---
 
@@ -143,8 +199,14 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 - **Props:** `lang: Lang`
 - **Sichtbar für:** `admin`
 - **Zweck:** Zeigt alle `historical_deposits` mit Filter (ausstehend/übertragen/alle) und Suchfeld
-- **Stats:** Spieler ausstehend, Einträge ausstehend, übertragen
 - **Eingebettet in:** `AdminPanel.tsx` (nach BankImportPanel)
+
+---
+
+### `AdminPanel.tsx`
+- **Props:** `lang: Lang`
+- **Key-Sektionen:** Einladungscode, Passwort-Reset, StarterMembersPanel, ProfileMatchPanel, BankImportPanel, HistoricalDepositsPanel
+- **data-tour-id Attribute:** `admin-password-reset`, `admin-bank-import`
 
 ---
 
@@ -156,28 +218,9 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 
 ---
 
-### `AdminPanel.tsx`
-- **Props:** `lang: Lang`
-- **Key-Sektionen:**
-  - Einladungscode (MAFIA2026 immer sichtbar)
-  - Passwort zurücksetzen
-  - Starter-Members (StarterMembersPanel)
-  - ProfileMatchPanel
-  - BankImportPanel (Idee 3)
-  - HistoricalDepositsPanel (Idee 3)
-
----
-
 ### `AnnouncementWidget.tsx`
 - **Props:** `lang: Lang`
 - **Sichtbar für:** alle Rollen (Admin sieht Formular + Löschen-Button)
-- **Hinweis:** Playwright-Tests hinterlassen Test-Ankündigungen — nach Testläufen manuell löschen
-
----
-
-### `FCUEventTab.tsx`
-- **Props:** `lang: Lang`
-- **Key-States:** `view: 'list' | 'upload' | 'results' | 'ranking'`, `activeEventId`
 
 ---
 
@@ -207,7 +250,7 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 
 ### `RankingTab.tsx`
 - **Props:** `lang: Lang`
-- **RPC:** `get_ranking_data()` — enthält jetzt auch historical_deposits (UNION ALL)
+- **RPC:** `get_ranking_data()` — enthält auch historical_deposits (UNION ALL)
 - **Hinweis:** Raidleiter werden NICHT im Ranking angezeigt
 
 ---
@@ -215,18 +258,6 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 ### `BacklogWidget.tsx`
 - **Props:** `lang: Lang`
 - **Key-Function:** Ampelfarben für Rückstand, Raidleiter ausgeblendet
-
----
-
-### `PayoutCalculation.tsx`
-- **Props:** `lang: Lang`
-- **Sichtbar für:** `admin` und `offizier`
-
----
-
-### `SecurityAlerts.tsx`
-- **Props:** `lang: Lang`
-- **Dashboard-Tab:** "Warnungen" mit rotem Badge-Indikator
 
 ---
 
@@ -256,15 +287,37 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 
 ---
 
-## 4. Datenbank
+### `app/api/demo/login/route.ts`
+- **Methode:** POST
+- **Env:** `SUPABASE_SERVICE_ROLE_KEY`
+- **Body:** `{ role: 'admin' | 'offizier' | 'mitglied' }`
+- **Ablauf:** Erstellt Gastaccount im Demo-Clan via `auth.admin.createUser()`, setzt Session, Redirect zu `/dashboard`
+- **Kein Auth-Check** — Route ist öffentlich
+- **Demo-Clan-UUID:** `00000000-0000-0000-0000-000000000002`
+
+---
+
+## 4. Seiten
+
+### `app/demo/page.tsx`
+- **Kein Auth-Check** — vollständig öffentlich, kein Einladungscode
+- **Inhalt:** 3 Rollenkarten (Admin / Offizier / Mitglied) mit Funktionsbeschreibung
+- **Klick auf Karte:** POST `/api/demo/login` → Redirect `/dashboard`
+- **Kein GuidedTour** im Demo-Modus — freies Erkunden
+- **Link:** Zurück zu `/login`
+
+---
+
+## 5. Datenbank
 
 ### Tabellen
 
 #### `clans`
 | Spalte | Typ | Hinweis |
 |--------|-----|---------|
-| id | uuid PK | `00000000-0000-0000-0000-000000000001` für Camorra Elite |
-| invite_code | text | "MAFIA2026" |
+| id | uuid PK | `00000000-0000-0000-0000-000000000001` = Camorra Elite |
+| id | uuid PK | `00000000-0000-0000-0000-000000000002` = Demo-Clan |
+| invite_code | text | "MAFIA2026" (Camorra Elite) / NULL (Demo-Clan) |
 
 #### `profiles`
 | Spalte | Typ | Hinweis |
@@ -275,7 +328,7 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 | display_name | text | |
 | role | enum | `admin` / `offizier` / `mitglied` |
 | is_raidleiter | boolean | Flag |
-| is_test | boolean | Testaccounts |
+| is_test | boolean | Testaccounts + Demo-Gastaccounts |
 | left_clan_at | timestamptz | Soft-Delete (kein deleted_at!) |
 
 #### `deposits`
@@ -311,15 +364,40 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 |--------|-----|---------|
 | is_active | boolean | aktive Ausnahmen: `WHERE is_active = true` (kein deleted_at) |
 
+#### `tour_progress`
+| Spalte | Typ | Hinweis |
+|--------|-----|---------|
+| id | uuid PK | |
+| user_id | uuid FK → auth.users | |
+| completed | boolean | default false |
+| last_step | int | letzter abgeschlossener Schritt-Index |
+| updated_at | timestamptz | |
+
+- **RLS:** `user_id = auth.uid()` — Nutzer sieht nur eigenen Eintrag
+- **Demo-Nutzer:** Kein Eintrag — Demo hat keinen GuidedTour
+
 ### Views
 - **`active_deposits`** — filtert approved + nicht-deleted Deposits
 
 ### Supabase Storage
 - **Bucket:** `screenshots`
 
+### Demo-Clan Seed-Daten (einmalig per SQL, nie zurücksetzen)
+| Tabelle | Inhalt |
+|---------|--------|
+| profiles | 5 Einträge: 1 Admin, 1 Offizier, 3 Mitglieder — alle `is_test = true` |
+| deposits | ~30 Einzahlungen, 8 Wochen, alle 5 Ressourcentypen |
+| starter_members | 3 nicht-registrierte Starter |
+| fcu_events | 2 abgeschlossene Events mit Ergebnissen |
+| battle_reports | 1 Kampfbericht mit berechneten Auszahlungen |
+| announcements | 2 Ankündigungen (1 angepinnt) |
+| historical_deposits | 5 Einträge für Demo-Starter |
+
+**RLS Demo-Clan:** Policies für `clan_id = '00000000-0000-0000-0000-000000000002'` erlauben nur `SELECT` — kein INSERT/UPDATE/DELETE.
+
 ---
 
-## 5. RPCs
+## 6. RPCs
 
 ### Hilfs-Funktionen
 ```sql
@@ -392,9 +470,18 @@ create_battle_report / save_battle_casualties
 calculate_payouts / mark_payout_paid
 ```
 
+### Tour (Idee 7)
+```sql
+get_or_create_tour_progress()
+  → { completed: boolean, last_step: int }
+
+update_tour_progress(p_last_step int, p_completed boolean)
+  → { success, message }
+```
+
 ---
 
-## 6. Navigation (Hamburger Drawer)
+## 7. Navigation (Hamburger Drawer)
 ```typescript
 type Tab =
   | 'home' | 'deposits' | 'battle' | 'ranking' | 'fcu'
@@ -403,7 +490,28 @@ type Tab =
 
 ---
 
-## 7. Playwright E2E-Tests
+## 8. data-tour-id Attribute (Member-Tour)
+
+Alle Ziel-Elemente für `GuidedTour.tsx` erhalten ein `data-tour-id` Attribut.
+Niemals auf CSS-Klassen oder generische IDs als Tour-Target verlassen.
+
+| data-tour-id | Komponente | Element |
+|---|---|---|
+| `home-status` | HomeTab | Persönlicher Status (grün/rot) |
+| `home-ranking-bank` | HomeTab | Bank-Ranking-Podest |
+| `home-ranking-fcu` | HomeTab | FCU-Ranking-Podest |
+| `home-backlog` | HomeTab | Wand der Schande Grid |
+| `deposits-list` | DepositsTab | Einzahlungsliste |
+| `deposits-add-btn` | DepositsTab | Neue Einzahlung Button |
+| `fcu-list` | FCUEventTab | FCU Event-Liste |
+| `fcu-ranking-btn` | FCUEventTab | Gesamtranking Button |
+| `members-search` | MembersTab | Suchfeld |
+| `admin-password-reset` | AdminPanel | Passwort-Reset Sektion |
+| `admin-bank-import` | AdminPanel | BankImportPanel Sektion |
+
+---
+
+## 9. Playwright E2E-Tests
 
 ### GitHub Secrets
 | Secret | Wert |
@@ -433,7 +541,7 @@ async function loginAs(page: any, user: string, pass: string) {
 
 ---
 
-## 8. Key-Patterns
+## 10. Key-Patterns
 
 ### Imports
 ```typescript
@@ -470,7 +578,6 @@ const XLSX = xlsxMod.default ?? xlsxMod
 ### resource_type ENUM (grossgeschrieben!)
 ```sql
 -- Enum-Werte: Cash, Arms, Cargo, Metal, Diamond (NICHT lowercase!)
--- In RPCs immer CASE-Mapping verwenden:
 v_resource_enum := CASE v_resource
   WHEN 'cash'    THEN 'Cash'::resource_type
   WHEN 'arms'    THEN 'Arms'::resource_type
@@ -481,7 +588,7 @@ END;
 -- historical_deposits.resource_type ist plain text (lowercase) — kein ENUM!
 ```
 
-### Bank-Ranking (HomeTab) — nutzt RPC statt direkter Query
+### Bank-Ranking (HomeTab)
 ```typescript
 // RICHTIG: get_ranking_data enthält historical_deposits
 const { data } = await supabase.rpc('get_ranking_data')
@@ -496,6 +603,24 @@ const res = await fetch('/api/admin/reset-password', {
   headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (session?.access_token ?? '') },
   body: JSON.stringify({ targetUserId, newPassword }),
 })
+```
+
+### Demo-Login
+```typescript
+// Kein Auth-Token nötig — Route ist öffentlich
+const res = await fetch('/api/demo/login', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ role: 'admin' }), // 'admin' | 'offizier' | 'mitglied'
+})
+// Bei Erfolg: redirect zu /dashboard
+```
+
+### tour_progress laden
+```typescript
+const { data } = await supabase.rpc('get_or_create_tour_progress')
+// data: { completed: boolean, last_step: number }
+if (!data.completed) { /* Tour starten */ }
 ```
 
 ### Template Literals vermeiden (Turbopack)
@@ -515,7 +640,7 @@ const res = await fetch('/api/admin/reset-password', {
 
 ---
 
-## 9. Auth & Rollen
+## 11. Auth & Rollen
 
 | | Admin | Offizier | Mitglied |
 |--|-------|----------|---------|
@@ -528,15 +653,17 @@ const res = await fetch('/api/admin/reset-password', {
 | AdminPanel | ✅ | ❌ | ❌ |
 | Bank-Import (Idee 3) | ✅ | ❌ | ❌ |
 | Passwort-Reset | ✅ | ❌ | ❌ |
+| Member-Tour Schritte | ✅ 1–9 | ➖ 1–7 | ➖ 1–4 |
 
 **Auth-Pattern:**
 - Fake-Email: `username@clanbank.local`
 - Clan-Code: `MAFIA2026`
 - Supabase-ID Camorra Elite: `00000000-0000-0000-0000-000000000001`
+- Supabase-ID Demo-Clan: `00000000-0000-0000-0000-000000000002`
 
 ---
 
-## 10. Bekannte Fallstricke
+## 12. Bekannte Fallstricke
 
 | Problem | Lösung |
 |---------|--------|
@@ -560,6 +687,11 @@ const res = await fetch('/api/admin/reset-password', {
 | transfer_historical_deposits nicht aufgerufen | confirm_starter_claim + link_profile_to_starter rufen es automatisch auf |
 | `SUPABASE_SERVICE_ROLE_KEY` fehlt | Vercel Projekt-Settings (nicht Team) — Sensitive Variable |
 | Avatar-Kreise in Ranking/Members | ❌ Entfernt (V33) — avatarColor() + alle Avatar-Divs gelöscht |
+| Demo-RLS: nur SELECT | RLS-Policies auf Demo-Clan-UUID — kein INSERT/UPDATE/DELETE |
+| Demo-Clan invite_code | NULL setzen — /demo braucht keinen Code |
+| tour_progress für Demo-Nutzer | Nicht in DB schreiben — Demo hat keinen GuidedTour |
+| Tooltip-Position berechnen | `getBoundingClientRect()` → rechts > links > unten > oben |
+| data-tour-id Konflikte | Immer spezifische IDs — nie generische wie `btn` oder `table` |
 
 ---
 
