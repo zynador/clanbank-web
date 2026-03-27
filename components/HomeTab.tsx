@@ -9,9 +9,8 @@ interface Props { lang: Lang; onNavigate: (tab: string) => void }
 type ResourceType = 'cash' | 'arms' | 'cargo' | 'metal' | 'diamond'
 type BacklogMember = { user_id: string; ingame_name: string; weeks_behind: number; missing_resources: ResourceType[] }
 type MyStatus = { weeks_behind: number; missing_resources: ResourceType[] }
-type LastFcu = { event_name: string; rank: number | null }
 type MemberDetail = { user_id: string; ingame_name: string; weeks_behind: number; total_all_time: number; per_resource: Record<ResourceType, number> }
-type RankingEntry = { user_id: string; ingame_name: string; total_amount: number }
+type RankingEntry = { user_id: string; ingame_name: string; total_amount: number; is_raidleiter: boolean }
 type FcuRankingEntry = { ingame_name: string; total_points: number }
 
 const RESOURCES: ResourceType[] = ['cash', 'arms', 'cargo', 'metal', 'diamond']
@@ -71,6 +70,7 @@ export default function HomeTab({ lang, onNavigate }: Props) {
   const [fcuRanking, setFcuRanking] = useState<FcuRankingEntry[]>([])
   const isAdmin = profile?.role === 'admin'
   const isOfficer = profile?.role === 'offizier'
+
   const t = {
     greeting: lang === 'de' ? 'Willkommen' : 'Welcome',
     statusOk: lang === 'de' ? 'Clanbank: Du bist auf dem Laufenden' : 'Clanbank: You are up to date',
@@ -140,9 +140,12 @@ export default function HomeTab({ lang, onNavigate }: Props) {
   async function loadBacklog() {
     if (!profile?.clan_id) return
     const { data: allProfiles } = await supabase
-      .from('profiles').select('id, ingame_name, is_raidleiter, is_test')
+      .from('profiles').select('id, ingame_name, is_raidleiter, is_test, is_bank')
       .eq('clan_id', profile.clan_id)
-    const profiles = (allProfiles ?? []).filter(p => !(p as any).is_raidleiter && !(p as any).is_test)
+    // Wand der Schande: is_raidleiter, is_test und is_bank ausblenden
+    const profiles = (allProfiles ?? []).filter(p =>
+      !(p as any).is_raidleiter && !(p as any).is_test && !(p as any).is_bank
+    )
     setTotalMembers(profiles.length)
     const since = new Date()
     since.setDate(since.getDate() - 28)
@@ -200,13 +203,31 @@ export default function HomeTab({ lang, onNavigate }: Props) {
   async function loadBankRanking() {
     if (!profile?.clan_id) return
     try {
+      // Profile-Flags laden für korrektes Filtern
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('id, is_bank, is_raidleiter, is_test')
+        .eq('clan_id', profile.clan_id)
+      const bankIds = new Set<string>()
+      const testIds = new Set<string>()
+      const raidleiterIds = new Set<string>()
+      for (const p of profileData ?? []) {
+        if ((p as any).is_bank) bankIds.add(p.id)
+        if ((p as any).is_test) testIds.add(p.id)
+        if ((p as any).is_raidleiter) raidleiterIds.add(p.id)
+      }
       const { data } = await supabase.rpc('get_ranking_data')
       if (!data) return
       const sorted = (data as any[])
-        .filter((r: any) => !r.is_raidleiter)
+        .filter((r: any) => !bankIds.has(r.user_id) && !testIds.has(r.user_id))
         .sort((a: any, b: any) => Number(b.total_deposit) - Number(a.total_deposit))
         .slice(0, 5)
-        .map((r: any) => ({ user_id: r.user_id ?? r.ingame_name, ingame_name: r.ingame_name || r.username || '?', total_amount: Number(r.total_deposit) }))
+        .map((r: any) => ({
+          user_id: r.user_id ?? r.ingame_name,
+          ingame_name: r.ingame_name || r.username || '?',
+          total_amount: Number(r.total_deposit),
+          is_raidleiter: raidleiterIds.has(r.user_id),
+        }))
       setBankRanking(sorted)
     } catch {}
   }
@@ -378,6 +399,7 @@ export default function HomeTab({ lang, onNavigate }: Props) {
             <p className="text-xs text-gray-400 text-center py-4">{t.noData}</p>
           ) : (
             <>
+              {/* Podest: Platz 2 links, 1 Mitte, 3 rechts */}
               <div className="grid grid-cols-3 gap-1 items-end mb-2">
                 {[1, 0, 2].map((i: number) => {
                   const entry = bankRanking[i]
@@ -393,17 +415,20 @@ export default function HomeTab({ lang, onNavigate }: Props) {
                         {isGold ? '\uD83C\uDFC6' : isSilver ? '\uD83E\uDD48' : '\uD83E\uDD49'}
                       </div>
                       <p className={'text-xs font-medium truncate ' + (isGold ? 'text-yellow-700' : 'text-gray-700')}>
-                        {entry.ingame_name}
+                        {entry.ingame_name}{entry.is_raidleiter ? ' \u2694\uFE0F' : ''}
                       </p>
                       <p className="text-xs text-gray-400">{fmtMio(entry.total_amount)}</p>
                     </div>
                   )
                 })}
               </div>
+              {/* Zeilen 4–5 */}
               {bankRanking.slice(3, 5).map((entry, idx) => (
                 <div key={entry.user_id} className="flex items-center gap-1.5 py-1 border-t border-gray-50">
                   <span className="text-xs text-gray-400 w-3 flex-shrink-0">{(idx + 4) + '.'}</span>
-                  <span className="flex-1 text-xs text-gray-700 truncate">{entry.ingame_name}</span>
+                  <span className="flex-1 text-xs text-gray-700 truncate">
+                    {entry.ingame_name}{entry.is_raidleiter ? ' \u2694\uFE0F' : ''}
+                  </span>
                   <span className="text-xs text-gray-400">{fmtMio(entry.total_amount)}</span>
                 </div>
               ))}
