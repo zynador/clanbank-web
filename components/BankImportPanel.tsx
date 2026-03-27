@@ -366,10 +366,17 @@ export default function BankImportPanel({ lang }: BankImportPanelProps) {
                   <select value={manualMappings[name] ?? ''}
                     onChange={e => setManualMappings(prev => ({ ...prev, [name]: e.target.value }))}
                     className="flex-1 bg-white/10 text-white rounded px-2 py-1 text-xs border border-white/20">
-                    <option value="">{t('-- als unbekannt speichern --', '-- save as unknown --')}</option>
-                    {registeredMembers.map(m => (
-                      <option key={m.profile_id!} value={m.profile_id!}>{m.ingame_name}</option>
-                    ))}
+                   <option value="">{t('-- als unbekannt speichern --', '-- save as unknown --')}</option>
+                    <optgroup label={t('✓ Registriert', '✓ Registered')}>
+                      {registeredMembers.map(m => (
+                        <option key={m.profile_id!} value={m.profile_id!}>{m.ingame_name}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label={t('🕐 Noch nicht registriert', '🕐 Not yet registered')}>
+                      {allMembersForDropdown.filter(m => !m.is_registered).map(m => (
+                        <option key={m.ingame_name} value={'ingame:' + m.ingame_name}>{m.ingame_name}</option>
+                      ))}
+                    </optgroup>
                     <option value="skip">{'⛔ ' + t('Überspringen', 'Skip')}</option>
                   </select>
                 </div>
