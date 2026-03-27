@@ -247,7 +247,7 @@ export default function BankImportPanel({ lang }: BankImportPanelProps) {
 
   function handleReset() {
     setStep('upload'); setRows([]); setUnmatchedNames([])
-    setUnregisteredNames([]); setManualMappings([])
+    setUnregisteredNames([]); setManualMappings({})
     setResult(null); setError(null); setFileName(null)
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
