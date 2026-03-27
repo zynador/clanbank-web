@@ -312,33 +312,24 @@ export default function HomeTab({ lang, onNavigate }: Props) {
     return palette[(name.charCodeAt(0) || 0) % palette.length]
   }
 
+  // ← GEÄNDERT: nutzt get_ranking_data RPC statt direkter deposits-Query
+  // Enthält jetzt auch historical_deposits für nicht-registrierte Spieler
   async function loadBankRanking() {
     if (!profile?.clan_id) return
-    const { data: testProfiles } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('clan_id', profile.clan_id)
-      .or('is_test.eq.true,is_raidleiter.eq.true')
-    const excludeIds = new Set((testProfiles ?? []).map((p: any) => p.id))
-    const { data } = await supabase
-      .from('deposits')
-      .select('user_id, amount, profiles!deposits_user_id_fkey(ingame_name)')
-      .eq('clan_id', profile.clan_id)
-      .eq('status', 'approved')
-      .is('deleted_at', null)
-    if (!data) return
-    const totals: Record<string, { ingame_name: string; total: number }> = {}
-    for (const d of data) {
-      if (excludeIds.has(d.user_id)) continue
-      const name = (d as any).profiles?.ingame_name ?? '?'
-      if (!totals[d.user_id]) totals[d.user_id] = { ingame_name: name, total: 0 }
-      totals[d.user_id].total += d.amount
-    }
-    const sorted = Object.entries(totals)
-      .map(([user_id, v]) => ({ user_id, ingame_name: v.ingame_name, total_amount: v.total }))
-      .sort((a, b) => b.total_amount - a.total_amount)
-      .slice(0, 5)
-    setBankRanking(sorted)
+    try {
+      const { data } = await supabase.rpc('get_ranking_data')
+      if (!data) return
+      const sorted = (data as any[])
+        .filter((r: any) => !r.is_raidleiter)
+        .sort((a: any, b: any) => Number(b.total_deposit) - Number(a.total_deposit))
+        .slice(0, 5)
+        .map((r: any) => ({
+          user_id: r.user_id ?? r.ingame_name,
+          ingame_name: r.ingame_name || r.username || '?',
+          total_amount: Number(r.total_deposit),
+        }))
+      setBankRanking(sorted)
+    } catch {}
   }
 
   async function loadFcuRanking() {
