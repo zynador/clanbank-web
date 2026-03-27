@@ -1,6 +1,6 @@
 # ClanBank — Codestruktur
 
-> **Letzte Aktualisierung:** 27.03.2026 | Fahrplan V34
+> **Letzte Aktualisierung:** 27.03.2026 | Fahrplan V35
 > **Raw-URL für neue Chat-Sessions:**
 > `https://raw.githubusercontent.com/zynador/clanbank-web/main/CODESTRUKTUR.md`
 
@@ -11,7 +11,7 @@
 clanbank-web/
 ├── .github/
 │   └── workflows/
-│       └── playwright.yml        ← GitHub Actions E2E-Tests (bei jedem Push auf main)
+│       └── playwright.yml        ← GitHub Actions E2E-Tests (manuell via workflow_dispatch)
 ├── app/
 │   ├── api/
 │   │   ├── ocr/
@@ -107,13 +107,17 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 - **Props:** `lang: Lang`, `onNavigate: (tab: string) => void`
 - **Key-Sections:**
   - Persönlicher Clanbank-Status (grün/rot) mit fehlenden Ressourcen als Pills
-  - Wand der Schande (Admin + Offizier): Grid-Layout mit kompakten Mitgliederkarten — **KEIN Avatar-Kreis**, nur Name + KW-Badge + Ressource-Emojis
+  - **Wand der Schande (alle Rollen):** Grid-Layout mit kompakten Mitgliederkarten — registrierte Mitglieder + nicht-registrierte Starter mit 🆕-Badge
   - `AnnouncementWidget` eingebettet
   - **Doppel-Podest Ranking:** Bank-Ranking + FCU-Ranking nebeneinander (Top 3 Podest + Plätze 4–5 als Zeilen) — **KEINE Avatar-Kreise**
   - Schnellzugriff auf alle 4 Hauptbereiche via `onNavigate`
 - **loadBankRanking():** Nutzt `get_ranking_data` RPC (enthält historical_deposits) — NICHT direkter deposits-Query
+- **loadBacklog():** Lädt `profiles` (aktive, nicht is_test/is_raidleiter/is_bank) + `starter_members` (claimed_by IS NULL, left_clan_at IS NULL). Starter mit gleichem ingame_name wie ein Profil werden ausgeschlossen.
+- **loadDetail():** Für registrierte Mitglieder: `deposits` + `historical_deposits` (transferred=false). Für Starter: nur `historical_deposits` (alle). **Immer `.toLowerCase()` auf resource_type** — ENUM liefert `'Cash'`, historical liefert `'cash'`.
+- **BacklogMember / MemberDetail:** optionales Feld `is_starter?: boolean`
 - **avatarColor():** ❌ Entfernt (V33) — keine Avatar-Kreise mehr
 - **data-tour-id Attribute:** `home-status`, `home-ranking-bank`, `home-ranking-fcu`, `home-backlog`
+- **⚠️ Offener Punkt:** Detailansicht erscheint inline nach ALLEN Kacheln — bei vielen Einträgen außerhalb Sichtfeld. Geplant: Modal/Overlay.
 
 ---
 
@@ -523,6 +527,9 @@ Niemals auf CSS-Klassen oder generische IDs als Tour-Target verlassen.
 | `TEST_MEMBER_PASS` | `mitglied123` |
 | `VERCEL_BYPASS_SECRET` | Vercel Protection Bypass |
 
+### Offene Punkte (Stand V35)
+- `home.spec.ts`: Test `Mitglied sieht KEINEN Rueckstand Block` muss angepasst werden — Wand der Schande ist jetzt für alle sichtbar
+
 ### loginAs()-Muster
 ```typescript
 async function loginAs(page: any, user: string, pass: string) {
@@ -588,6 +595,13 @@ END;
 -- historical_deposits.resource_type ist plain text (lowercase) — kein ENUM!
 ```
 
+### loadDetail() resource_type normalisieren (HomeTab)
+```typescript
+// deposits.resource_type ist ENUM (grossgeschrieben) → immer normalisieren!
+const rt = (d.resource_type as string).toLowerCase() as ResourceType
+// historical_deposits.resource_type ist bereits lowercase — .toLowerCase() schadet nicht
+```
+
 ### Bank-Ranking (HomeTab)
 ```typescript
 // RICHTIG: get_ranking_data enthält historical_deposits
@@ -648,7 +662,7 @@ if (!data.completed) { /* Tour starten */ }
 | Einzahlungen genehmigen | ✅ | ✅ | ❌ |
 | FCU Event anlegen | ✅ | ❌ | ❌ |
 | Ankündigungen erstellen | ✅ | ❌ | ❌ |
-| Wand der Schande sehen | ✅ | ✅ | ❌ |
+| Wand der Schande sehen | ✅ | ✅ | ✅ |
 | Mitgliederliste sehen | ✅ | ✅ | ❌ |
 | AdminPanel | ✅ | ❌ | ❌ |
 | Bank-Import (Idee 3) | ✅ | ❌ | ❌ |
@@ -684,6 +698,7 @@ if (!data.completed) { /* Tour starten */ }
 | get_ranking_data zwei Versionen | DROP FUNCTION IF EXISTS für beide Signaturen |
 | get_ranking_data kein p_clan_id | Nutzt `get_my_clan_id()` intern — kein Parameter! |
 | HomeTab Bank-Ranking fehlt historical | `get_ranking_data` RPC nutzen — nicht direkter deposits-Query |
+| loadDetail() zeigt 0 für alle Werte | deposits.resource_type ist ENUM → immer `.toLowerCase()` normalisieren |
 | transfer_historical_deposits nicht aufgerufen | confirm_starter_claim + link_profile_to_starter rufen es automatisch auf |
 | `SUPABASE_SERVICE_ROLE_KEY` fehlt | Vercel Projekt-Settings (nicht Team) — Sensitive Variable |
 | Avatar-Kreise in Ranking/Members | ❌ Entfernt (V33) — avatarColor() + alle Avatar-Divs gelöscht |
@@ -692,6 +707,8 @@ if (!data.completed) { /* Tour starten */ }
 | tour_progress für Demo-Nutzer | Nicht in DB schreiben — Demo hat keinen GuidedTour |
 | Tooltip-Position berechnen | `getBoundingClientRect()` → rechts > links > unten > oben |
 | data-tour-id Konflikte | Immer spezifische IDs — nie generische wie `btn` oder `table` |
+| Wand der Schande Detail außerhalb Sichtfeld | Bei 97+ Kacheln: geplant als Modal/Overlay (offener Punkt V35) |
+| Playwright home.spec.ts Mitglied-Test | "Mitglied sieht KEINEN Rueckstand Block" anpassen — Wand für alle sichtbar |
 
 ---
 
