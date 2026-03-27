@@ -56,19 +56,21 @@ export default function RankingTab({ lang }: { lang: Lang }) {
   const [tab, setTab] = useState<TabMode>('gesamt')
   const [filterMonth, setFilterMonth] = useState<number | null>(null)
   const [filterKw, setFilterKw] = useState<number | null>(null)
-  const [raidleiterIds, setRaidleiterIds] = useState<Set<string>>(new Set())
+  const [bankIds, setBankIds] = useState<Set<string>>(new Set())
   const [testIds, setTestIds] = useState<Set<string>>(new Set())
+  const [raidleiterIds, setRaidleiterIds] = useState<Set<string>>(new Set())
   const { getExemptionForUser } = useExemptions()
 
   useEffect(() => {
     supabase
       .from('profiles')
-      .select('id, is_raidleiter, is_test')
+      .select('id, is_bank, is_raidleiter, is_test')
       .then(({ data }) => {
         if (data) {
-          const profiles = data as { id: string; is_raidleiter: boolean; is_test: boolean }[]
-          setRaidleiterIds(new Set(profiles.filter(p => p.is_raidleiter).map(p => p.id)))
+          const profiles = data as { id: string; is_bank: boolean; is_raidleiter: boolean; is_test: boolean }[]
+          setBankIds(new Set(profiles.filter(p => p.is_bank).map(p => p.id)))
           setTestIds(new Set(profiles.filter(p => p.is_test).map(p => p.id)))
+          setRaidleiterIds(new Set(profiles.filter(p => p.is_raidleiter).map(p => p.id)))
         }
       })
   }, [])
@@ -88,7 +90,8 @@ export default function RankingTab({ lang }: { lang: Lang }) {
   }
 
   function sorted(list: RankingRow[]) {
-    const visible = list.filter(r => !testIds.has(r.user_id) && !raidleiterIds.has(r.user_id))
+    // is_bank und is_test komplett ausblenden; Raidleiter bleiben drin
+    const visible = list.filter(r => !bankIds.has(r.user_id) && !testIds.has(r.user_id))
     if (sort === 'value') {
       return [...visible].sort((a, b) => b.total_deposit - a.total_deposit)
     }
@@ -104,7 +107,7 @@ export default function RankingTab({ lang }: { lang: Lang }) {
   const monthOptions = [
     { v: 1, de: 'Januar', en: 'January' },
     { v: 2, de: 'Februar', en: 'February' },
-    { v: 3, de: 'März', en: 'March' },
+    { v: 3, de: 'M\u00e4rz', en: 'March' },
     { v: 4, de: 'April', en: 'April' },
     { v: 5, de: 'Mai', en: 'May' },
     { v: 6, de: 'Juni', en: 'June' },
@@ -117,22 +120,20 @@ export default function RankingTab({ lang }: { lang: Lang }) {
   ]
 
   const t = {
-    title: { de: 'Ranking', en: 'Ranking' },
     gesamt: { de: 'Gesamt', en: 'Overall' },
     ressource: { de: 'Pro Ressource', en: 'Per Resource' },
     byValue: { de: 'Nach Wert', en: 'By value' },
-    byAlpha: { de: 'A – Z', en: 'A – Z' },
+    byAlpha: { de: 'A \u2013 Z', en: 'A \u2013 Z' },
     allMonths: { de: 'Alle Monate', en: 'All months' },
     allKw: { de: 'Alle KW', en: 'All weeks' },
     threshold: { de: 'Soll', en: 'Target' },
     berechtigt: { de: 'Auszahlung berechtigt', en: 'Eligible for payout' },
     nichtBerecht: { de: 'Nicht berechtigt', en: 'Not eligible' },
     noData: { de: 'Keine Daten gefunden.', en: 'No data found.' },
-    loading: { de: 'Lädt...', en: 'Loading...' },
     legend_green: { de: 'Soll erreicht', en: 'Target reached' },
     legend_amber: { de: 'Auf Kurs', en: 'On track' },
-    legend_red: { de: 'Rückstand', en: 'Behind' },
-    hint: { de: 'Berechtigung: mind. 3 von 5 Ressourcen ≥ Schwellwert', en: 'Eligibility: at least 3 of 5 resources ≥ threshold' },
+    legend_red: { de: 'R\u00fcckstand', en: 'Behind' },
+    hint: { de: 'Berechtigung: mind. 3 von 5 Ressourcen \u2265 Schwellwert', en: 'Eligibility: at least 3 of 5 resources \u2265 threshold' },
   }
 
   const sortedRows = sorted(rows)
@@ -158,7 +159,7 @@ export default function RankingTab({ lang }: { lang: Lang }) {
         >
           <option value="">{t.allKw[lang]}</option>
           {kwOptions.map(kw => (
-            <option key={kw} value={kw}>KW {kw}</option>
+            <option key={kw} value={kw}>{'KW ' + kw}</option>
           ))}
         </select>
         <div className="ml-auto flex rounded-lg border border-zinc-700 overflow-hidden">
@@ -203,7 +204,7 @@ export default function RankingTab({ lang }: { lang: Lang }) {
           </span>
         ))}
         <span className="flex items-center gap-1.5 text-xs text-zinc-400">
-          <span className="text-yellow-400">⚔️</span>
+          <span>&#x2694;&#xFE0F;</span>
           {lang === 'de' ? 'Raidleiter (befreit)' : 'Raid leader (exempt)'}
         </span>
         <span className="text-xs text-zinc-600 ml-auto">{t.hint[lang]}</span>
@@ -219,12 +220,13 @@ export default function RankingTab({ lang }: { lang: Lang }) {
       ) : (
         <div className="space-y-2">
           {sortedRows.map((row, idx) => {
+            const isRaidleiter = raidleiterIds.has(row.user_id)
             const exemption = getExemptionForUser(row.user_id)
             const met = metCount(row)
-            const berechtigt = met >= 3
+            const berechtigt = isRaidleiter || met >= 3
             const totalThr = row.threshold_per_res * 5
             const totalPct = pct(row.total_deposit, totalThr)
-            const rankLabel = sort === 'value' ? String(idx + 1) : '–'
+            const rankLabel = sort === 'value' ? String(idx + 1) : '\u2013'
             let alphaSep: string | null = null
             if (sort === 'alpha') {
               const name = (row.ingame_name || row.username)[0]?.toUpperCase() ?? ''
@@ -244,6 +246,11 @@ export default function RankingTab({ lang }: { lang: Lang }) {
                     <span className="text-xs text-zinc-600 w-5 text-right shrink-0">{rankLabel}</span>
                     <span className="text-sm font-medium text-zinc-200 flex-1">
                       {row.ingame_name || row.username}
+                      {isRaidleiter && (
+                        <span className="ml-1.5 text-xs font-normal text-amber-400 border border-amber-700 rounded px-1 py-0.5">
+                          &#x2694;&#xFE0F; {lang === 'de' ? 'befreit' : 'exempt'}
+                        </span>
+                      )}
                     </span>
                     <ExemptionBadge exemption={exemption} />
                     <span className="text-xs text-zinc-500 shrink-0">
@@ -283,17 +290,25 @@ export default function RankingTab({ lang }: { lang: Lang }) {
 
                   {/* Berechtigungs-Zeile */}
                   <div className="flex items-center gap-2 pt-1 border-t border-zinc-800/60">
-                    <span className={'text-xs font-medium px-2 py-0.5 rounded-full ' + (berechtigt ? 'bg-green-900/40 text-green-400 border border-green-800/40' : 'bg-red-900/30 text-red-400 border border-red-800/30')}>
-                      {berechtigt ? t.berechtigt[lang] : t.nichtBerecht[lang]}
-                    </span>
-                    <span className="text-xs text-zinc-500">
-                      {met} / 5 {lang === 'de' ? 'Ressourcen erfüllt' : 'resources met'}
-                    </span>
-                    <div className="flex gap-1 ml-auto">
-                      {RESOURCES.map((_, i) => (
-                        <span key={i} className={'w-2.5 h-2.5 rounded-full ' + (i < met ? 'bg-green-700' : 'bg-zinc-700')} />
-                      ))}
-                    </div>
+                    {isRaidleiter ? (
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-900/30 text-amber-400 border border-amber-800/40">
+                        &#x2694;&#xFE0F; {lang === 'de' ? 'Raidleiter \u2014 befreit' : 'Raid leader \u2014 exempt'}
+                      </span>
+                    ) : (
+                      <>
+                        <span className={'text-xs font-medium px-2 py-0.5 rounded-full ' + (berechtigt ? 'bg-green-900/40 text-green-400 border border-green-800/40' : 'bg-red-900/30 text-red-400 border border-red-800/30')}>
+                          {berechtigt ? t.berechtigt[lang] : t.nichtBerecht[lang]}
+                        </span>
+                        <span className="text-xs text-zinc-500">
+                          {met} / 5 {lang === 'de' ? 'Ressourcen erf\u00fcllt' : 'resources met'}
+                        </span>
+                        <div className="flex gap-1 ml-auto">
+                          {RESOURCES.map((_, i) => (
+                            <span key={i} className={'w-2.5 h-2.5 rounded-full ' + (i < met ? 'bg-green-700' : 'bg-zinc-700')} />
+                          ))}
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
