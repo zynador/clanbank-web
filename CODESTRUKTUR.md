@@ -1,6 +1,6 @@
 # ClanBank — Codestruktur
 
-> **Letzte Aktualisierung:** 27.03.2026 | Fahrplan V32
+> **Letzte Aktualisierung:** 27.03.2026 | Fahrplan V33
 > **Raw-URL für neue Chat-Sessions:**
 > `https://raw.githubusercontent.com/zynador/clanbank-web/main/CODESTRUKTUR.md`
 
@@ -46,7 +46,7 @@ clanbank-web/
 │   ├── HomeTab.tsx               ← Startseite (Status, Backlog, Ankündigungen, Doppel-Podest Ranking)
 │   ├── InfoTooltip.tsx
 │   ├── Logo.tsx                  ← KEINE Props
-│   ├── MembersTab.tsx            ← Mitgliederliste (Suchfeld, Match-Dot, Filter)
+│   ├── MembersTab.tsx            ← Mitgliederliste (Suchfeld, Filter, kompaktes Karten-Layout)
 │   ├── PayoutCalculation.tsx
 │   ├── ProfileMatchPanel.tsx     ← Fuzzy-Matching ungematchter Profile mit Starter-Einträgen
 │   ├── RankingTab.tsx
@@ -100,12 +100,27 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 - **Props:** `lang: Lang`, `onNavigate: (tab: string) => void`
 - **Key-Sections:**
   - Persönlicher Clanbank-Status (grün/rot) mit fehlenden Ressourcen als Pills
-  - Wand der Schande (Admin + Offizier): Grid-Layout mit kompakten Mitgliederkarten
+  - Wand der Schande (Admin + Offizier): Grid-Layout mit kompakten Mitgliederkarten — **KEIN Avatar-Kreis**, nur Name + KW-Badge + Ressource-Emojis
   - `AnnouncementWidget` eingebettet
-  - **Doppel-Podest Ranking:** Bank-Ranking + FCU-Ranking nebeneinander (Top 3 Podest + Plätze 4–5 als Zeilen)
+  - **Doppel-Podest Ranking:** Bank-Ranking + FCU-Ranking nebeneinander (Top 3 Podest + Plätze 4–5 als Zeilen) — **KEINE Avatar-Kreise**
   - Schnellzugriff auf alle 4 Hauptbereiche via `onNavigate`
 - **loadBankRanking():** Nutzt `get_ranking_data` RPC (enthält historical_deposits) — NICHT direkter deposits-Query
-- **Filter:** Raidleiter (`is_raidleiter = true`) werden via RPC-Ergebnis gefiltert
+- **avatarColor():** ❌ Entfernt (V33) — keine Avatar-Kreise mehr
+
+---
+
+### `MembersTab.tsx`
+- **Props:** `lang: Lang`
+- **Sichtbar für:** `admin` und `offizier`
+- **Key-Features:**
+  - Suchfeld (ingame_name + display_name, mit Clear-Button)
+  - Filter: Alle / Aktiv / Ausstehend / Ausgetreten / Nicht gematcht (N)
+  - Karten-Layout kompakt: Name + `@display_name` links, Rolle- und Registrierungsstatus-Badges inline rechts
+  - Raidleiter-Badge + Ausnahme-Badge: eigene Zeile, nur konditionell wenn vorhanden
+  - Expand-on-click für Aktionen
+- **Entfernt (V33):** Avatar-Kreis (38px), Match-Dot, Match-Legende, `matchDot()`-Funktion
+- **Abhängigkeiten:** `ExemptionModal`, `ExemptionBadge`, `useExemptions`
+- **RPC:** `get_members_list`
 
 ---
 
@@ -133,25 +148,11 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 
 ---
 
-### `MembersTab.tsx`
-- **Props:** `lang: Lang`
-- **Sichtbar für:** `admin` und `offizier`
-- **Key-Features:**
-  - Suchfeld (ingame_name + display_name, mit Clear-Button)
-  - Match-Dot am Avatar (grün = profile + starter verknüpft, blau = nur Profil, grau = nur Starter)
-  - Legende unterhalb der Filter
-  - Filter: Alle / Aktiv / Ausstehend / Ausgetreten / Nicht gematcht (N)
-  - Karten-Layout mit Expand-on-click und Aktions-Grid
-- **Abhängigkeiten:** `ExemptionModal`, `ExemptionBadge`, `useExemptions`
-- **RPC:** `get_members_list`
-
----
-
 ### `ProfileMatchPanel.tsx`
 - **Props:** `lang: Lang`
 - **Sichtbar für:** `admin`
 - **RPCs:** `get_unmatched_profiles`, `link_profile_to_starter`
-- **Hinweis:** `link_profile_to_starter` löst jetzt automatisch `transfer_historical_deposits` aus
+- **Hinweis:** `link_profile_to_starter` löst automatisch `transfer_historical_deposits` aus
 
 ---
 
@@ -162,8 +163,8 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
   - Passwort zurücksetzen
   - Starter-Members (StarterMembersPanel)
   - ProfileMatchPanel
-  - **BankImportPanel** (Idee 3)
-  - **HistoricalDepositsPanel** (Idee 3)
+  - BankImportPanel (Idee 3)
+  - HistoricalDepositsPanel (Idee 3)
 
 ---
 
@@ -291,21 +292,19 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 | ocr_alias | text | Alternative OCR-Schreibweise (nullable) |
 | left_clan_at | timestamptz | Soft-Delete (kein deleted_at!) |
 
-#### `historical_deposits` ← NEU (Idee 3)
+#### `historical_deposits`
 | Spalte | Typ | Hinweis |
 |--------|-----|---------|
 | id | uuid PK | |
 | clan_id | uuid FK | |
-| ingame_name | text | Spielername (lowercase resource_type) |
-| resource_type | text | lowercase: cash/arms/cargo/metal/diamond |
+| ingame_name | text | Spielername |
+| resource_type | text | lowercase: cash/arms/cargo/metal/diamond (plain text, kein ENUM!) |
 | amount | bigint | |
 | import_kw | int | Kalenderwoche des Imports |
 | import_year | int | Jahr des Imports |
 | transferred | boolean | false = ausstehend, true = in deposits übertragen |
 | deposit_id | uuid | FK → deposits.id (nach Transfer gesetzt) |
 | created_at | timestamptz | |
-
-**Achtung:** `historical_deposits.resource_type` ist plain `text` (lowercase) — nicht ENUM!
 
 #### `member_exemptions`
 | Spalte | Typ | Hinweis |
@@ -335,8 +334,6 @@ get_members_list(p_clan_id uuid)
 
 get_members_for_import(p_clan_id uuid)
   → TABLE(profile_id uuid, ingame_name text, is_registered boolean)
-  -- DISTINCT ON (ingame_name), Prio: profiles > starter mit Account > starter ohne Account
-  -- is_registered=true: hat echten Account; false: nur Starter-Eintrag
 
 get_unmatched_profiles(p_clan_id uuid)
 link_profile_to_starter(p_profile_id uuid, p_starter_id uuid)
@@ -347,19 +344,14 @@ add_clan_member / mark_member_left / reactivate_member
 set_member_start_kw / set_raidleiter_flag
 ```
 
-### Historische Deposits (Idee 3) ← NEU
+### Historische Deposits (Idee 3)
 ```sql
 import_historical_deposits(p_clan_id uuid, p_deposits jsonb)
   → { success, message, imported, direct_deposits, skipped_duplicates }
-  -- Registrierte → direkt als deposits (status=approved)
-  -- Nicht-registrierte → historical_deposits (transferred=false)
-  -- 3 Match-Stufen: profiles, starter claimed_by, ocr_alias
-  -- ENUM-Cast: CASE v_resource WHEN 'cash' THEN 'Cash'::resource_type ...
 
 transfer_historical_deposits(p_profile_id uuid, p_ingame_name text, p_clan_id uuid)
   → { success, transferred }
-  -- Überträgt alle historical_deposits (transferred=false) eines Spielers
-  -- Wird automatisch aufgerufen von confirm_starter_claim + link_profile_to_starter
+  -- Automatisch aufgerufen von confirm_starter_claim + link_profile_to_starter
 ```
 
 ### Starter-Mitglieder
@@ -378,7 +370,6 @@ get_ranking_data(p_year int, p_kw int, p_month int)
            threshold_per_res, deposit_cash, deposit_arms, deposit_cargo,
            deposit_metal, deposit_diamond, total_deposit)
   -- UNION ALL: registrierte (active_deposits) + nicht-registrierte (historical_deposits)
-  -- historical_deposits: nur transferred=false + kein Profil vorhanden
   -- Verwendet get_my_clan_id() intern (kein p_clan_id Parameter!)
 ```
 
@@ -495,7 +486,6 @@ END;
 // RICHTIG: get_ranking_data enthält historical_deposits
 const { data } = await supabase.rpc('get_ranking_data')
 // FALSCH: direkter deposits-Query fehlen historical_deposits
-// const { data } = await supabase.from('deposits').select(...)
 ```
 
 ### Passwort-Reset
@@ -569,6 +559,7 @@ const res = await fetch('/api/admin/reset-password', {
 | HomeTab Bank-Ranking fehlt historical | `get_ranking_data` RPC nutzen — nicht direkter deposits-Query |
 | transfer_historical_deposits nicht aufgerufen | confirm_starter_claim + link_profile_to_starter rufen es automatisch auf |
 | `SUPABASE_SERVICE_ROLE_KEY` fehlt | Vercel Projekt-Settings (nicht Team) — Sensitive Variable |
+| Avatar-Kreise in Ranking/Members | ❌ Entfernt (V33) — avatarColor() + alle Avatar-Divs gelöscht |
 
 ---
 
