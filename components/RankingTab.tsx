@@ -1,5 +1,4 @@
 'use client'
-
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { useExemptions } from '@/hooks/useExemptions'
@@ -25,10 +24,10 @@ interface RankingRow {
 }
 
 const RESOURCES = [
-  { key: 'deposit_cash',    label: 'Cash' },
-  { key: 'deposit_arms',    label: 'Arms' },
-  { key: 'deposit_cargo',   label: 'Cargo' },
-  { key: 'deposit_metal',   label: 'Metal' },
+  { key: 'deposit_cash', label: 'Cash' },
+  { key: 'deposit_arms', label: 'Arms' },
+  { key: 'deposit_cargo', label: 'Cargo' },
+  { key: 'deposit_metal', label: 'Metal' },
   { key: 'deposit_diamond', label: 'Diamond' },
 ] as const
 
@@ -36,19 +35,16 @@ function pct(val: number, max: number) {
   if (max <= 0) return 100
   return Math.min(100, Math.round((val / max) * 100))
 }
-
 function ampelClass(p: number) {
   if (p >= 100) return 'bg-green-700'
-  if (p >= 60)  return 'bg-amber-600'
+  if (p >= 60) return 'bg-amber-600'
   return 'bg-red-700'
 }
-
 function fmtMio(n: number) {
   if (n >= 1_000_000) return (Math.round(n / 100_000) / 10) + 'M'
   if (n >= 1_000) return (Math.round(n / 100) / 10) + 'K'
   return String(n)
 }
-
 function metCount(row: RankingRow) {
   return RESOURCES.filter(r => row[r.key] >= row.threshold_per_res).length
 }
@@ -82,8 +78,8 @@ export default function RankingTab({ lang }: { lang: Lang }) {
   async function fetchData() {
     setLoading(true)
     const params: Record<string, number | null> = {
-      p_year:  filterMonth || filterKw ? new Date().getFullYear() : null,
-      p_kw:    filterKw,
+      p_year: filterMonth || filterKw ? new Date().getFullYear() : null,
+      p_kw: filterKw,
       p_month: filterMonth,
     }
     const { data, error } = await supabase.rpc('get_ranking_data', params)
@@ -92,7 +88,6 @@ export default function RankingTab({ lang }: { lang: Lang }) {
   }
 
   function sorted(list: RankingRow[]) {
-    // Testaccounts und Raidleiter herausfiltern
     const visible = list.filter(r => !testIds.has(r.user_id) && !raidleiterIds.has(r.user_id))
     if (sort === 'value') {
       return [...visible].sort((a, b) => b.total_deposit - a.total_deposit)
@@ -105,48 +100,45 @@ export default function RankingTab({ lang }: { lang: Lang }) {
   const currentKw = Math.ceil(
     (new Date().getTime() - new Date(new Date().getFullYear(), 0, 1).getTime()) / 604800000
   )
-
   const kwOptions = Array.from({ length: currentKw }, (_, i) => i + 1)
   const monthOptions = [
-    { v: 1,  de: 'Januar',    en: 'January' },
-    { v: 2,  de: 'Februar',   en: 'February' },
-    { v: 3,  de: 'März',      en: 'March' },
-    { v: 4,  de: 'April',     en: 'April' },
-    { v: 5,  de: 'Mai',       en: 'May' },
-    { v: 6,  de: 'Juni',      en: 'June' },
-    { v: 7,  de: 'Juli',      en: 'July' },
-    { v: 8,  de: 'August',    en: 'August' },
-    { v: 9,  de: 'September', en: 'September' },
-    { v: 10, de: 'Oktober',   en: 'October' },
-    { v: 11, de: 'November',  en: 'November' },
-    { v: 12, de: 'Dezember',  en: 'December' },
+    { v: 1, de: 'Januar', en: 'January' },
+    { v: 2, de: 'Februar', en: 'February' },
+    { v: 3, de: 'März', en: 'March' },
+    { v: 4, de: 'April', en: 'April' },
+    { v: 5, de: 'Mai', en: 'May' },
+    { v: 6, de: 'Juni', en: 'June' },
+    { v: 7, de: 'Juli', en: 'July' },
+    { v: 8, de: 'August', en: 'August' },
+    { v: 9, de: 'September', en: 'September' },
+    { v: 10, de: 'Oktober', en: 'October' },
+    { v: 11, de: 'November', en: 'November' },
+    { v: 12, de: 'Dezember', en: 'December' },
   ]
 
   const t = {
-    title:        { de: 'Ranking', en: 'Ranking' },
-    gesamt:       { de: 'Gesamt', en: 'Overall' },
-    ressource:    { de: 'Pro Ressource', en: 'Per Resource' },
-    byValue:      { de: 'Nach Wert', en: 'By value' },
-    byAlpha:      { de: 'A – Z', en: 'A – Z' },
-    allMonths:    { de: 'Alle Monate', en: 'All months' },
-    allKw:        { de: 'Alle KW', en: 'All weeks' },
-    threshold:    { de: 'Soll', en: 'Target' },
-    berechtigt:   { de: 'Auszahlung berechtigt', en: 'Eligible for payout' },
+    title: { de: 'Ranking', en: 'Ranking' },
+    gesamt: { de: 'Gesamt', en: 'Overall' },
+    ressource: { de: 'Pro Ressource', en: 'Per Resource' },
+    byValue: { de: 'Nach Wert', en: 'By value' },
+    byAlpha: { de: 'A – Z', en: 'A – Z' },
+    allMonths: { de: 'Alle Monate', en: 'All months' },
+    allKw: { de: 'Alle KW', en: 'All weeks' },
+    threshold: { de: 'Soll', en: 'Target' },
+    berechtigt: { de: 'Auszahlung berechtigt', en: 'Eligible for payout' },
     nichtBerecht: { de: 'Nicht berechtigt', en: 'Not eligible' },
-    rlBefreit:    { de: 'RL — befreit', en: 'RL — exempt' },
-    noData:       { de: 'Keine Daten gefunden.', en: 'No data found.' },
-    loading:      { de: 'Lädt...', en: 'Loading...' },
+    noData: { de: 'Keine Daten gefunden.', en: 'No data found.' },
+    loading: { de: 'Lädt...', en: 'Loading...' },
     legend_green: { de: 'Soll erreicht', en: 'Target reached' },
     legend_amber: { de: 'Auf Kurs', en: 'On track' },
-    legend_red:   { de: 'Rückstand', en: 'Behind' },
-    hint:         { de: 'Berechtigung: mind. 3 von 5 Ressourcen ≥ Schwellwert', en: 'Eligibility: at least 3 of 5 resources ≥ threshold' },
+    legend_red: { de: 'Rückstand', en: 'Behind' },
+    hint: { de: 'Berechtigung: mind. 3 von 5 Ressourcen ≥ Schwellwert', en: 'Eligibility: at least 3 of 5 resources ≥ threshold' },
   }
 
   const sortedRows = sorted(rows)
 
   return (
     <div className="space-y-4">
-
       {/* Filter + Sort */}
       <div className="flex flex-wrap items-center gap-2">
         <select
@@ -159,7 +151,6 @@ export default function RankingTab({ lang }: { lang: Lang }) {
             <option key={m.v} value={m.v}>{lang === 'de' ? m.de : m.en}</option>
           ))}
         </select>
-
         <select
           value={filterKw ?? ''}
           onChange={e => { setFilterKw(e.target.value ? Number(e.target.value) : null) }}
@@ -170,7 +161,6 @@ export default function RankingTab({ lang }: { lang: Lang }) {
             <option key={kw} value={kw}>KW {kw}</option>
           ))}
         </select>
-
         <div className="ml-auto flex rounded-lg border border-zinc-700 overflow-hidden">
           <button
             onClick={() => setSort('value')}
@@ -205,7 +195,7 @@ export default function RankingTab({ lang }: { lang: Lang }) {
         {[
           { cls: 'bg-green-700', label: t.legend_green[lang] },
           { cls: 'bg-amber-600', label: t.legend_amber[lang] },
-          { cls: 'bg-red-700',   label: t.legend_red[lang] },
+          { cls: 'bg-red-700', label: t.legend_red[lang] },
         ].map(l => (
           <span key={l.label} className="flex items-center gap-1.5 text-xs text-zinc-400">
             <span className={'w-2 h-2 rounded-full inline-block ' + l.cls} />
@@ -235,7 +225,6 @@ export default function RankingTab({ lang }: { lang: Lang }) {
             const totalThr = row.threshold_per_res * 5
             const totalPct = pct(row.total_deposit, totalThr)
             const rankLabel = sort === 'value' ? String(idx + 1) : '–'
-
             let alphaSep: string | null = null
             if (sort === 'alpha') {
               const name = (row.ingame_name || row.username)[0]?.toUpperCase() ?? ''
@@ -244,20 +233,15 @@ export default function RankingTab({ lang }: { lang: Lang }) {
                 : ''
               if (name !== prevName) alphaSep = name
             }
-
             return (
               <div key={row.user_id}>
                 {alphaSep && (
                   <div className="text-xs text-zinc-600 font-medium px-1 pt-2 pb-1">{alphaSep}</div>
                 )}
                 <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl px-4 py-3 space-y-2">
-
                   {/* Header */}
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-zinc-600 w-5 text-right shrink-0">{rankLabel}</span>
-                    <div className="w-8 h-8 rounded-full bg-teal-900/40 border border-teal-800/40 flex items-center justify-center text-xs font-medium text-teal-400 shrink-0">
-                      {(row.ingame_name || row.username).slice(0, 2).toUpperCase()}
-                    </div>
                     <span className="text-sm font-medium text-zinc-200 flex-1">
                       {row.ingame_name || row.username}
                     </span>
@@ -270,10 +254,7 @@ export default function RankingTab({ lang }: { lang: Lang }) {
                   {tab === 'gesamt' ? (
                     <>
                       <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
-                        <div
-                          className={'h-full rounded-full ' + ampelClass(totalPct)}
-                          style={{ width: totalPct + '%' }}
-                        />
+                        <div className={'h-full rounded-full ' + ampelClass(totalPct)} style={{ width: totalPct + '%' }} />
                       </div>
                       <div className="flex justify-between text-xs text-zinc-500">
                         <span>{totalPct}% {lang === 'de' ? 'des Solls' : 'of target'}</span>
@@ -289,10 +270,7 @@ export default function RankingTab({ lang }: { lang: Lang }) {
                           <div key={res.key} className="flex items-center gap-2">
                             <span className="text-xs text-zinc-500 w-14 shrink-0">{res.label}</span>
                             <div className="flex-1 h-2 bg-zinc-800 rounded-full overflow-hidden">
-                              <div
-                                className={'h-full rounded-full ' + ampelClass(p)}
-                                style={{ width: p + '%' }}
-                              />
+                              <div className={'h-full rounded-full ' + ampelClass(p)} style={{ width: p + '%' }} />
                             </div>
                             <span className="text-xs text-zinc-500 w-24 text-right shrink-0">
                               {fmtMio(val)} / {fmtMio(row.threshold_per_res)}
@@ -313,14 +291,10 @@ export default function RankingTab({ lang }: { lang: Lang }) {
                     </span>
                     <div className="flex gap-1 ml-auto">
                       {RESOURCES.map((_, i) => (
-                        <span
-                          key={i}
-                          className={'w-2.5 h-2.5 rounded-full ' + (i < met ? 'bg-green-700' : 'bg-zinc-700')}
-                        />
+                        <span key={i} className={'w-2.5 h-2.5 rounded-full ' + (i < met ? 'bg-green-700' : 'bg-zinc-700')} />
                       ))}
                     </div>
                   </div>
-
                 </div>
               </div>
             )
