@@ -4,12 +4,30 @@ Dieses Dokument definiert verbindliche Regeln für alle Code-Beiträge in diesem
 
 ---
 
+## Session-Ablauf
+
+### Erst prüfen und testen — dann dokumentieren
+
+Nach jeder Änderung gilt zwingend folgende Reihenfolge:
+
+1. **Code lesen** — betroffene Dateien vollständig sichten bevor etwas geändert wird
+2. **Änderung umsetzen** — vollständige Datei liefern, in GitHub einspielen
+3. **Testen** — Vercel-Deploy abwarten, im Browser prüfen, ggf. Konsole/Logs checken
+4. **Gemeinsam bestätigen** — der Nutzer meldet das Testergebnis (Screenshot oder kurze Rückmeldung), Claude bestätigt. Erst wenn beide einig sind dass alles funktioniert, gilt eine Änderung als abgeschlossen.
+5. **Erst dann** Fahrplan und CODESTRUKTUR.md aktualisieren
+
+Fahrplan und CODESTRUKTUR.md werden **nicht sofort** nach einer Änderung erstellt — nur wenn der Nutzer explizit danach fragt oder die Session abgeschlossen ist.
+
+---
+
 ## Code Style
 
 ### TypeScript strict mode
+
 `strict: true` ist in `tsconfig.json` aktiviert. Alle neuen Dateien müssen damit fehlerfrei kompilieren.
 
 ### Keine `any`-Types
+
 Explizites `any` ist verboten — auch dort wo der Compiler es erlauben würde.
 
 ```typescript
@@ -25,6 +43,7 @@ function process(input: unknown) { ... }
 Erlaubte Alternativen: `unknown` + Type Guard, konkretes Interface, generischer Typ.
 
 ### Funktionen unter 30 Zeilen
+
 Jede Funktion — Handler, Hook, Hilfsfunktion — bleibt unter 30 Zeilen. Größere Logik wird in benannte Hilfsfunktionen aufgeteilt.
 
 ```typescript
@@ -34,6 +53,7 @@ Jede Funktion — Handler, Hook, Hilfsfunktion — bleibt unter 30 Zeilen. Grö�
 function validateForm(fields: FormFields): boolean { ... }
 async function uploadFile(file: File): Promise<string> { ... }
 async function callRpc(url: string): Promise<RpcResult> { ... }
+
 async function handleSave() {
   if (!validateForm(fields)) return
   const url = await uploadFile(file)
@@ -42,6 +62,7 @@ async function handleSave() {
 ```
 
 ### Tests für jeden neuen `app/api/`-Endpunkt
+
 Für jede neue Route unter `app/api/` wird ein Playwright-Testfall in der passenden Spec-Datei ergänzt. Bestehende Spec-Dateien sind in `tests/`.
 
 ```
