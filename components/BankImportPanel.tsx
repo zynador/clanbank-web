@@ -218,6 +218,7 @@ export default function BankImportPanel({ lang }: BankImportPanelProps) {
   }
 
   const registeredMembers = members.filter(m => m.is_registered && m.profile_id)
+  const allMembersForDropdown = members // alle, auch unregistrierte
   const totalNames = Object.keys(rowsByName).length
   const skippedCount = Object.keys(manualMappings).filter(k => manualMappings[k] === 'skip').length
   const readyCount = totalNames - unmatchedNames.filter(n => !manualMappings[n] || manualMappings[n] === 'skip').length - skippedCount
