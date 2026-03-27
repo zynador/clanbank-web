@@ -131,8 +131,8 @@ export default function BankImportPanel({ lang }: BankImportPanelProps) {
       }
 
       const headerLower = rawHeaders.map(h => h.toLowerCase().trim())
-      const hasResourceCol = headerLower.some(h => ['ressource','resource','typ'].includes(h))
-      const hasMengeCol = headerLower.some(h => ['menge','amount','betrag'].includes(h))
+      const hasResourceCol = headerLower.some(h => ['ressource', 'resource', 'typ'].includes(h))
+      const hasMengeCol = headerLower.some(h => ['menge', 'amount', 'betrag'].includes(h))
       const isLongFormat = hasResourceCol && hasMengeCol && Object.keys(resourceCols).length === 0
 
       const parsedRows: ImportRow[] = []
@@ -157,8 +157,8 @@ export default function BankImportPanel({ lang }: BankImportPanelProps) {
       }
 
       if (isLongFormat) {
-        const resCol = rawHeaders.find(h => ['ressource','resource','typ'].includes(h.toLowerCase().trim()))!
-        const amtCol = rawHeaders.find(h => ['menge','amount','betrag'].includes(h.toLowerCase().trim()))!
+        const resCol = rawHeaders.find(h => ['ressource', 'resource', 'typ'].includes(h.toLowerCase().trim()))!
+        const amtCol = rawHeaders.find(h => ['menge', 'amount', 'betrag'].includes(h.toLowerCase().trim()))!
         for (const row of jsonData) {
           const name = String(row[nameCol] ?? '').trim()
           const resource = RESOURCE_HEADERS[String(row[resCol] ?? '').toLowerCase().trim()] ?? ''
@@ -205,8 +205,15 @@ export default function BankImportPanel({ lang }: BankImportPanelProps) {
           kw: importKw,
           year: importYear,
         }
-        const pid = (override && override !== 'skip') ? override : row.profile_id
-        if (pid) obj.profile_id = pid
+        if (override && override !== 'skip') {
+          if (override.startsWith('ingame:')) {
+            obj.ingame_name = override.replace('ingame:', '')
+          } else {
+            obj.profile_id = override
+          }
+        } else if (row.profile_id) {
+          obj.profile_id = row.profile_id
+        }
         return obj
       })
   }
@@ -218,10 +225,9 @@ export default function BankImportPanel({ lang }: BankImportPanelProps) {
   }
 
   const registeredMembers = members.filter(m => m.is_registered && m.profile_id)
-  const allMembersForDropdown = members // alle, auch unregistrierte
+  const unregisteredMembers = members.filter(m => !m.is_registered)
   const totalNames = Object.keys(rowsByName).length
-  const skippedCount = Object.keys(manualMappings).filter(k => manualMappings[k] === 'skip').length
-  const readyCount = totalNames - unmatchedNames.filter(n => !manualMappings[n] || manualMappings[n] === 'skip').length - skippedCount
+  const stillUnmatched = unmatchedNames.filter(n => !manualMappings[n] || manualMappings[n] === 'skip')
 
   async function handleImport() {
     setLoading(true)
@@ -277,7 +283,8 @@ export default function BankImportPanel({ lang }: BankImportPanelProps) {
             </div>
           </div>
 
-          <div className="border-2 border-dashed border-white/20 rounded-xl p-8 text-center cursor-pointer hover:border-white/40 transition-colors"
+          <div
+            className="border-2 border-dashed border-white/20 rounded-xl p-8 text-center cursor-pointer hover:border-white/40 transition-colors"
             onClick={() => fileInputRef.current?.click()}>
             <div className="text-4xl mb-2">📊</div>
             <p className="text-white/70 text-sm font-medium">{t('Excel-Datei (.xlsx) hochladen', 'Upload Excel file (.xlsx)')}</p>
@@ -292,7 +299,7 @@ export default function BankImportPanel({ lang }: BankImportPanelProps) {
             <p className="text-green-400/70 pt-1">
               {'✅ ' + t(
                 'Alle Spieler werden importiert — auch nicht registrierte. Ihre Daten werden automatisch übertragen sobald sie sich registrieren.',
-                'All players are imported — including unregistered ones. Their data transfers automatically upon registration.'
+                'All players are imported — including unregistered ones. Data transfers automatically upon registration.'
               )}
             </p>
           </div>
@@ -306,7 +313,9 @@ export default function BankImportPanel({ lang }: BankImportPanelProps) {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-sm text-white/60">{'📄 ' + (fileName ?? '') + ' — KW ' + importKw + '/' + importYear}</span>
-            <button onClick={handleReset} className="text-xs text-white/40 hover:text-white/70 transition">✕ {t('Zurücksetzen', 'Reset')}</button>
+            <button onClick={handleReset} className="text-xs text-white/40 hover:text-white/70 transition">
+              {'✕ ' + t('Zurücksetzen', 'Reset')}
+            </button>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -330,9 +339,9 @@ export default function BankImportPanel({ lang }: BankImportPanelProps) {
               <div className="text-lg font-bold text-green-400">{totalNames - unmatchedNames.length}</div>
               <div className="text-xs text-white/50">{t('erkannt', 'matched')}</div>
             </div>
-            <div className={'border rounded-lg p-2 ' + (unmatchedNames.filter(n => !manualMappings[n] || manualMappings[n] === 'skip').length > 0 ? 'bg-orange-900/20 border-orange-500/20' : 'bg-green-900/20 border-green-500/20')}>
-              <div className={'text-lg font-bold ' + (unmatchedNames.filter(n => !manualMappings[n] || manualMappings[n] === 'skip').length > 0 ? 'text-orange-400' : 'text-green-400')}>
-                {unmatchedNames.filter(n => !manualMappings[n] || manualMappings[n] === 'skip').length}
+            <div className={'border rounded-lg p-2 ' + (stillUnmatched.length > 0 ? 'bg-orange-900/20 border-orange-500/20' : 'bg-green-900/20 border-green-500/20')}>
+              <div className={'text-lg font-bold ' + (stillUnmatched.length > 0 ? 'text-orange-400' : 'text-green-400')}>
+                {stillUnmatched.length}
               </div>
               <div className="text-xs text-white/50">{t('unbekannt', 'unknown')}</div>
             </div>
@@ -344,15 +353,15 @@ export default function BankImportPanel({ lang }: BankImportPanelProps) {
 
           {/* Legende */}
           <div className="flex gap-4 text-xs text-white/50 flex-wrap">
-            <span>✓ {t('registriert → direkt in Bank', 'registered → direct to bank')}</span>
-            <span>🕐 {t('nicht registriert → wird übertragen bei Registrierung', 'unregistered → transfers on registration')}</span>
+            <span>{'✓ ' + t('registriert → direkt in Bank', 'registered → direct to bank')}</span>
+            <span>{'🕐 ' + t('nicht registriert → übertragen bei Registrierung', 'unregistered → transfers on registration')}</span>
           </div>
 
           {/* Unbekannte Namen */}
           {unmatchedNames.length > 0 && (
             <div className="bg-orange-900/10 border border-orange-500/20 rounded-lg p-3 space-y-2">
               <p className="text-sm font-medium text-orange-300">
-                ⚠️ {t('Unbekannte Namen — zuordnen oder überspringen:', 'Unknown names — assign or skip:')}
+                {'⚠️ ' + t('Unbekannte Namen — zuordnen oder überspringen:', 'Unknown names — assign or skip:')}
               </p>
               {unmatchedNames.map(name => (
                 <div key={name} className="flex items-center gap-2">
@@ -363,26 +372,32 @@ export default function BankImportPanel({ lang }: BankImportPanelProps) {
                   )}>
                     {manualMappings[name] && manualMappings[name] !== 'skip' ? '✓ ' : ''}{name}
                   </span>
-                  <select value={manualMappings[name] ?? ''}
+                  <select
+                    value={manualMappings[name] ?? ''}
                     onChange={e => setManualMappings(prev => ({ ...prev, [name]: e.target.value }))}
                     className="flex-1 bg-white/10 text-white rounded px-2 py-1 text-xs border border-white/20">
-                   <option value="">{t('-- als unbekannt speichern --', '-- save as unknown --')}</option>
+                    <option value="">{t('-- als unbekannt speichern --', '-- save as unknown --')}</option>
                     <optgroup label={t('✓ Registriert', '✓ Registered')}>
                       {registeredMembers.map(m => (
                         <option key={m.profile_id!} value={m.profile_id!}>{m.ingame_name}</option>
                       ))}
                     </optgroup>
-                    <optgroup label={t('🕐 Noch nicht registriert', '🕐 Not yet registered')}>
-                      {allMembersForDropdown.filter(m => !m.is_registered).map(m => (
-                        <option key={m.ingame_name} value={'ingame:' + m.ingame_name}>{m.ingame_name}</option>
-                      ))}
-                    </optgroup>
+                    {unregisteredMembers.length > 0 && (
+                      <optgroup label={t('🕐 Noch nicht registriert', '🕐 Not yet registered')}>
+                        {unregisteredMembers.map(m => (
+                          <option key={m.ingame_name} value={'ingame:' + m.ingame_name}>{m.ingame_name}</option>
+                        ))}
+                      </optgroup>
+                    )}
                     <option value="skip">{'⛔ ' + t('Überspringen', 'Skip')}</option>
                   </select>
                 </div>
               ))}
               <p className="text-xs text-white/40 pt-1">
-                💡 {t('Unbekannte Namen ohne Zuordnung werden trotzdem gespeichert und können später manuell verknüpft werden.', 'Unknown names without assignment are still saved and can be linked later.')}
+                {'💡 ' + t(
+                  'Unbekannte Namen ohne Zuordnung werden trotzdem gespeichert und können später manuell verknüpft werden.',
+                  'Unknown names without assignment are still saved and can be linked later.'
+                )}
               </p>
             </div>
           )}
@@ -408,7 +423,9 @@ export default function BankImportPanel({ lang }: BankImportPanelProps) {
                       {isSkipped ? '⛔ ' : isUnregistered ? '🕐 ' : isMatched ? '✓ ' : '⚠️ '}
                       {name}
                       {isUnregistered && (
-                        <span className="ml-1 text-zinc-500 font-normal italic">{t('(nicht registriert — wird gespeichert)', '(not registered — will be saved)')}</span>
+                        <span className="ml-1 text-zinc-500 font-normal italic">
+                          {t('(nicht registriert — wird gespeichert)', '(not registered — will be saved)')}
+                        </span>
                       )}
                     </span>
                     <span className="text-white/40">{nameRows.length}{' '}{t('Res.', 'res.')}</span>
@@ -427,7 +444,9 @@ export default function BankImportPanel({ lang }: BankImportPanelProps) {
 
           {error && <div className="bg-red-900/30 border border-red-500/30 text-red-300 rounded-lg p-3 text-sm">⚠️ {error}</div>}
 
-          <button onClick={handleImport} disabled={loading || rows.length === 0}
+          <button
+            onClick={handleImport}
+            disabled={loading || rows.length === 0}
             className="w-full bg-green-700 hover:bg-green-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg px-4 py-3 text-sm font-semibold transition">
             {loading
               ? '⏳ ' + t('Importiere...', 'Importing...')
@@ -440,7 +459,7 @@ export default function BankImportPanel({ lang }: BankImportPanelProps) {
       {step === 'done' && result && (
         <div className="space-y-4">
           <div className="bg-green-900/20 border border-green-500/30 rounded-xl p-5 space-y-4">
-            <h4 className="text-green-400 font-semibold text-base">✅ {t('Import abgeschlossen', 'Import complete')}</h4>
+            <h4 className="text-green-400 font-semibold text-base">{'✅ ' + t('Import abgeschlossen', 'Import complete')}</h4>
             <div className="grid grid-cols-3 gap-3 text-center">
               <div>
                 <div className="text-2xl font-bold text-white">{result.imported}</div>
@@ -456,15 +475,16 @@ export default function BankImportPanel({ lang }: BankImportPanelProps) {
               </div>
             </div>
             <p className="text-xs text-white/40 text-center">
-              🕐 {t(
+              {'🕐 ' + t(
                 'Nicht registrierte Spieler: Daten werden automatisch in die Bank übertragen sobald ihr Claim bestätigt wird.',
-                'Unregistered players: Data transfers to the bank automatically when their claim is confirmed.'
+                'Unregistered players: Data transfers automatically when their claim is confirmed.'
               )}
             </p>
           </div>
-          <button onClick={handleReset}
+          <button
+            onClick={handleReset}
             className="w-full bg-white/10 hover:bg-white/15 text-white rounded-lg px-4 py-2 text-sm transition">
-            📥 {t('Weitere Datei importieren', 'Import another file')}
+            {'📥 ' + t('Weitere Datei importieren', 'Import another file')}
           </button>
         </div>
       )}
