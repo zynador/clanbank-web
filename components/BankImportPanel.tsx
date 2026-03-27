@@ -26,8 +26,8 @@ interface MemberOption {
 
 interface ImportResult {
   imported: number
+  direct_deposits: number
   skipped_duplicates: number
-  unmatched_names: string[]
 }
 
 const RESOURCE_HEADERS: Record<string, string> = {
@@ -92,7 +92,6 @@ export default function BankImportPanel({ lang }: BankImportPanelProps) {
     if (data) setMembers(data as MemberOption[])
   }
 
-  // Findet exakten Match (case-insensitive)
   function findMatch(name: string): MemberOption | undefined {
     const lower = name.toLowerCase().trim()
     return members.find(m => m.ingame_name.toLowerCase().trim() === lower)
@@ -110,57 +109,47 @@ export default function BankImportPanel({ lang }: BankImportPanelProps) {
       const XLSX = xlsxMod.default ?? xlsxMod
       const buffer = await file.arrayBuffer()
       const workbook = XLSX.read(buffer, { type: 'array' })
-      const sheetName = workbook.SheetNames[0]
-      const sheet = workbook.Sheets[sheetName]
+      const sheet = workbook.Sheets[workbook.SheetNames[0]]
       const jsonData: Record<string, unknown>[] = XLSX.utils.sheet_to_json(sheet, { defval: 0 })
 
       if (!jsonData.length) {
-        setError(t('Excel-Datei ist leer oder hat kein gültiges Format.', 'Excel file is empty or has no valid format.'))
+        setError(t('Excel-Datei ist leer.', 'Excel file is empty.'))
         return
       }
 
       const rawHeaders = Object.keys(jsonData[0])
 
-      // Name-Spalte suchen
       let nameCol = rawHeaders[0]
       for (const h of rawHeaders) {
-        if (NAME_HEADERS.includes(h.toLowerCase().trim())) {
-          nameCol = h
-          break
-        }
+        if (NAME_HEADERS.includes(h.toLowerCase().trim())) { nameCol = h; break }
       }
 
-      // Ressource-Spalten (Breit-Format)
       const resourceCols: Record<string, string> = {}
       for (const h of rawHeaders) {
-        const normalized = h.toLowerCase().trim()
-        if (RESOURCE_HEADERS[normalized]) {
-          resourceCols[h] = RESOURCE_HEADERS[normalized]
-        }
+        const n = h.toLowerCase().trim()
+        if (RESOURCE_HEADERS[n]) resourceCols[h] = RESOURCE_HEADERS[n]
       }
 
-      // Lang-Format erkennen
       const headerLower = rawHeaders.map(h => h.toLowerCase().trim())
-      const hasResourceCol = headerLower.some(h => h === 'ressource' || h === 'resource' || h === 'typ')
-      const hasMengeCol = headerLower.some(h => h === 'menge' || h === 'amount' || h === 'betrag')
+      const hasResourceCol = headerLower.some(h => ['ressource','resource','typ'].includes(h))
+      const hasMengeCol = headerLower.some(h => ['menge','amount','betrag'].includes(h))
       const isLongFormat = hasResourceCol && hasMengeCol && Object.keys(resourceCols).length === 0
 
       const parsedRows: ImportRow[] = []
       const unmatchedSet = new Set<string>()
       const unregisteredSet = new Set<string>()
 
-      const processName = (name: string, rowResource: string, rowAmount: number) => {
+      const processName = (name: string, resource: string, amount: number) => {
         const match = findMatch(name)
         if (!match) {
           unmatchedSet.add(name)
         } else if (!match.is_registered) {
-          // Bekannter Starter, aber noch nicht registriert
           unregisteredSet.add(name)
         }
         parsedRows.push({
           ingame_name: name,
-          resource_type: rowResource,
-          amount: rowAmount,
+          resource_type: resource,
+          amount,
           kw: importKw,
           year: importYear,
           profile_id: (match?.is_registered && match.profile_id) ? match.profile_id : undefined,
@@ -168,13 +157,12 @@ export default function BankImportPanel({ lang }: BankImportPanelProps) {
       }
 
       if (isLongFormat) {
-        const resColName = rawHeaders.find(h => ['ressource', 'resource', 'typ'].includes(h.toLowerCase().trim()))!
-        const amtColName = rawHeaders.find(h => ['menge', 'amount', 'betrag'].includes(h.toLowerCase().trim()))!
+        const resCol = rawHeaders.find(h => ['ressource','resource','typ'].includes(h.toLowerCase().trim()))!
+        const amtCol = rawHeaders.find(h => ['menge','amount','betrag'].includes(h.toLowerCase().trim()))!
         for (const row of jsonData) {
           const name = String(row[nameCol] ?? '').trim()
-          const resourceRaw = String(row[resColName] ?? '').toLowerCase().trim()
-          const amount = Number(row[amtColName] ?? 0)
-          const resource = RESOURCE_HEADERS[resourceRaw] ?? ''
+          const resource = RESOURCE_HEADERS[String(row[resCol] ?? '').toLowerCase().trim()] ?? ''
+          const amount = Number(row[amtCol] ?? 0)
           if (!name || !resource || amount <= 0) continue
           processName(name, resource, amount)
         }
@@ -191,17 +179,12 @@ export default function BankImportPanel({ lang }: BankImportPanelProps) {
       }
 
       if (!parsedRows.length) {
-        setError(t(
-          'Keine gültigen Einträge gefunden. Spalten erwartet: Name + Cash/Arms/Cargo/Metal/Diamond',
-          'No valid rows found. Expected columns: Name + Cash/Arms/Cargo/Metal/Diamond'
-        ))
+        setError(t('Keine gültigen Einträge gefunden.', 'No valid rows found.'))
         return
       }
 
       setRows(parsedRows)
-      // Unmatched = weder in profiles noch in starter_members
       setUnmatchedNames(Array.from(unmatchedSet))
-      // Unregistered = in starter_members aber noch kein Account
       setUnregisteredNames(Array.from(unregisteredSet))
       setManualMappings({})
       setStep('preview')
@@ -212,13 +195,7 @@ export default function BankImportPanel({ lang }: BankImportPanelProps) {
 
   function buildPayload(): Record<string, unknown>[] {
     return rows
-      .filter(row => {
-        // Unregistrierte immer überspringen
-        if (unregisteredNames.includes(row.ingame_name)) return false
-        // Manuell als Skip markierte überspringen
-        if (manualMappings[row.ingame_name] === 'skip') return false
-        return true
-      })
+      .filter(row => manualMappings[row.ingame_name] !== 'skip')
       .map(row => {
         const override = manualMappings[row.ingame_name]
         const obj: Record<string, unknown> = {
@@ -234,27 +211,31 @@ export default function BankImportPanel({ lang }: BankImportPanelProps) {
       })
   }
 
-  function getImportableCount(): number {
-    return buildPayload().filter(r => r.profile_id).length
+  const rowsByName: Record<string, ImportRow[]> = {}
+  for (const row of rows) {
+    if (!rowsByName[row.ingame_name]) rowsByName[row.ingame_name] = []
+    rowsByName[row.ingame_name].push(row)
   }
+
+  const registeredMembers = members.filter(m => m.is_registered && m.profile_id)
+  const totalNames = Object.keys(rowsByName).length
+  const skippedCount = Object.keys(manualMappings).filter(k => manualMappings[k] === 'skip').length
+  const readyCount = totalNames - unmatchedNames.filter(n => !manualMappings[n] || manualMappings[n] === 'skip').length - skippedCount
 
   async function handleImport() {
     setLoading(true)
     setError(null)
     try {
       const payload = buildPayload()
-      const { data, error: rpcError } = await supabase.rpc('import_bank_deposits', {
+      const { data, error: rpcError } = await supabase.rpc('import_historical_deposits', {
         p_clan_id: profile!.clan_id,
         p_deposits: payload,
-        p_dry_run: false,
       })
       if (rpcError) { setError(rpcError.message); return }
-
-      const unmatched = Array.isArray(data?.unmatched_names) ? data.unmatched_names as string[] : []
       setResult({
         imported: Number(data?.imported ?? 0),
+        direct_deposits: Number(data?.direct_deposits ?? 0),
         skipped_duplicates: Number(data?.skipped_duplicates ?? 0),
-        unmatched_names: unmatched,
       })
       setStep('done')
     } catch (err) {
@@ -265,29 +246,11 @@ export default function BankImportPanel({ lang }: BankImportPanelProps) {
   }
 
   function handleReset() {
-    setStep('upload')
-    setRows([])
-    setUnmatchedNames([])
-    setUnregisteredNames([])
-    setManualMappings({})
-    setResult(null)
-    setError(null)
-    setFileName(null)
+    setStep('upload'); setRows([]); setUnmatchedNames([])
+    setUnregisteredNames([]); setManualMappings([])
+    setResult(null); setError(null); setFileName(null)
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
-
-  const rowsByName: Record<string, ImportRow[]> = {}
-  for (const row of rows) {
-    if (!rowsByName[row.ingame_name]) rowsByName[row.ingame_name] = []
-    rowsByName[row.ingame_name].push(row)
-  }
-
-  // Registrierte Mitglieder für Dropdown (nur die mit echtem Account)
-  const registeredMembers = members.filter(m => m.is_registered && m.profile_id)
-
-  const totalNames = Object.keys(rowsByName).length
-  const stillUnmatched = unmatchedNames.filter(n => !manualMappings[n] || manualMappings[n] === 'skip')
-  const matchedNames = totalNames - unmatchedNames.length - unregisteredNames.length
 
   return (
     <div className="space-y-4">
@@ -295,7 +258,7 @@ export default function BankImportPanel({ lang }: BankImportPanelProps) {
         📥 {t('Bankstand-Import (Historisch)', 'Bank Import (Historical)')}
       </h3>
 
-      {/* ===== UPLOAD ===== */}
+      {/* UPLOAD */}
       {step === 'upload' && (
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
@@ -321,14 +284,14 @@ export default function BankImportPanel({ lang }: BankImportPanelProps) {
           </div>
           <input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFileChange} />
 
-          <div className="bg-white/5 rounded-lg p-3 text-xs text-white/50 space-y-1">
-            <p className="font-medium text-white/70 mb-1">{t('Unterstützte Spalten-Formate:', 'Supported column formats:')}</p>
-            <p>{'📋 ' + t('Breit:', 'Wide:') + ' Name | Cash | Arms | Cargo | Metal | Diamond'}</p>
-            <p>{'📋 ' + t('Lang:', 'Long:') + ' Name | Ressource | Menge'}</p>
-            <p className="text-orange-400/70 pt-1">
-              {'⚠️ ' + t(
-                'Nur registrierte Mitglieder können importiert werden. Noch nicht registrierte Starter werden mit Hinweis angezeigt.',
-                'Only registered members can be imported. Unregistered starters will be shown with a note.'
+          <div className="bg-white/5 rounded-lg p-3 text-xs space-y-1">
+            <p className="font-medium text-white/70">{t('Unterstützte Formate:', 'Supported formats:')}</p>
+            <p className="text-white/50">{'📋 ' + t('Breit:', 'Wide:') + ' Name | Cash | Arms | Cargo | Metal | Diamond'}</p>
+            <p className="text-white/50">{'📋 ' + t('Lang:', 'Long:') + ' Name | Ressource | Menge'}</p>
+            <p className="text-green-400/70 pt-1">
+              {'✅ ' + t(
+                'Alle Spieler werden importiert — auch nicht registrierte. Ihre Daten werden automatisch übertragen sobald sie sich registrieren.',
+                'All players are imported — including unregistered ones. Their data transfers automatically upon registration.'
               )}
             </p>
           </div>
@@ -337,7 +300,7 @@ export default function BankImportPanel({ lang }: BankImportPanelProps) {
         </div>
       )}
 
-      {/* ===== VORSCHAU ===== */}
+      {/* VORSCHAU */}
       {step === 'preview' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
@@ -360,19 +323,17 @@ export default function BankImportPanel({ lang }: BankImportPanelProps) {
             </div>
           </div>
 
-          {/* Statistik */}
-          <div className="grid grid-cols-4 gap-2 text-center">
+          {/* Stats */}
+          <div className="grid grid-cols-3 gap-2 text-center">
             <div className="bg-green-900/20 border border-green-500/20 rounded-lg p-2">
-              <div className="text-lg font-bold text-green-400">{matchedNames}</div>
+              <div className="text-lg font-bold text-green-400">{totalNames - unmatchedNames.length}</div>
               <div className="text-xs text-white/50">{t('erkannt', 'matched')}</div>
             </div>
-            <div className={'border rounded-lg p-2 ' + (stillUnmatched.length > 0 ? 'bg-orange-900/20 border-orange-500/20' : 'bg-green-900/20 border-green-500/20')}>
-              <div className={'text-lg font-bold ' + (stillUnmatched.length > 0 ? 'text-orange-400' : 'text-green-400')}>{stillUnmatched.length}</div>
-              <div className="text-xs text-white/50">{t('offen', 'unmatched')}</div>
-            </div>
-            <div className={'border rounded-lg p-2 ' + (unregisteredNames.length > 0 ? 'bg-zinc-800 border-zinc-600' : 'bg-green-900/20 border-green-500/20')}>
-              <div className={'text-lg font-bold ' + (unregisteredNames.length > 0 ? 'text-zinc-400' : 'text-green-400')}>{unregisteredNames.length}</div>
-              <div className="text-xs text-white/50">{t('n. registriert', 'unregistered')}</div>
+            <div className={'border rounded-lg p-2 ' + (unmatchedNames.filter(n => !manualMappings[n] || manualMappings[n] === 'skip').length > 0 ? 'bg-orange-900/20 border-orange-500/20' : 'bg-green-900/20 border-green-500/20')}>
+              <div className={'text-lg font-bold ' + (unmatchedNames.filter(n => !manualMappings[n] || manualMappings[n] === 'skip').length > 0 ? 'text-orange-400' : 'text-green-400')}>
+                {unmatchedNames.filter(n => !manualMappings[n] || manualMappings[n] === 'skip').length}
+              </div>
+              <div className="text-xs text-white/50">{t('unbekannt', 'unknown')}</div>
             </div>
             <div className="bg-blue-900/20 border border-blue-500/20 rounded-lg p-2">
               <div className="text-lg font-bold text-blue-400">{rows.length}</div>
@@ -380,27 +341,17 @@ export default function BankImportPanel({ lang }: BankImportPanelProps) {
             </div>
           </div>
 
-          {/* Nicht registrierte Starter */}
-          {unregisteredNames.length > 0 && (
-            <div className="bg-zinc-800/60 border border-zinc-600/40 rounded-lg p-3 space-y-1">
-              <p className="text-sm font-medium text-zinc-400 mb-2">
-                🔒 {t('Noch nicht registriert – werden automatisch übersprungen:', 'Not yet registered – will be skipped automatically:')}
-              </p>
-              {unregisteredNames.map(name => (
-                <div key={name} className="flex items-center gap-2 text-xs">
-                  <span className="text-zinc-500">👤</span>
-                  <span className="text-zinc-400">{name}</span>
-                  <span className="text-zinc-600 italic">{t('(kein Account)', '(no account)')}</span>
-                </div>
-              ))}
-            </div>
-          )}
+          {/* Legende */}
+          <div className="flex gap-4 text-xs text-white/50 flex-wrap">
+            <span>✓ {t('registriert → direkt in Bank', 'registered → direct to bank')}</span>
+            <span>🕐 {t('nicht registriert → wird übertragen bei Registrierung', 'unregistered → transfers on registration')}</span>
+          </div>
 
-          {/* Vollständig unbekannte Namen */}
+          {/* Unbekannte Namen */}
           {unmatchedNames.length > 0 && (
             <div className="bg-orange-900/10 border border-orange-500/20 rounded-lg p-3 space-y-2">
               <p className="text-sm font-medium text-orange-300">
-                ⚠️ {t('Unbekannte Namen – manuell zuordnen oder überspringen:', 'Unknown names – assign manually or skip:')}
+                ⚠️ {t('Unbekannte Namen — zuordnen oder überspringen:', 'Unknown names — assign or skip:')}
               </p>
               {unmatchedNames.map(name => (
                 <div key={name} className="flex items-center gap-2">
@@ -411,11 +362,10 @@ export default function BankImportPanel({ lang }: BankImportPanelProps) {
                   )}>
                     {manualMappings[name] && manualMappings[name] !== 'skip' ? '✓ ' : ''}{name}
                   </span>
-                  <select
-                    value={manualMappings[name] ?? ''}
+                  <select value={manualMappings[name] ?? ''}
                     onChange={e => setManualMappings(prev => ({ ...prev, [name]: e.target.value }))}
                     className="flex-1 bg-white/10 text-white rounded px-2 py-1 text-xs border border-white/20">
-                    <option value="">{t('-- Spieler auswählen --', '-- Select player --')}</option>
+                    <option value="">{t('-- als unbekannt speichern --', '-- save as unknown --')}</option>
                     {registeredMembers.map(m => (
                       <option key={m.profile_id!} value={m.profile_id!}>{m.ingame_name}</option>
                     ))}
@@ -423,31 +373,34 @@ export default function BankImportPanel({ lang }: BankImportPanelProps) {
                   </select>
                 </div>
               ))}
+              <p className="text-xs text-white/40 pt-1">
+                💡 {t('Unbekannte Namen ohne Zuordnung werden trotzdem gespeichert und können später manuell verknüpft werden.', 'Unknown names without assignment are still saved and can be linked later.')}
+              </p>
             </div>
           )}
 
-          {/* Vorschau-Liste */}
-          <div className="space-y-1 max-h-60 overflow-y-auto pr-1">
+          {/* Vorschauliste */}
+          <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
             {Object.entries(rowsByName).map(([name, nameRows]) => {
+              const isSkipped = manualMappings[name] === 'skip'
               const isUnregistered = unregisteredNames.includes(name)
-              const isSkipped = manualMappings[name] === 'skip' || isUnregistered
+              const isUnknown = unmatchedNames.includes(name) && (!manualMappings[name] || manualMappings[name] === 'skip')
               const hasOverride = manualMappings[name] && manualMappings[name] !== 'skip'
               const isMatched = !!nameRows[0].profile_id || hasOverride
 
               return (
                 <div key={name} className={
                   'rounded-lg p-2 border text-xs ' +
-                  (isUnregistered ? 'bg-zinc-800/40 border-zinc-700/30 opacity-50'
-                  : isSkipped ? 'bg-white/3 border-white/5 opacity-40'
-                  : isMatched ? 'bg-white/5 border-white/10'
-                  : 'bg-orange-900/10 border-orange-500/20')
+                  (isSkipped ? 'bg-white/3 border-white/5 opacity-40'
+                  : isUnknown ? 'bg-orange-900/10 border-orange-500/20'
+                  : 'bg-white/5 border-white/10')
                 }>
                   <div className="flex items-center justify-between mb-1">
                     <span className="font-medium text-white/80">
-                      {isUnregistered ? '🔒 ' : isSkipped ? '⛔ ' : isMatched ? '✓ ' : '⚠️ '}
+                      {isSkipped ? '⛔ ' : isUnregistered ? '🕐 ' : isMatched ? '✓ ' : '⚠️ '}
                       {name}
                       {isUnregistered && (
-                        <span className="ml-1 text-zinc-500 font-normal italic">{t('(nicht registriert)', '(not registered)')}</span>
+                        <span className="ml-1 text-zinc-500 font-normal italic">{t('(nicht registriert — wird gespeichert)', '(not registered — will be saved)')}</span>
                       )}
                     </span>
                     <span className="text-white/40">{nameRows.length}{' '}{t('Res.', 'res.')}</span>
@@ -470,22 +423,12 @@ export default function BankImportPanel({ lang }: BankImportPanelProps) {
             className="w-full bg-green-700 hover:bg-green-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg px-4 py-3 text-sm font-semibold transition">
             {loading
               ? '⏳ ' + t('Importiere...', 'Importing...')
-              : '✅ ' + t('Jetzt importieren', 'Import now') + ' (' + getImportableCount() + t(' Einträge)', ' rows)')
-            }
+              : '✅ ' + t('Alle importieren', 'Import all') + ' (' + (rows.length - rows.filter(r => manualMappings[r.ingame_name] === 'skip').length) + t(' Einträge)', ' rows)')}
           </button>
-
-          {(stillUnmatched.length > 0 || unregisteredNames.length > 0) && (
-            <p className="text-xs text-zinc-500 text-center">
-              {(stillUnmatched.length + unregisteredNames.length) + ' ' + t(
-                'Namen werden übersprungen (nicht zugeordnet / nicht registriert)',
-                'names will be skipped (unmatched / not registered)'
-              )}
-            </p>
-          )}
         </div>
       )}
 
-      {/* ===== FERTIG ===== */}
+      {/* FERTIG */}
       {step === 'done' && result && (
         <div className="space-y-4">
           <div className="bg-green-900/20 border border-green-500/30 rounded-xl p-5 space-y-4">
@@ -493,24 +436,23 @@ export default function BankImportPanel({ lang }: BankImportPanelProps) {
             <div className="grid grid-cols-3 gap-3 text-center">
               <div>
                 <div className="text-2xl font-bold text-white">{result.imported}</div>
-                <div className="text-xs text-white/50">{t('importiert', 'imported')}</div>
+                <div className="text-xs text-white/50">{t('gespeichert', 'saved')}</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-green-400">{result.direct_deposits}</div>
+                <div className="text-xs text-white/50">{t('direkt in Bank', 'direct to bank')}</div>
               </div>
               <div>
                 <div className="text-2xl font-bold text-yellow-400">{result.skipped_duplicates}</div>
                 <div className="text-xs text-white/50">{t('Duplikate', 'duplicates')}</div>
               </div>
-              <div>
-                <div className={'text-2xl font-bold ' + (result.unmatched_names.length > 0 ? 'text-orange-400' : 'text-white')}>
-                  {result.unmatched_names.length}
-                </div>
-                <div className="text-xs text-white/50">{t('übersprungen', 'skipped')}</div>
-              </div>
             </div>
-            {result.unmatched_names.length > 0 && (
-              <div className="bg-orange-900/20 rounded-lg p-2 text-xs text-orange-300">
-                ⚠️ {t('Nicht importiert:', 'Not imported:')}{' '}{result.unmatched_names.join(', ')}
-              </div>
-            )}
+            <p className="text-xs text-white/40 text-center">
+              🕐 {t(
+                'Nicht registrierte Spieler: Daten werden automatisch in die Bank übertragen sobald ihr Claim bestätigt wird.',
+                'Unregistered players: Data transfers to the bank automatically when their claim is confirmed.'
+              )}
+            </p>
           </div>
           <button onClick={handleReset}
             className="w-full bg-white/10 hover:bg-white/15 text-white rounded-lg px-4 py-2 text-sm transition">
