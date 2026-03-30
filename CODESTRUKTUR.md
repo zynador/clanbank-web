@@ -1,6 +1,6 @@
 # ClanBank — Codestruktur
 
-> **Letzte Aktualisierung:** 27.03.2026 | Fahrplan V35
+> **Letzte Aktualisierung:** 30.03.2026 | Fahrplan V37
 > **Raw-URL für neue Chat-Sessions:**
 > `https://raw.githubusercontent.com/zynador/clanbank-web/main/CODESTRUKTUR.md`
 
@@ -11,7 +11,7 @@
 clanbank-web/
 ├── .github/
 │   └── workflows/
-│       └── playwright.yml        ← GitHub Actions E2E-Tests (manuell via workflow_dispatch)
+│       └── playwright.yml        ← GitHub Actions E2E-Tests (manuell via workflow_dispatch, Node.js 22)
 ├── app/
 │   ├── api/
 │   │   ├── ocr/
@@ -97,171 +97,56 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 
 ---
 
-### `Logo.tsx`
-- **Props:** keine
-- **Hinweis:** Immer ohne Props aufrufen: `<Logo />`
-
----
-
 ### `HomeTab.tsx`
 - **Props:** `lang: Lang`, `onNavigate: (tab: string) => void`
 - **Key-Sections:**
-  - Persönlicher Clanbank-Status (grün/rot) mit fehlenden Ressourcen als Pills
-  - **Wand der Schande (alle Rollen):** Grid-Layout mit kompakten Mitgliederkarten — registrierte Mitglieder + nicht-registrierte Starter mit 🆕-Badge
+  - Persönlicher Clanbank-Status (grün/rot)
+  - **Wand der Schande:** Grid — nur Mitglieder/Starter MIT Rückstand. Klick öffnet **Modal/Overlay** (fixed z-50)
+  - **„🆕 Noch nicht registriert":** Eigenes blaues Panel für Starter OHNE Rückstand (vollständig eingezahlt)
   - `AnnouncementWidget` eingebettet
-  - **Doppel-Podest Ranking:** Bank-Ranking + FCU-Ranking nebeneinander (Top 3 Podest + Plätze 4–5 als Zeilen) — **KEINE Avatar-Kreise**
-  - Schnellzugriff auf alle 4 Hauptbereiche via `onNavigate`
-- **loadBankRanking():** Nutzt `get_ranking_data` RPC (enthält historical_deposits) — NICHT direkter deposits-Query
-- **loadBacklog():** Lädt `profiles` (aktive, nicht is_test/is_raidleiter/is_bank) + `starter_members` (claimed_by IS NULL, left_clan_at IS NULL). Starter mit gleichem ingame_name wie ein Profil werden ausgeschlossen.
-- **loadDetail():** Für registrierte Mitglieder: `deposits` + `historical_deposits` (transferred=false). Für Starter: nur `historical_deposits` (alle). **Immer `.toLowerCase()` auf resource_type** — ENUM liefert `'Cash'`, historical liefert `'cash'`.
-- **BacklogMember / MemberDetail:** optionales Feld `is_starter?: boolean`
-- **avatarColor():** ❌ Entfernt (V33) — keine Avatar-Kreise mehr
+  - **Doppel-Podest Ranking:** Bank + FCU nebeneinander
+  - Schnellzugriff auf alle 4 Hauptbereiche
+- **State:**
+  - `backlog: BacklogMember[]` — registrierte Mitglieder mit Rückstand + Starter mit Rückstand
+  - `starters: BacklogMember[]` — Starter ohne Rückstand (eigener Abschnitt)
+- **loadBacklog():**
+  - Supabase-Query-Ergebnis heißt `starterRows` (nicht `starters`) — kein Konflikt mit State
+  - Bulk-Query `historical_deposits` per `.in('ingame_name', starterNames)` für alle Starter auf einmal
+  - Pro Starter: Ressourcen summieren, gegen `(currentKw - 2) × 5M` prüfen
+  - Fehlende Ressourcen → `startersBehind` → Wand der Schande
+  - Alles grün → `startersPaid` → `starters`-State (eigener Abschnitt)
+  - **paidSet:** `d.resource_type` IMMER `.toLowerCase()` — DB liefert `'Cash'`, RESOURCES-Array `'cash'`
+- **loadDetail():** aufgeteilt in `loadDetailForStarter()` + `loadDetailForMember()` (je < 30 Zeilen)
+- **Modal:** `fixed inset-0 z-50`, Backdrop `rgba(0,0,0,0.45)`, Klick außen schließt
 - **data-tour-id Attribute:** `home-status`, `home-ranking-bank`, `home-ranking-fcu`, `home-backlog`
-- **⚠️ Offener Punkt:** Detailansicht erscheint inline nach ALLEN Kacheln — bei vielen Einträgen außerhalb Sichtfeld. Geplant: Modal/Overlay.
 
 ---
 
 ### `MembersTab.tsx`
 - **Props:** `lang: Lang`
 - **Sichtbar für:** `admin` und `offizier`
-- **Key-Features:**
-  - Suchfeld (ingame_name + display_name, mit Clear-Button)
-  - Filter: Alle / Aktiv / Ausstehend / Ausgetreten / Nicht gematcht (N)
-  - Karten-Layout kompakt: Name + `@display_name` links, Rolle- und Registrierungsstatus-Badges inline rechts
-  - Raidleiter-Badge + Ausnahme-Badge: eigene Zeile, nur konditionell wenn vorhanden
-  - Expand-on-click für Aktionen
-- **Entfernt (V33):** Avatar-Kreis (38px), Match-Dot, Match-Legende, `matchDot()`-Funktion
-- **Abhängigkeiten:** `ExemptionModal`, `ExemptionBadge`, `useExemptions`
+- **Entfernt (V33):** Avatar-Kreis, Match-Dot, Match-Legende
 - **RPC:** `get_members_list`
-- **data-tour-id Attribute:** `members-search`
-
----
-
-### `DepositsTab.tsx`
-- **data-tour-id Attribute:** `deposits-list`, `deposits-add-btn`
-
----
-
-### `FCUEventTab.tsx`
-- **Props:** `lang: Lang`
-- **Key-States:** `view: 'list' | 'upload' | 'results' | 'ranking'`, `activeEventId`
-- **data-tour-id Attribute:** `fcu-list`, `fcu-ranking-btn`
+- **data-tour-id:** `members-search`
 
 ---
 
 ### `GuidedTour.tsx`
-- **Props:**
-  - `steps: TourStep[]` — rollengefiltertes Schritt-Array
-  - `onNavigate: (tab: string) => void` — Tab-Wechsel-Callback
-  - `onComplete: () => void` — Callback wenn Tour abgeschlossen
-  - `onSkip: () => void` — Callback wenn abgebrochen
 - **NUR für Member-Tour** — Demo-Nutzer haben keinen GuidedTour
-- **Mechanismus:** Floating Tooltip + Highlight-Ring (box-shadow Overlay Technik)
-- **Tooltip-Positionierung:** `getBoundingClientRect()` → rechts > links > unten > oben
-- **Scroll:** `scrollIntoView({ behavior: 'smooth', block: 'center' })` vor Tooltip-Render
+- **Mechanismus:** Floating Tooltip + Highlight-Ring (box-shadow)
 - **Keyboard:** ESC = abbrechen, Pfeil rechts = weiter, Pfeil links = zurück
-- **Backdrop:** Dunkles Overlay außerhalb Highlight-Bereich (`pointer-events: none`)
-
-```typescript
-interface TourStep {
-  id: string           // z.B. 'home-ranking'
-  targetId: string     // Wert des data-tour-id Attributs am Ziel-Element
-  tab: string          // Tab der vor dem Schritt aktiviert wird
-  title: string        // Tooltip-Überschrift
-  body: string         // Erklärungstext (2-3 Sätze)
-  roles: UserRole[]    // Rollen die diesen Schritt sehen
-}
-```
-
----
-
-### `TourButton.tsx`
-- **Props:** `onClick: () => void`
-- **Darstellung:** Schwebender `?` Button, `position: fixed`, unten rechts
-- **Sichtbar:** Immer im Dashboard (für alle echten Rollen)
-- **Funktion:** Startet Member-Tour neu
 
 ---
 
 ### `BankImportPanel.tsx`
-- **Props:** `lang: Lang`
-- **Sichtbar für:** `admin`
-- **Key-Features:**
-  - Excel-Upload (.xlsx) mit automatischer Format-Erkennung (Breit: Name|Cash|Arms... / Lang: Name|Ressource|Menge)
-  - KW + Jahr einstellbar (default: aktuelle KW)
-  - Alle Spieler importierbar — registrierte direkt als `deposits`, nicht-registrierte in `historical_deposits`
-  - Dropdown für unbekannte Namen: registrierte (optgroup 1) + nicht-registrierte Starter (optgroup 2, `ingame:`-Prefix)
-  - Duplikatschutz in beiden Tabellen
 - **xlsx-Import:** `const xlsxMod = await import('xlsx') as any; const XLSX = xlsxMod.default ?? xlsxMod`
 - **RPC:** `import_historical_deposits`
-- **Eingebettet in:** `AdminPanel.tsx`
 - **data-tour-id:** `admin-bank-import`
 
 ---
 
-### `HistoricalDepositsPanel.tsx`
-- **Props:** `lang: Lang`
-- **Sichtbar für:** `admin`
-- **Zweck:** Zeigt alle `historical_deposits` mit Filter (ausstehend/übertragen/alle) und Suchfeld
-- **Eingebettet in:** `AdminPanel.tsx` (nach BankImportPanel)
-
----
-
 ### `AdminPanel.tsx`
-- **Props:** `lang: Lang`
-- **Key-Sektionen:** Einladungscode, Passwort-Reset, StarterMembersPanel, ProfileMatchPanel, BankImportPanel, HistoricalDepositsPanel
 - **data-tour-id Attribute:** `admin-password-reset`, `admin-bank-import`
-
----
-
-### `ProfileMatchPanel.tsx`
-- **Props:** `lang: Lang`
-- **Sichtbar für:** `admin`
-- **RPCs:** `get_unmatched_profiles`, `link_profile_to_starter`
-- **Hinweis:** `link_profile_to_starter` löst automatisch `transfer_historical_deposits` aus
-
----
-
-### `AnnouncementWidget.tsx`
-- **Props:** `lang: Lang`
-- **Sichtbar für:** alle Rollen (Admin sieht Formular + Löschen-Button)
-
----
-
-### `FCUResultsEditor.tsx`
-- **Props:** `lang: Lang`, `eventId: string`, `onBack: () => void`
-- **Bearbeiten-Button** (nur Admin, nur bei `confirmed`): ruft `reopen_fcu_event` RPC auf
-
----
-
-### `FCURankingView.tsx`
-- **Props:** `lang: Lang`, `onBack: () => void`
-- **Sortierung:** höchste Gesamtpunktzahl = Platz 1 (total_points DESC)
-
----
-
-### `ScreenshotUpload.tsx`
-- **Props:** `lang: Lang`, `clanId: string`, `onUploadComplete: (url: string, hash: string | null) => void`, `maxAgeDays?: number`
-- **Default maxAgeDays:** 4 (Einzahlungen), BattleReport: 7
-
----
-
-### `BattleReportUpload.tsx`
-- **Props:** `lang: Lang`, `onComplete?: (battleReportId: string) => void`
-- **OCR-Modi:** `battle_overview` / `battle_detail`
-
----
-
-### `RankingTab.tsx`
-- **Props:** `lang: Lang`
-- **RPC:** `get_ranking_data()` — enthält auch historical_deposits (UNION ALL)
-- **Hinweis:** Raidleiter werden NICHT im Ranking angezeigt
-
----
-
-### `BacklogWidget.tsx`
-- **Props:** `lang: Lang`
-- **Key-Function:** Ampelfarben für Rückstand, Raidleiter ausgeblendet
 
 ---
 
@@ -286,17 +171,10 @@ interface TourStep {
 ---
 
 ### `app/api/admin/reset-password/route.ts`
-- **Methode:** POST
-- **Env:** `SUPABASE_SERVICE_ROLE_KEY`
-
----
+- **Methode:** POST / **Env:** `SUPABASE_SERVICE_ROLE_KEY`
 
 ### `app/api/demo/login/route.ts`
-- **Methode:** POST
-- **Env:** `SUPABASE_SERVICE_ROLE_KEY`
-- **Body:** `{ role: 'admin' | 'offizier' | 'mitglied' }`
-- **Ablauf:** Erstellt Gastaccount im Demo-Clan via `auth.admin.createUser()`, setzt Session, Redirect zu `/dashboard`
-- **Kein Auth-Check** — Route ist öffentlich
+- **Methode:** POST / **Env:** `SUPABASE_SERVICE_ROLE_KEY`
 - **Demo-Clan-UUID:** `00000000-0000-0000-0000-000000000002`
 
 ---
@@ -304,183 +182,49 @@ interface TourStep {
 ## 4. Seiten
 
 ### `app/demo/page.tsx`
-- **Kein Auth-Check** — vollständig öffentlich, kein Einladungscode
-- **Inhalt:** 3 Rollenkarten (Admin / Offizier / Mitglied) mit Funktionsbeschreibung
+- **Kein Auth-Check** — vollständig öffentlich
 - **Klick auf Karte:** POST `/api/demo/login` → Redirect `/dashboard`
-- **Kein GuidedTour** im Demo-Modus — freies Erkunden
-- **Link:** Zurück zu `/login`
+- **Kein GuidedTour** im Demo-Modus
 
 ---
 
 ## 5. Datenbank
 
-### Tabellen
-
-#### `clans`
-| Spalte | Typ | Hinweis |
-|--------|-----|---------|
-| id | uuid PK | `00000000-0000-0000-0000-000000000001` = Camorra Elite |
-| id | uuid PK | `00000000-0000-0000-0000-000000000002` = Demo-Clan |
-| invite_code | text | "MAFIA2026" (Camorra Elite) / NULL (Demo-Clan) |
-
-#### `profiles`
-| Spalte | Typ | Hinweis |
-|--------|-----|---------|
-| id | uuid PK | = auth.uid() |
-| clan_id | uuid FK | |
-| ingame_name | text | |
-| display_name | text | |
-| role | enum | `admin` / `offizier` / `mitglied` |
-| is_raidleiter | boolean | Flag |
-| is_test | boolean | Testaccounts + Demo-Gastaccounts |
-| left_clan_at | timestamptz | Soft-Delete (kein deleted_at!) |
+### Tabellen (Auszug)
 
 #### `deposits`
 | Spalte | Typ | Hinweis |
 |--------|-----|---------|
 | resource_type | enum | **Cash/Arms/Cargo/Metal/Diamond (grossgeschrieben!)** |
-| status | enum | `pending` / `approved` / `rejected` |
-| screenshot_url | text | nullable (historische Imports haben keinen Screenshot) |
-| deleted_at | timestamptz | Soft-Delete |
-
-#### `starter_members`
-| Spalte | Typ | Hinweis |
-|--------|-----|---------|
-| ocr_alias | text | Alternative OCR-Schreibweise (nullable) |
-| left_clan_at | timestamptz | Soft-Delete (kein deleted_at!) |
 
 #### `historical_deposits`
 | Spalte | Typ | Hinweis |
 |--------|-----|---------|
-| id | uuid PK | |
-| clan_id | uuid FK | |
-| ingame_name | text | Spielername |
 | resource_type | text | lowercase: cash/arms/cargo/metal/diamond (plain text, kein ENUM!) |
-| amount | bigint | |
-| import_kw | int | Kalenderwoche des Imports |
-| import_year | int | Jahr des Imports |
-| transferred | boolean | false = ausstehend, true = in deposits übertragen |
-| deposit_id | uuid | FK → deposits.id (nach Transfer gesetzt) |
-| created_at | timestamptz | |
-
-#### `member_exemptions`
-| Spalte | Typ | Hinweis |
-|--------|-----|---------|
-| is_active | boolean | aktive Ausnahmen: `WHERE is_active = true` (kein deleted_at) |
+| transferred | boolean | false = ausstehend, true = übertragen |
 
 #### `tour_progress`
 | Spalte | Typ | Hinweis |
 |--------|-----|---------|
-| id | uuid PK | |
-| user_id | uuid FK → auth.users | |
+| user_id | uuid FK | RLS: user_id = auth.uid() |
 | completed | boolean | default false |
-| last_step | int | letzter abgeschlossener Schritt-Index |
-| updated_at | timestamptz | |
-
-- **RLS:** `user_id = auth.uid()` — Nutzer sieht nur eigenen Eintrag
-- **Demo-Nutzer:** Kein Eintrag — Demo hat keinen GuidedTour
-
-### Views
-- **`active_deposits`** — filtert approved + nicht-deleted Deposits
-
-### Supabase Storage
-- **Bucket:** `screenshots`
-
-### Demo-Clan Seed-Daten (einmalig per SQL, nie zurücksetzen)
-| Tabelle | Inhalt |
-|---------|--------|
-| profiles | 5 Einträge: 1 Admin, 1 Offizier, 3 Mitglieder — alle `is_test = true` |
-| deposits | ~30 Einzahlungen, 8 Wochen, alle 5 Ressourcentypen |
-| starter_members | 3 nicht-registrierte Starter |
-| fcu_events | 2 abgeschlossene Events mit Ergebnissen |
-| battle_reports | 1 Kampfbericht mit berechneten Auszahlungen |
-| announcements | 2 Ankündigungen (1 angepinnt) |
-| historical_deposits | 5 Einträge für Demo-Starter |
-
-**RLS Demo-Clan:** Policies für `clan_id = '00000000-0000-0000-0000-000000000002'` erlauben nur `SELECT` — kein INSERT/UPDATE/DELETE.
+| last_step | int | letzter Schritt-Index |
 
 ---
 
 ## 6. RPCs
 
-### Hilfs-Funktionen
 ```sql
 get_my_clan_id() → uuid
 get_my_role()    → text
-```
-
-### Mitglieder
-```sql
-get_members_list(p_clan_id uuid)
-  → TABLE(source, profile_id, starter_id, ingame_name, ...)
-
-get_members_for_import(p_clan_id uuid)
-  → TABLE(profile_id uuid, ingame_name text, is_registered boolean)
-
-get_unmatched_profiles(p_clan_id uuid)
-link_profile_to_starter(p_profile_id uuid, p_starter_id uuid)
-  → { success, message }
-  -- Löst automatisch transfer_historical_deposits aus!
-
-add_clan_member / mark_member_left / reactivate_member
-set_member_start_kw / set_raidleiter_flag
-```
-
-### Historische Deposits (Idee 3)
-```sql
+get_ranking_data()  -- kein p_clan_id! Nutzt get_my_clan_id() intern
+get_fcu_overall_ranking(p_clan_id uuid)
 import_historical_deposits(p_clan_id uuid, p_deposits jsonb)
-  → { success, message, imported, direct_deposits, skipped_duplicates }
-
 transfer_historical_deposits(p_profile_id uuid, p_ingame_name text, p_clan_id uuid)
-  → { success, transferred }
-  -- Automatisch aufgerufen von confirm_starter_claim + link_profile_to_starter
-```
-
-### Starter-Mitglieder
-```sql
-import_starter_members / claim_starter_profile
-confirm_starter_claim(p_starter_id uuid)
-  → { success, message }
-  -- Löst automatisch transfer_historical_deposits aus!
-reject_starter_claim(p_starter_id uuid)
-```
-
-### Ranking
-```sql
-get_ranking_data(p_year int, p_kw int, p_month int)
-  → TABLE(user_id, ingame_name, username, start_kw, start_year,
-           threshold_per_res, deposit_cash, deposit_arms, deposit_cargo,
-           deposit_metal, deposit_diamond, total_deposit)
-  -- UNION ALL: registrierte (active_deposits) + nicht-registrierte (historical_deposits)
-  -- Verwendet get_my_clan_id() intern (kein p_clan_id Parameter!)
-```
-
-### FCU
-```sql
-create_fcu_event / save_fcu_results / get_fcu_overall_ranking
-reopen_fcu_event(p_fcu_event_id uuid) → { success, message }
-create_announcement / delete_announcement
-```
-
-### Einzahlungen
-```sql
-create_bulk_deposit(p_clan_id, p_deposits jsonb) → { success, message }
-check_screenshot_hash(p_hash, p_clan_id) → { exists: boolean }
-```
-
-### Kampfberichte & Auszahlungen
-```sql
-create_battle_report / save_battle_casualties
-calculate_payouts / mark_payout_paid
-```
-
-### Tour (Idee 7)
-```sql
-get_or_create_tour_progress()
-  → { completed: boolean, last_step: int }
-
+confirm_starter_claim(p_starter_id uuid)   -- löst transfer_historical_deposits aus
+link_profile_to_starter(p_profile_id uuid, p_starter_id uuid)  -- löst transfer aus
+get_or_create_tour_progress() → { completed, last_step }
 update_tour_progress(p_last_step int, p_completed boolean)
-  → { success, message }
 ```
 
 ---
@@ -496,12 +240,9 @@ type Tab =
 
 ## 8. data-tour-id Attribute (Member-Tour)
 
-Alle Ziel-Elemente für `GuidedTour.tsx` erhalten ein `data-tour-id` Attribut.
-Niemals auf CSS-Klassen oder generische IDs als Tour-Target verlassen.
-
 | data-tour-id | Komponente | Element |
 |---|---|---|
-| `home-status` | HomeTab | Persönlicher Status (grün/rot) |
+| `home-status` | HomeTab | Persönlicher Status |
 | `home-ranking-bank` | HomeTab | Bank-Ranking-Podest |
 | `home-ranking-fcu` | HomeTab | FCU-Ranking-Podest |
 | `home-backlog` | HomeTab | Wand der Schande Grid |
@@ -517,18 +258,8 @@ Niemals auf CSS-Klassen oder generische IDs als Tour-Target verlassen.
 
 ## 9. Playwright E2E-Tests
 
-### GitHub Secrets
-| Secret | Wert |
-|--------|------|
-| `PLAYWRIGHT_BASE_URL` | Vercel-URL |
-| `TEST_ADMIN_USER` | `autoadmin` |
-| `TEST_ADMIN_PASS` | `admin123` |
-| `TEST_MEMBER_USER` | `automitglied` |
-| `TEST_MEMBER_PASS` | `mitglied123` |
-| `VERCEL_BYPASS_SECRET` | Vercel Protection Bypass |
-
-### Offene Punkte (Stand V35)
-- `home.spec.ts`: Test `Mitglied sieht KEINEN Rueckstand Block` muss angepasst werden — Wand der Schande ist jetzt für alle sichtbar
+### Offene Punkte (Stand V37)
+Keine offenen Punkte.
 
 ### loginAs()-Muster
 ```typescript
@@ -557,84 +288,39 @@ import { useAuth } from '@/lib/auth-context'
 const { user, profile, loading, signOut } = useAuth()
 ```
 
-### RPC aufrufen
+### resource_type normalisieren (HomeTab loadBacklog + loadDetail)
 ```typescript
-const { data, error } = await supabase.rpc('rpc_name', { p_param: value })
-if (error || !data?.success) { setFeedback(data?.message || 'Fehler'); return }
-```
-
-### FK-Join (Ambiguität)
-```typescript
-supabase.from('deposits').select('*, profiles!deposits_user_id_fkey(ingame_name)')
-```
-
-### SHA-256
-```typescript
-const buf = await file.arrayBuffer()
-const digest = await crypto.subtle.digest('SHA-256', buf)
-const hash = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('')
-```
-
-### xlsx-Import (Turbopack-safe)
-```typescript
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const xlsxMod = await import('xlsx') as any
-const XLSX = xlsxMod.default ?? xlsxMod
-```
-
-### resource_type ENUM (grossgeschrieben!)
-```sql
--- Enum-Werte: Cash, Arms, Cargo, Metal, Diamond (NICHT lowercase!)
-v_resource_enum := CASE v_resource
-  WHEN 'cash'    THEN 'Cash'::resource_type
-  WHEN 'arms'    THEN 'Arms'::resource_type
-  WHEN 'cargo'   THEN 'Cargo'::resource_type
-  WHEN 'metal'   THEN 'Metal'::resource_type
-  WHEN 'diamond' THEN 'Diamond'::resource_type
-END;
--- historical_deposits.resource_type ist plain text (lowercase) — kein ENUM!
-```
-
-### loadDetail() resource_type normalisieren (HomeTab)
-```typescript
-// deposits.resource_type ist ENUM (grossgeschrieben) → immer normalisieren!
+// IMMER .toLowerCase() — deposits-ENUM liefert 'Cash', RESOURCES-Array erwartet 'cash'
+paidSet.add(d.user_id + '_' + (d.resource_type as string).toLowerCase() + '_' + kw)
 const rt = (d.resource_type as string).toLowerCase() as ResourceType
-// historical_deposits.resource_type ist bereits lowercase — .toLowerCase() schadet nicht
 ```
 
-### Bank-Ranking (HomeTab)
+### Starter Bulk-Query (HomeTab loadBacklog)
 ```typescript
-// RICHTIG: get_ranking_data enthält historical_deposits
-const { data } = await supabase.rpc('get_ranking_data')
-// FALSCH: direkter deposits-Query fehlen historical_deposits
+// NICHT in Schleife einzeln abfragen — eine Bulk-Query für alle Starter-Namen
+const { data: histDeposits } = starterNames.length > 0
+  ? await supabase.from('historical_deposits').select('ingame_name, resource_type, amount')
+      .eq('clan_id', profile.clan_id).in('ingame_name', starterNames)
+  : { data: [] }
 ```
 
-### Passwort-Reset
+### Variable-Konflikt vermeiden (HomeTab)
 ```typescript
-const { data: { session } } = await supabase.auth.getSession()
-const res = await fetch('/api/admin/reset-password', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (session?.access_token ?? '') },
-  body: JSON.stringify({ targetUserId, newPassword }),
-})
+// Supabase-Ergebnis heißt starterRows (nicht starters) — kein Konflikt mit useState starters
+const { data: starterRows } = await supabase.from('starter_members')...
+const activeStarters = (starterRows ?? []).filter(...)
 ```
 
-### Demo-Login
+### Modal-Pattern (Wand der Schande)
 ```typescript
-// Kein Auth-Token nötig — Route ist öffentlich
-const res = await fetch('/api/demo/login', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ role: 'admin' }), // 'admin' | 'offizier' | 'mitglied'
-})
-// Bei Erfolg: redirect zu /dashboard
-```
-
-### tour_progress laden
-```typescript
-const { data } = await supabase.rpc('get_or_create_tour_progress')
-// data: { completed: boolean, last_step: number }
-if (!data.completed) { /* Tour starten */ }
+// Backdrop: Klick schließt. Inner div: e.stopPropagation()
+<div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+  style={{ backgroundColor: 'rgba(0,0,0,0.45)' }} onClick={closeDetail}>
+  <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl"
+    onClick={e => e.stopPropagation()}>
+    ...
+  </div>
+</div>
 ```
 
 ### Template Literals vermeiden (Turbopack)
@@ -658,15 +344,9 @@ if (!data.completed) { /* Tour starten */ }
 
 | | Admin | Offizier | Mitglied |
 |--|-------|----------|---------|
-| Einzahlungen sehen | ✅ alle | ✅ alle | ✅ eigene |
-| Einzahlungen genehmigen | ✅ | ✅ | ❌ |
-| FCU Event anlegen | ✅ | ❌ | ❌ |
-| Ankündigungen erstellen | ✅ | ❌ | ❌ |
 | Wand der Schande sehen | ✅ | ✅ | ✅ |
 | Mitgliederliste sehen | ✅ | ✅ | ❌ |
 | AdminPanel | ✅ | ❌ | ❌ |
-| Bank-Import (Idee 3) | ✅ | ❌ | ❌ |
-| Passwort-Reset | ✅ | ❌ | ❌ |
 | Member-Tour Schritte | ✅ 1–9 | ➖ 1–7 | ➖ 1–4 |
 
 **Auth-Pattern:**
@@ -683,32 +363,23 @@ if (!data.completed) { /* Tour starten */ }
 |---------|--------|
 | `search_path`-Fehler bei RPCs | `SET search_path = public` in jede RPC |
 | Supabase FK-Join-Ambiguität | `profiles!deposits_user_id_fkey(...)` |
-| Vercel build schlägt fehl | `tests/` in `tsconfig.json` ausschließen |
-| OCR-Modell-String falsch | Muss exakt `claude-haiku-4-5-20251001` sein |
-| Playwright: WelcomeModal blockiert | `waitFor({ state: 'visible' })` + `waitFor({ state: 'hidden' })` |
-| Playwright: Strict mode violation | Drawer-Buttons per `getByRole('navigation')` einschränken |
 | `profiles` hat kein `deleted_at` | Soft-Delete über `left_clan_at` |
 | `starter_members` hat kein `deleted_at` | Soft-Delete über `left_clan_at` |
 | `member_exemptions`: aktive Ausnahmen | `WHERE is_active = true` — kein deleted_at |
 | `is_test` / `is_raidleiter` PostgREST `.eq(false)` | JS-seitig filtern via excludeIds Set |
-| UNION ALL mit ORDER BY | In Subquery wrappen |
-| resource_type ENUM grossgeschrieben | Cash/Arms/Cargo/Metal/Diamond — CASE-Mapping in RPCs |
-| xlsx Turbopack-Interop | `const XLSX = xlsxMod.default ?? xlsxMod` |
+| resource_type ENUM grossgeschrieben | Cash/Arms/Cargo/Metal/Diamond — immer `.toLowerCase()` in JS |
 | historical_deposits resource_type | plain text (lowercase) — kein ENUM! |
-| get_ranking_data zwei Versionen | DROP FUNCTION IF EXISTS für beide Signaturen |
 | get_ranking_data kein p_clan_id | Nutzt `get_my_clan_id()` intern — kein Parameter! |
-| HomeTab Bank-Ranking fehlt historical | `get_ranking_data` RPC nutzen — nicht direkter deposits-Query |
-| loadDetail() zeigt 0 für alle Werte | deposits.resource_type ist ENUM → immer `.toLowerCase()` normalisieren |
-| transfer_historical_deposits nicht aufgerufen | confirm_starter_claim + link_profile_to_starter rufen es automatisch auf |
-| `SUPABASE_SERVICE_ROLE_KEY` fehlt | Vercel Projekt-Settings (nicht Team) — Sensitive Variable |
-| Avatar-Kreise in Ranking/Members | ❌ Entfernt (V33) — avatarColor() + alle Avatar-Divs gelöscht |
-| Demo-RLS: nur SELECT | RLS-Policies auf Demo-Clan-UUID — kein INSERT/UPDATE/DELETE |
-| Demo-Clan invite_code | NULL setzen — /demo braucht keinen Code |
+| loadBacklog() paidSet: kein Match | `.toLowerCase()` auf resource_type vergessen — DB liefert 'Cash' |
+| Starter-State vs. Query-Ergebnis | Query-Ergebnis heißt `starterRows`, State heißt `starters` |
+| Modal blockiert Playwright-Test | `div.fixed.inset-0.z-50` — selber Selektor wie WelcomeModal |
+| TypeScript: 'members' not found | State umbenannt → alle JSX-Refs (`members.length`, `members.map`) mitumbenennen |
+| Avatar-Kreise in Ranking/Members | ❌ Entfernt (V33) |
+| Demo-RLS: nur SELECT | RLS-Policies auf Demo-Clan-UUID |
 | tour_progress für Demo-Nutzer | Nicht in DB schreiben — Demo hat keinen GuidedTour |
-| Tooltip-Position berechnen | `getBoundingClientRect()` → rechts > links > unten > oben |
-| data-tour-id Konflikte | Immer spezifische IDs — nie generische wie `btn` oder `table` |
-| Wand der Schande Detail außerhalb Sichtfeld | Bei 97+ Kacheln: geplant als Modal/Overlay (offener Punkt V35) |
-| Playwright home.spec.ts Mitglied-Test | "Mitglied sieht KEINEN Rueckstand Block" anpassen — Wand für alle sichtbar |
+| GitHub Actions Node.js Deprecation | `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"` + `node-version: 22` in `playwright.yml` |
+| UNION ALL mit ORDER BY | In Subquery wrappen |
+| xlsx Turbopack-Interop | `const XLSX = xlsxMod.default ?? xlsxMod` |
 
 ---
 
