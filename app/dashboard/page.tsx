@@ -17,6 +17,7 @@ import HelpButton from '@/components/HelpButton'
 import HomeTab from '@/components/HomeTab'
 import FCUEventTab from '@/components/FCUEventTab'
 import MembersTab from '@/components/MembersTab'
+import GuidesModal from '@/components/GuidesModal'
 
 type Tab =
   | 'home'
@@ -39,6 +40,7 @@ function DashboardContent() {
   const [activeTab, setActiveTab] = useState<Tab>('home')
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [showWelcome, setShowWelcome] = useState(false)
+  const [showGuides, setShowGuides] = useState(false)
   const [lang, setLang] = useState<'de' | 'en'>('de')
   const [alertsCount, setAlertsCount] = useState(0)
   const [pendingClaimsCount, setPendingClaimsCount] = useState(0)
@@ -107,46 +109,46 @@ function DashboardContent() {
   }
 
   const t = {
-    home:         lang === 'de' ? 'Home'                    : 'Home',
-    deposits:     lang === 'de' ? 'Bank'                    : 'Bank',
-    battle:       lang === 'de' ? 'Kampfberichte'           : 'Battle Reports',
-    ranking:      lang === 'de' ? 'Ranking'                 : 'Ranking',
-    fcu:          lang === 'de' ? 'FCU'                     : 'FCU',
-    mitglieder:   lang === 'de' ? 'Mitglieder'              : 'Members',
-    freigabe:     lang === 'de' ? 'Freigaben'               : 'Approvals',
-    vorschlaege:  lang === 'de' ? 'Vorschläge'              : 'Suggestions',
-    warnungen:    lang === 'de' ? 'Warnungen'               : 'Warnings',
-    verwaltung:   lang === 'de' ? 'Admin'                   : 'Admin',
-    logout:       lang === 'de' ? 'Abmelden'                : 'Sign out',
-    upload_title: lang === 'de' ? 'Kampfbericht hochladen'  : 'Upload Battle Report',
-    payout_title: lang === 'de' ? 'Auszahlungsberechnung'   : 'Payout Calculation',
-    pending:      lang === 'de' ? '⏳ Ausstehende Freigaben': '⏳ Pending Approvals',
+    home: lang === 'de' ? 'Home' : 'Home',
+    deposits: lang === 'de' ? 'Bank' : 'Bank',
+    battle: lang === 'de' ? 'Kampfberichte' : 'Battle Reports',
+    ranking: lang === 'de' ? 'Ranking' : 'Ranking',
+    fcu: lang === 'de' ? 'FCU' : 'FCU',
+    mitglieder: lang === 'de' ? 'Mitglieder' : 'Members',
+    freigabe: lang === 'de' ? 'Freigaben' : 'Approvals',
+    vorschlaege: lang === 'de' ? 'Vorschläge' : 'Suggestions',
+    warnungen: lang === 'de' ? 'Warnungen' : 'Warnings',
+    verwaltung: lang === 'de' ? 'Admin' : 'Admin',
+    logout: lang === 'de' ? 'Abmelden' : 'Sign out',
+    upload_title: lang === 'de' ? 'Kampfbericht hochladen' : 'Upload Battle Report',
+    payout_title: lang === 'de' ? 'Auszahlungsberechnung' : 'Payout Calculation',
+    pending: lang === 'de' ? '⏳ Ausstehende Freigaben' : '⏳ Pending Approvals',
   }
 
   const tabLabel: Record<Tab, string> = {
-    home:        t.home,
-    deposits:    t.deposits,
-    battle:      t.battle,
-    ranking:     t.ranking,
-    fcu:         t.fcu,
-    mitglieder:  t.mitglieder,
-    freigabe:    t.freigabe,
+    home: t.home,
+    deposits: t.deposits,
+    battle: t.battle,
+    ranking: t.ranking,
+    fcu: t.fcu,
+    mitglieder: t.mitglieder,
+    freigabe: t.freigabe,
     vorschlaege: t.vorschlaege,
-    warnungen:   t.warnungen,
-    verwaltung:  t.verwaltung,
+    warnungen: t.warnungen,
+    verwaltung: t.verwaltung,
   }
 
   const tabIcon: Record<Tab, string> = {
-    home:        '🏠',
-    deposits:    '💰',
-    battle:      '⚔️',
-    ranking:     '🏆',
-    fcu:         '🎯',
-    mitglieder:  '👥',
-    freigabe:    '✅',
+    home: '🏠',
+    deposits: '💰',
+    battle: '⚔️',
+    ranking: '🏆',
+    fcu: '🎯',
+    mitglieder: '👥',
+    freigabe: '✅',
     vorschlaege: '💡',
-    warnungen:   '⚠️',
-    verwaltung:  '⚙️',
+    warnungen: '⚠️',
+    verwaltung: '⚙️',
   }
 
   const visibleTabs: Tab[] = [
@@ -163,8 +165,8 @@ function DashboardContent() {
   ]
 
   function badgeFor(tab: Tab): number {
-    if (tab === 'warnungen')   return alertsCount
-    if (tab === 'mitglieder')  return pendingClaimsCount
+    if (tab === 'warnungen') return alertsCount
+    if (tab === 'mitglieder') return pendingClaimsCount
     return 0
   }
 
@@ -174,29 +176,54 @@ function DashboardContent() {
       {/* Header */}
       <header className="border-b border-gray-800 bg-[#161822] sticky top-0 z-20">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
+
+          {/* Logo / Home Button */}
           <div className="relative group">
-            <button
-              onClick={() => navigate('home')}
-              className="flex items-center"
-            >
+            <button onClick={() => navigate('home')} className="flex items-center">
               <Logo />
             </button>
             <div className="absolute left-0 top-full mt-1 px-2 py-1 rounded bg-gray-800 text-gray-200 text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
               {lang === 'de' ? 'Zur Startseite' : 'Go to Home'}
             </div>
           </div>
+
+          {/* Header Actions */}
           <div className="flex items-center gap-2">
             {profile?.ingame_name && (
               <span className="text-xs text-gray-400 truncate max-w-[120px]">
                 {'👤 ' + profile.ingame_name}
               </span>
             )}
+
+            {/* Guides Button */}
+            <button
+              onClick={() => setShowGuides(true)}
+              className="text-xs text-gray-400 hover:text-teal-400 px-2 py-1 rounded border border-gray-700 hover:border-teal-600 transition-colors"
+              title={lang === 'de' ? 'Guides' : 'Guides'}
+            >
+              {'📚'}
+            </button>
+
+            {/* Demo Button */}
+            <a
+              href="/demo"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-gray-400 hover:text-teal-400 px-2 py-1 rounded border border-gray-700 hover:border-teal-600 transition-colors"
+              title={lang === 'de' ? 'Demo ansehen' : 'View Demo'}
+            >
+              {'🎬'}
+            </a>
+
+            {/* Language Toggle */}
             <button
               onClick={toggleLang}
               className="text-xs text-gray-400 hover:text-teal-400 px-2 py-1 rounded border border-gray-700 hover:border-teal-600"
             >
               {'🌐 ' + (lang === 'de' ? 'EN' : 'DE')}
             </button>
+
+            {/* Sign Out */}
             <button
               onClick={() => signOut()}
               className="text-xs text-gray-400 hover:text-red-400 px-2 py-1 rounded border border-gray-700 hover:border-red-600"
@@ -204,6 +231,8 @@ function DashboardContent() {
             >
               {'🚪'}
             </button>
+
+            {/* Hamburger */}
             <button
               onClick={() => setDrawerOpen(true)}
               className="flex flex-col gap-1 p-2 rounded hover:bg-gray-800"
@@ -215,6 +244,8 @@ function DashboardContent() {
             </button>
           </div>
         </div>
+
+        {/* Breadcrumb */}
         <div className="max-w-2xl mx-auto px-4 pb-2 flex items-center gap-2">
           <span className="text-sm text-gray-400">
             {tabIcon[activeTab] + ' ' + tabLabel[activeTab]}
@@ -270,6 +301,13 @@ function DashboardContent() {
 
             <div className="px-2 py-3 border-t border-gray-700 space-y-0.5">
               <button
+                onClick={() => { setDrawerOpen(false); setShowGuides(true) }}
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-gray-800 hover:text-gray-200"
+              >
+                <span>{'📚'}</span>
+                <span>{lang === 'de' ? 'Guides' : 'Guides'}</span>
+              </button>
+              <button
                 onClick={() => { setDrawerOpen(false); setShowWelcome(true) }}
                 className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-gray-800 hover:text-gray-200"
               >
@@ -285,25 +323,18 @@ function DashboardContent() {
               </button>
             </div>
           </div>
-
-          <div
-            className="flex-1 bg-black/50"
-            onClick={() => setDrawerOpen(false)}
-          />
+          <div className="flex-1 bg-black/50" onClick={() => setDrawerOpen(false)} />
         </div>
       )}
 
       {/* Hauptinhalt */}
       <main className="max-w-2xl mx-auto">
-
         {activeTab === 'home' && (
           <HomeTab lang={lang} onNavigate={(tab) => navigate(tab as Tab)} />
         )}
-
         {activeTab === 'deposits' && (
           <DepositsTab lang={lang} />
         )}
-
         {activeTab === 'battle' && canSeeAuszahlungen && (
           <div className="space-y-6 p-4">
             <section className="bg-[#161822] border border-gray-800 rounded-xl p-5">
@@ -315,10 +346,7 @@ function DashboardContent() {
                   </span>
                 )}
               </h2>
-              <BattleReportUpload
-                lang={lang}
-                onComplete={(id) => setLastBattleReportId(id)}
-              />
+              <BattleReportUpload lang={lang} onComplete={(id) => setLastBattleReportId(id)} />
             </section>
             <section className="bg-[#161822] border border-gray-800 rounded-xl p-5">
               <h2 className="text-base font-medium text-gray-300 mb-4">
@@ -328,17 +356,14 @@ function DashboardContent() {
             </section>
           </div>
         )}
-
         {activeTab === 'ranking' && (
           <section className="bg-[#161822] border border-gray-800 rounded-xl m-4 p-5">
             <RankingTab lang={lang} />
           </section>
         )}
-
         {activeTab === 'fcu' && (
           <FCUEventTab lang={lang} />
         )}
-
         {activeTab === 'mitglieder' && isOfficerOrAdmin && (
           <section className="bg-[#161822] border border-gray-800 rounded-xl m-4 p-5">
             <h2 className="text-base font-medium text-gray-300 mb-4">
@@ -347,32 +372,31 @@ function DashboardContent() {
             <MembersTab lang={lang} />
           </section>
         )}
-
         {activeTab === 'freigabe' && isOfficerOrAdmin && (
           <section className="bg-[#161822] border border-gray-800 rounded-xl m-4 p-5">
             <h2 className="text-base font-medium text-gray-300 mb-4">{t.pending}</h2>
             <ApprovalQueue />
           </section>
         )}
-
         {activeTab === 'vorschlaege' && (
           <SuggestionBox lang={lang} />
         )}
-
         {activeTab === 'warnungen' && isOfficerOrAdmin && (
           <section className="bg-[#161822] border border-gray-800 rounded-xl m-4 p-5">
             <SecurityAlerts lang={lang} onCountChange={(n) => setAlertsCount(n)} />
           </section>
         )}
-
         {activeTab === 'verwaltung' && isAdmin && (
           <AdminPanel />
         )}
-
       </main>
 
+      {/* Modals */}
       <WelcomeModal role={role} isOpen={showWelcome} onClose={() => setShowWelcome(false)} />
       <HelpButton onClick={() => setShowWelcome(true)} lang={lang} />
+      {showGuides && (
+        <GuidesModal lang={lang} onClose={() => setShowGuides(false)} />
+      )}
     </div>
   )
 }
