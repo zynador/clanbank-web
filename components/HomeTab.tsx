@@ -17,7 +17,6 @@ type BacklogMember = {
   weeks_behind: number
   missing_resources: ResourceType[]
   is_starter?: boolean
-  is_paid?: boolean
 }
 type MyStatus = {
   weeks_behind: number
@@ -30,7 +29,6 @@ type MemberDetail = {
   total_all_time: number
   per_resource: Record<ResourceType, number>
   is_starter?: boolean
-  is_paid?: boolean
 }
 type RankingEntry = {
   user_id: string
@@ -96,9 +94,6 @@ function sortMembers(members: BacklogMember[]): BacklogMember[] {
     // Starter immer ans Ende
     if (a.is_starter && !b.is_starter) return 1
     if (!a.is_starter && b.is_starter) return -1
-    // Bezahlte nach hinten (vor Startern)
-    if (a.is_paid && !b.is_paid) return 1
-    if (!a.is_paid && b.is_paid) return -1
     // Rückstand absteigend
     return b.weeks_behind - a.weeks_behind
   })
@@ -126,7 +121,6 @@ export default function HomeTab({ lang, onNavigate }: Props) {
     missingRes: lang === 'de' ? 'Fehlende Ressourcen:' : 'Missing resources:',
     backlogTitle: lang === 'de' ? 'Clanbank-Status' : 'Clanbank Status',
     paid: lang === 'de' ? 'bezahlt' : 'paid',
-    paidBadge: lang === 'de' ? '✅ ok' : '✅ ok',
     noBacklog: lang === 'de' ? 'Alle Mitglieder haben eingezahlt.' : 'All members have paid.',
     quickActions: lang === 'de' ? 'Schnellzugriff' : 'Quick Actions',
     deposit: lang === 'de' ? 'Einzahlen' : 'Deposit',
@@ -242,14 +236,12 @@ export default function HomeTab({ lang, onNavigate }: Props) {
         const hasLastKw = paidSet.has(p.id + '_' + res + '_' + (currentKw - 1))
         if (!hasThisKw && !hasLastKw) missing.push(res)
       }
-      const isPaid = weeksBehind === 0 && missing.length === 0
-      if (isPaid) paidThisKw++
+      if (weeksBehind === 0 && missing.length === 0) { paidThisKw++; continue }
       result.push({
         user_id: p.id,
         ingame_name: p.ingame_name,
         weeks_behind: weeksBehind,
         missing_resources: missing,
-        is_paid: isPaid,
       })
     }
     for (const s of activeStarters) {
@@ -315,7 +307,6 @@ export default function HomeTab({ lang, onNavigate }: Props) {
       total_all_time: totalAllTime,
       per_resource: perResource,
       is_starter: member.is_starter,
-      is_paid: member.is_paid,
     })
     setDetailLoading(false)
   }
@@ -366,7 +357,7 @@ export default function HomeTab({ lang, onNavigate }: Props) {
   if (loading) return <div className="p-4 text-sm text-gray-400">...</div>
 
   const isBehind = (myStatus?.weeks_behind ?? 0) > 0 || (myStatus?.missing_resources?.length ?? 0) > 0
-  const hasAnyBehind = members.some(m => !m.is_paid && !m.is_starter)
+  const hasAnyBehind = members.some(m => !m.is_starter)
 
   return (
     <div className="p-4 space-y-4">
@@ -429,15 +420,10 @@ export default function HomeTab({ lang, onNavigate }: Props) {
           <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))' }}>
             {members.map(member => {
               const isSelected = selectedId === member.user_id
-              let cardBg = 'bg-white'
-              let cardBorder = isSelected ? 'border-gray-400 ring-1 ring-gray-300' : 'border-gray-100 hover:border-gray-300'
-              if (member.is_paid) {
-                cardBg = 'bg-green-50'
-                cardBorder = isSelected ? 'border-green-400 ring-1 ring-green-300' : 'border-green-200 hover:border-green-400'
-              } else if (member.is_starter) {
-                cardBg = 'bg-blue-50'
-                cardBorder = isSelected ? 'border-blue-400 ring-1 ring-blue-300' : 'border-blue-100 hover:border-blue-300'
-              }
+              const cardBg = member.is_starter ? 'bg-blue-50' : 'bg-white'
+              const cardBorder = member.is_starter
+                ? (isSelected ? 'border-blue-400 ring-1 ring-blue-300' : 'border-blue-100 hover:border-blue-300')
+                : (isSelected ? 'border-gray-400 ring-1 ring-gray-300' : 'border-gray-100 hover:border-gray-300')
               return (
                 <button
                   key={member.user_id}
@@ -447,8 +433,6 @@ export default function HomeTab({ lang, onNavigate }: Props) {
                   <p className="text-xs font-medium text-gray-800 truncate mb-1">{member.ingame_name}</p>
                   {member.is_starter ? (
                     <p className="text-xs font-medium text-blue-500">{t.notRegistered}</p>
-                  ) : member.is_paid ? (
-                    <p className="text-xs font-medium text-green-600">{t.paidBadge}</p>
                   ) : (
                     <>
                       {member.weeks_behind > 0 && (
@@ -601,14 +585,12 @@ export default function HomeTab({ lang, onNavigate }: Props) {
             onClick={e => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div className={'flex items-center justify-between px-4 pt-4 pb-2 ' + (detail?.is_paid ? 'border-b border-green-100' : detail?.is_starter ? 'border-b border-blue-100' : 'border-b border-red-100')}>
+            <div className={'flex items-center justify-between px-4 pt-4 pb-2 ' + (detail?.is_starter ? 'border-b border-blue-100' : 'border-b border-red-100')}>
               {detail ? (
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-semibold text-gray-800">{detail.ingame_name}</span>
                   {detail.is_starter ? (
                     <span className="text-xs font-medium text-blue-500">{t.notRegistered}</span>
-                  ) : detail.is_paid ? (
-                    <span className="text-xs font-medium text-green-600">{t.paidBadge}</span>
                   ) : detail.weeks_behind > 0 ? (
                     <span className={'text-xs font-medium ' + kwBadgeColor(detail.weeks_behind)}>
                       {detail.weeks_behind + ' ' + t.weeksShort + ' ' + t.behind}
