@@ -102,7 +102,8 @@ function sortMembers(members: BacklogMember[]): BacklogMember[] {
 export default function HomeTab({ lang, onNavigate }: Props) {
   const { profile } = useAuth()
   const [myStatus, setMyStatus] = useState<MyStatus | null>(null)
-  const [members, setMembers] = useState<BacklogMember[]>([])
+  const [backlog, setBacklog] = useState<BacklogMember[]>([])
+  const [starters, setStarters] = useState<BacklogMember[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [detail, setDetail] = useState<MemberDetail | null>(null)
@@ -138,6 +139,8 @@ export default function HomeTab({ lang, onNavigate }: Props) {
     noFcuData: lang === 'de' ? 'Noch keine FCU-Daten' : 'No FCU data yet',
     pkt: lang === 'de' ? ' Pkt.' : ' pts',
     notRegistered: lang === 'de' ? '🆕 nicht reg.' : '🆕 not reg.',
+    notRegisteredSection: lang === 'de' ? 'Noch nicht registriert' : 'Not yet registered',
+    notRegisteredHint: lang === 'de' ? 'Einzahlungen vorhanden — Registrierung ausstehend' : 'Deposits found — registration pending',
     historicalData: lang === 'de' ? 'Historische Einzahlungen' : 'Historical deposits',
     upToDate: lang === 'de' ? 'Aktuell' : 'Up to date',
   }
@@ -198,12 +201,12 @@ export default function HomeTab({ lang, onNavigate }: Props) {
       profileNames.add((p.ingame_name ?? '').toLowerCase())
       return true
     })
-    const { data: starters } = await supabase
+    const { data: starterRows } = await supabase
       .from('starter_members').select('id, ingame_name')
       .eq('clan_id', profile.clan_id)
       .is('claimed_by', null)
       .is('left_clan_at', null)
-    const activeStarters = (starters ?? []).filter(
+    const activeStarters = (starterRows ?? []).filter(
       s => !profileNames.has((s.ingame_name ?? '').toLowerCase())
     )
     setTotalMembers(activeProfiles.length + activeStarters.length)
@@ -244,11 +247,34 @@ export default function HomeTab({ lang, onNavigate }: Props) {
         missing_resources: missing,
       })
     }
+    // Historische Einzahlungen aller Starter in einer Bulk-Query laden
+    const starterNames = activeStarters.map(s => s.ingame_name)
+    const { data: histDeposits } = starterNames.length > 0
+      ? await supabase
+          .from('historical_deposits').select('ingame_name, resource_type, amount')
+          .eq('clan_id', profile.clan_id)
+          .in('ingame_name', starterNames)
+      : { data: [] }
+    const histByName: Record<string, Record<ResourceType, number>> = {}
+    for (const d of histDeposits ?? []) {
+      const name = d.ingame_name as string
+      const rt = (d.resource_type as string).toLowerCase() as ResourceType
+      if (!histByName[name]) histByName[name] = { cash: 0, arms: 0, cargo: 0, metal: 0, diamond: 0 }
+      if (histByName[name][rt] !== undefined) histByName[name][rt] += d.amount as number
+    }
+    const kwThreshold = (currentKw - 2) * 5_000_000
+    const startersBehind: BacklogMember[] = []
+    const startersPaid: BacklogMember[] = []
     for (const s of activeStarters) {
-      result.push({ user_id: s.id, ingame_name: s.ingame_name, weeks_behind: 0, missing_resources: [], is_starter: true })
+      const perRes = histByName[s.ingame_name] ?? { cash: 0, arms: 0, cargo: 0, metal: 0, diamond: 0 }
+      const missing = kwThreshold > 0 ? RESOURCES.filter(r => perRes[r] < kwThreshold) : []
+      const entry: BacklogMember = { user_id: s.id, ingame_name: s.ingame_name, weeks_behind: 0, missing_resources: missing, is_starter: true }
+      if (missing.length > 0) startersBehind.push(entry)
+      else startersPaid.push(entry)
     }
     setPaidCount(paidThisKw)
-    setMembers(sortMembers(result))
+    setBacklog(sortMembers([...result, ...startersBehind]))
+    setStarters(startersPaid)
   }
 
   function closeDetail() {
@@ -357,7 +383,7 @@ export default function HomeTab({ lang, onNavigate }: Props) {
   if (loading) return <div className="p-4 text-sm text-gray-400">...</div>
 
   const isBehind = (myStatus?.weeks_behind ?? 0) > 0 || (myStatus?.missing_resources?.length ?? 0) > 0
-  const hasAnyBehind = members.some(m => !m.is_starter)
+  const hasAnyBehind = backlog.length > 0
 
   return (
     <div className="p-4 space-y-4">
@@ -455,6 +481,32 @@ export default function HomeTab({ lang, onNavigate }: Props) {
           </div>
         )}
       </div>
+
+      {/* Noch nicht registriert — Starter ohne Rückstand */}
+      {starters.length > 0 && (
+        <div className="rounded-xl p-3 space-y-2 border bg-blue-50 border-blue-200">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-gray-800">{'🆕 ' + t.notRegisteredSection}</p>
+            <span className="text-xs text-gray-500">{starters.length}</span>
+          </div>
+          <p className="text-xs text-blue-600">{t.notRegisteredHint}</p>
+          <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))' }}>
+            {starters.map(member => (
+              <button
+                key={member.user_id}
+                onClick={() => loadDetail(member)}
+                className={'text-left bg-white rounded-lg px-2.5 py-2 border transition-colors ' +
+                  (selectedId === member.user_id
+                    ? 'border-blue-400 ring-1 ring-blue-300'
+                    : 'border-blue-100 hover:border-blue-300')}
+              >
+                <p className="text-xs font-medium text-gray-800 truncate mb-1">{member.ingame_name}</p>
+                <p className="text-xs font-medium text-blue-500">{'✅ ' + t.notRegistered.replace('🆕 ', '')}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Ankündigungen */}
       <AnnouncementWidget lang={lang} />
