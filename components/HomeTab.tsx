@@ -17,6 +17,7 @@ type BacklogMember = {
   weeks_behind: number
   missing_resources: ResourceType[]
   is_starter?: boolean
+  is_paid?: boolean
 }
 type MyStatus = {
   weeks_behind: number
@@ -29,6 +30,7 @@ type MemberDetail = {
   total_all_time: number
   per_resource: Record<ResourceType, number>
   is_starter?: boolean
+  is_paid?: boolean
 }
 type RankingEntry = {
   user_id: string
@@ -89,10 +91,23 @@ function getISOWeek(date: Date): number {
   return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
 }
 
+function sortMembers(members: BacklogMember[]): BacklogMember[] {
+  return [...members].sort((a, b) => {
+    // Starter immer ans Ende
+    if (a.is_starter && !b.is_starter) return 1
+    if (!a.is_starter && b.is_starter) return -1
+    // Bezahlte nach hinten (vor Startern)
+    if (a.is_paid && !b.is_paid) return 1
+    if (!a.is_paid && b.is_paid) return -1
+    // Rückstand absteigend
+    return b.weeks_behind - a.weeks_behind
+  })
+}
+
 export default function HomeTab({ lang, onNavigate }: Props) {
   const { profile } = useAuth()
   const [myStatus, setMyStatus] = useState<MyStatus | null>(null)
-  const [backlog, setBacklog] = useState<BacklogMember[]>([])
+  const [members, setMembers] = useState<BacklogMember[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [detail, setDetail] = useState<MemberDetail | null>(null)
@@ -109,8 +124,9 @@ export default function HomeTab({ lang, onNavigate }: Props) {
     statusBehind: lang === 'de' ? 'Clanbank: Du bist im Rückstand!' : 'Clanbank: You are behind!',
     weeksBehind: lang === 'de' ? 'Wochen fehlen' : 'weeks missing',
     missingRes: lang === 'de' ? 'Fehlende Ressourcen:' : 'Missing resources:',
-    backlogTitle: lang === 'de' ? 'Clanbank-Rückstand' : 'Clanbank backlog',
+    backlogTitle: lang === 'de' ? 'Clanbank-Status' : 'Clanbank Status',
     paid: lang === 'de' ? 'bezahlt' : 'paid',
+    paidBadge: lang === 'de' ? '✅ ok' : '✅ ok',
     noBacklog: lang === 'de' ? 'Alle Mitglieder haben eingezahlt.' : 'All members have paid.',
     quickActions: lang === 'de' ? 'Schnellzugriff' : 'Quick Actions',
     deposit: lang === 'de' ? 'Einzahlen' : 'Deposit',
@@ -118,7 +134,6 @@ export default function HomeTab({ lang, onNavigate }: Props) {
     ranking: lang === 'de' ? 'Ranking' : 'Ranking',
     fcu: lang === 'de' ? 'FCU' : 'FCU',
     weeksShort: lang === 'de' ? 'KW' : 'W',
-    close: lang === 'de' ? '✕ schließen' : '✕ close',
     totalAll: lang === 'de' ? 'Gesamt eingezahlt' : 'Total deposited',
     schwellwert: lang === 'de' ? 'Schwellwert / Res.' : 'Threshold / res.',
     behind: lang === 'de' ? 'Rückstand' : 'behind',
@@ -130,6 +145,7 @@ export default function HomeTab({ lang, onNavigate }: Props) {
     pkt: lang === 'de' ? ' Pkt.' : ' pts',
     notRegistered: lang === 'de' ? '🆕 nicht reg.' : '🆕 not reg.',
     historicalData: lang === 'de' ? 'Historische Einzahlungen' : 'Historical deposits',
+    upToDate: lang === 'de' ? 'Aktuell' : 'Up to date',
   }
 
   useEffect(() => {
@@ -210,7 +226,7 @@ export default function HomeTab({ lang, onNavigate }: Props) {
       const kw = getISOWeek(new Date(d.created_at))
       paidSet.add(d.user_id + '_' + d.resource_type + '_' + kw)
     }
-    const behind: BacklogMember[] = []
+    const result: BacklogMember[] = []
     let paidThisKw = 0
     for (const p of activeProfiles) {
       if (p.id === profile.id) continue
@@ -226,19 +242,21 @@ export default function HomeTab({ lang, onNavigate }: Props) {
         const hasLastKw = paidSet.has(p.id + '_' + res + '_' + (currentKw - 1))
         if (!hasThisKw && !hasLastKw) missing.push(res)
       }
-      if (weeksBehind === 0 && missing.length === 0) paidThisKw++
-      else behind.push({ user_id: p.id, ingame_name: p.ingame_name, weeks_behind: weeksBehind, missing_resources: missing })
+      const isPaid = weeksBehind === 0 && missing.length === 0
+      if (isPaid) paidThisKw++
+      result.push({
+        user_id: p.id,
+        ingame_name: p.ingame_name,
+        weeks_behind: weeksBehind,
+        missing_resources: missing,
+        is_paid: isPaid,
+      })
     }
     for (const s of activeStarters) {
-      behind.push({ user_id: s.id, ingame_name: s.ingame_name, weeks_behind: 0, missing_resources: [], is_starter: true })
+      result.push({ user_id: s.id, ingame_name: s.ingame_name, weeks_behind: 0, missing_resources: [], is_starter: true })
     }
     setPaidCount(paidThisKw)
-    behind.sort((a, b) => {
-      if (a.is_starter && !b.is_starter) return 1
-      if (!a.is_starter && b.is_starter) return -1
-      return b.weeks_behind - a.weeks_behind
-    })
-    setBacklog(behind)
+    setMembers(sortMembers(result))
   }
 
   function closeDetail() {
@@ -297,6 +315,7 @@ export default function HomeTab({ lang, onNavigate }: Props) {
       total_all_time: totalAllTime,
       per_resource: perResource,
       is_starter: member.is_starter,
+      is_paid: member.is_paid,
     })
     setDetailLoading(false)
   }
@@ -347,6 +366,7 @@ export default function HomeTab({ lang, onNavigate }: Props) {
   if (loading) return <div className="p-4 text-sm text-gray-400">...</div>
 
   const isBehind = (myStatus?.weeks_behind ?? 0) > 0 || (myStatus?.missing_resources?.length ?? 0) > 0
+  const hasAnyBehind = members.some(m => !m.is_paid && !m.is_starter)
 
   return (
     <div className="p-4 space-y-4">
@@ -395,7 +415,7 @@ export default function HomeTab({ lang, onNavigate }: Props) {
       {/* Wand der Schande — für alle registrierten Mitglieder sichtbar */}
       <div
         data-tour-id="home-backlog"
-        className={'rounded-xl p-3 space-y-3 border ' + (backlog.length > 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200')}
+        className={'rounded-xl p-3 space-y-3 border ' + (hasAnyBehind ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200')}
       >
         <div className="flex items-center justify-between">
           <p className="text-sm font-medium text-gray-800">{'⚠️ ' + t.backlogTitle}</p>
@@ -403,36 +423,51 @@ export default function HomeTab({ lang, onNavigate }: Props) {
             <span className="text-xs text-gray-500">{paidCount + '/' + totalMembers + ' ' + t.paid}</span>
           )}
         </div>
-        {backlog.length === 0 ? (
+        {members.length === 0 ? (
           <p className="text-xs text-green-700">{t.noBacklog}</p>
         ) : (
           <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))' }}>
-            {backlog.map(member => (
-              <button
-                key={member.user_id}
-                onClick={() => loadDetail(member)}
-                className={'text-left bg-white rounded-lg px-2.5 py-2 border transition-colors ' +
-                  (selectedId === member.user_id
-                    ? 'border-gray-400 ring-1 ring-gray-300'
-                    : 'border-gray-100 hover:border-gray-300')}
-              >
-                <p className="text-xs font-medium text-gray-800 truncate mb-1">{member.ingame_name}</p>
-                {member.is_starter ? (
-                  <p className="text-xs font-medium text-blue-500 mb-1">{t.notRegistered}</p>
-                ) : member.weeks_behind > 0 ? (
-                  <p className={'text-xs font-medium mb-1 ' + kwBadgeColor(member.weeks_behind)}>
-                    {member.weeks_behind + ' ' + t.weeksShort}
-                  </p>
-                ) : null}
-                <div className="flex gap-1 flex-wrap">
-                  {member.missing_resources.map(res => (
-                    <span key={res} className={'text-xs px-1 py-0.5 rounded ' + RESOURCE_COLORS[res]}>
-                      {RESOURCE_LABELS[res].emoji}
-                    </span>
-                  ))}
-                </div>
-              </button>
-            ))}
+            {members.map(member => {
+              const isSelected = selectedId === member.user_id
+              let cardBg = 'bg-white'
+              let cardBorder = isSelected ? 'border-gray-400 ring-1 ring-gray-300' : 'border-gray-100 hover:border-gray-300'
+              if (member.is_paid) {
+                cardBg = 'bg-green-50'
+                cardBorder = isSelected ? 'border-green-400 ring-1 ring-green-300' : 'border-green-200 hover:border-green-400'
+              } else if (member.is_starter) {
+                cardBg = 'bg-blue-50'
+                cardBorder = isSelected ? 'border-blue-400 ring-1 ring-blue-300' : 'border-blue-100 hover:border-blue-300'
+              }
+              return (
+                <button
+                  key={member.user_id}
+                  onClick={() => loadDetail(member)}
+                  className={'text-left rounded-lg px-2.5 py-2 border transition-colors ' + cardBg + ' ' + cardBorder}
+                >
+                  <p className="text-xs font-medium text-gray-800 truncate mb-1">{member.ingame_name}</p>
+                  {member.is_starter ? (
+                    <p className="text-xs font-medium text-blue-500">{t.notRegistered}</p>
+                  ) : member.is_paid ? (
+                    <p className="text-xs font-medium text-green-600">{t.paidBadge}</p>
+                  ) : (
+                    <>
+                      {member.weeks_behind > 0 && (
+                        <p className={'text-xs font-medium mb-1 ' + kwBadgeColor(member.weeks_behind)}>
+                          {member.weeks_behind + ' ' + t.weeksShort}
+                        </p>
+                      )}
+                      <div className="flex gap-1 flex-wrap">
+                        {member.missing_resources.map(res => (
+                          <span key={res} className={'text-xs px-1 py-0.5 rounded ' + RESOURCE_COLORS[res]}>
+                            {RESOURCE_LABELS[res].emoji}
+                          </span>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </button>
+              )
+            })}
           </div>
         )}
       </div>
@@ -554,7 +589,7 @@ export default function HomeTab({ lang, onNavigate }: Props) {
         </div>
       </div>
 
-      {/* Detail-Modal — Wand der Schande */}
+      {/* Detail-Modal — Mitglied-Status */}
       {selectedId && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -566,12 +601,14 @@ export default function HomeTab({ lang, onNavigate }: Props) {
             onClick={e => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div className="flex items-center justify-between px-4 pt-4 pb-2">
+            <div className={'flex items-center justify-between px-4 pt-4 pb-2 ' + (detail?.is_paid ? 'border-b border-green-100' : detail?.is_starter ? 'border-b border-blue-100' : 'border-b border-red-100')}>
               {detail ? (
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-semibold text-gray-800">{detail.ingame_name}</span>
                   {detail.is_starter ? (
                     <span className="text-xs font-medium text-blue-500">{t.notRegistered}</span>
+                  ) : detail.is_paid ? (
+                    <span className="text-xs font-medium text-green-600">{t.paidBadge}</span>
                   ) : detail.weeks_behind > 0 ? (
                     <span className={'text-xs font-medium ' + kwBadgeColor(detail.weeks_behind)}>
                       {detail.weeks_behind + ' ' + t.weeksShort + ' ' + t.behind}
@@ -591,7 +628,7 @@ export default function HomeTab({ lang, onNavigate }: Props) {
             </div>
 
             {/* Modal Body */}
-            <div className="px-4 pb-4 space-y-3">
+            <div className="px-4 pb-4 space-y-3 pt-3">
               {detailLoading ? (
                 <p className="text-xs text-gray-400 text-center py-6">{'...'}</p>
               ) : detail ? (
