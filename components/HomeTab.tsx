@@ -224,7 +224,7 @@ export default function HomeTab({ lang, onNavigate }: Props) {
     const paidSet = new Set<string>()
     for (const d of deposits ?? []) {
       const kw = getISOWeek(new Date(d.created_at))
-      paidSet.add(d.user_id + '_' + d.resource_type + '_' + kw)
+      paidSet.add(d.user_id + '_' + (d.resource_type as string).toLowerCase() + '_' + kw)
     }
     const result: BacklogMember[] = []
     let paidThisKw = 0
