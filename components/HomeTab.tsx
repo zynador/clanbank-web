@@ -9,6 +9,7 @@ interface Props {
   lang: Lang
   onNavigate: (tab: string) => void
 }
+
 type ResourceType = 'cash' | 'arms' | 'cargo' | 'metal' | 'diamond'
 type BacklogMember = {
   user_id: string
@@ -61,29 +62,31 @@ function fmtMio(n: number): string {
   if (n >= 1_000) return (Math.round(n / 100) / 10) + 'K'
   return String(n)
 }
-
 function formatPoints(n: number): string {
   if (n >= 1000000) return (n / 1000000).toFixed(2).replace('.', ',') + ' Mio'
   if (n >= 1000) return (n / 1000).toFixed(2).replace('.', ',') + ' K'
   return n.toFixed(2).replace('.', ',')
 }
-
 function kwBadgeColor(weeks: number): string {
   if (weeks >= 3) return 'text-red-600'
   if (weeks === 2) return 'text-orange-500'
   return 'text-yellow-600'
 }
-
 function barColor(pct: number): string {
   if (pct >= 100) return 'bg-green-600'
   if (pct >= 60) return 'bg-amber-500'
   return 'bg-red-500'
 }
-
 function valColor(pct: number): string {
   if (pct >= 100) return 'text-green-700'
   if (pct >= 60) return 'text-amber-600'
   return 'text-red-600'
+}
+function getISOWeek(date: Date): number {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7))
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
+  return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
 }
 
 export default function HomeTab({ lang, onNavigate }: Props) {
@@ -162,8 +165,7 @@ export default function HomeTab({ lang, onNavigate }: Props) {
     }
     const missing: ResourceType[] = []
     for (const res of RESOURCES) {
-      if (!paid.has(res + '_' + currentKw) && !paid.has(res + '_' + (currentKw - 1)))
-        missing.push(res)
+      if (!paid.has(res + '_' + currentKw) && !paid.has(res + '_' + (currentKw - 1))) missing.push(res)
     }
     let weeksBehind = 0
     for (let w = currentKw - 1; w >= currentKw - 4; w--) {
@@ -176,12 +178,9 @@ export default function HomeTab({ lang, onNavigate }: Props) {
 
   async function loadBacklog() {
     if (!profile?.clan_id) return
-
-    // Registrierte Profile laden
     const { data: allProfiles } = await supabase
       .from('profiles').select('id, ingame_name, is_raidleiter, is_test, is_bank')
       .eq('clan_id', profile.clan_id)
-
     const profileNames = new Set<string>()
     const activeProfiles = (allProfiles ?? []).filter(p => {
       const pr = p as unknown as Record<string, unknown>
@@ -189,28 +188,21 @@ export default function HomeTab({ lang, onNavigate }: Props) {
       profileNames.add((p.ingame_name ?? '').toLowerCase())
       return true
     })
-
-    // Nicht-registrierte Starter laden
     const { data: starters } = await supabase
       .from('starter_members').select('id, ingame_name')
       .eq('clan_id', profile.clan_id)
       .is('claimed_by', null)
       .is('left_clan_at', null)
-
-    // Starter ausschließen die bereits ein Profil mit gleichem Namen haben
     const activeStarters = (starters ?? []).filter(
       s => !profileNames.has((s.ingame_name ?? '').toLowerCase())
     )
-
     setTotalMembers(activeProfiles.length + activeStarters.length)
-
     const since = new Date()
     since.setDate(since.getDate() - 28)
     const { data: deposits } = await supabase
       .from('deposits').select('user_id, resource_type, created_at')
       .eq('clan_id', profile.clan_id).eq('status', 'approved')
       .gte('created_at', since.toISOString()).is('deleted_at', null)
-
     const now = new Date()
     const currentKw = getISOWeek(now)
     const paidSet = new Set<string>()
@@ -218,11 +210,8 @@ export default function HomeTab({ lang, onNavigate }: Props) {
       const kw = getISOWeek(new Date(d.created_at))
       paidSet.add(d.user_id + '_' + d.resource_type + '_' + kw)
     }
-
     const behind: BacklogMember[] = []
     let paidThisKw = 0
-
-    // Registrierte Mitglieder prüfen
     for (const p of activeProfiles) {
       if (p.id === profile.id) continue
       let weeksBehind = 0
@@ -240,14 +229,10 @@ export default function HomeTab({ lang, onNavigate }: Props) {
       if (weeksBehind === 0 && missing.length === 0) paidThisKw++
       else behind.push({ user_id: p.id, ingame_name: p.ingame_name, weeks_behind: weeksBehind, missing_resources: missing })
     }
-
-    // Nicht-registrierte Starter immer als Rückstand anhängen
     for (const s of activeStarters) {
       behind.push({ user_id: s.id, ingame_name: s.ingame_name, weeks_behind: 0, missing_resources: [], is_starter: true })
     }
-
     setPaidCount(paidThisKw)
-    // Registrierte mit Rückstand zuerst (nach weeks_behind), Starter ans Ende
     behind.sort((a, b) => {
       if (a.is_starter && !b.is_starter) return 1
       if (!a.is_starter && b.is_starter) return -1
@@ -256,45 +241,55 @@ export default function HomeTab({ lang, onNavigate }: Props) {
     setBacklog(behind)
   }
 
-  async function loadDetail(member: BacklogMember) {
-    if (selectedId === member.user_id) { setSelectedId(null); setDetail(null); return }
-    setSelectedId(member.user_id)
-    setDetailLoading(true)
+  function closeDetail() {
+    setSelectedId(null)
+    setDetail(null)
+  }
 
+  async function loadDetailForStarter(member: BacklogMember) {
     const perResource: Record<ResourceType, number> = { cash: 0, arms: 0, cargo: 0, metal: 0, diamond: 0 }
     let totalAllTime = 0
-
-    if (member.is_starter) {
-      // Starter: alle historical_deposits (transferred=true + false)
-      const { data: histData } = await supabase
-        .from('historical_deposits').select('resource_type, amount')
-        .eq('ingame_name', member.ingame_name)
-        .eq('clan_id', profile?.clan_id ?? '')
-      for (const d of histData ?? []) {
-        const rt = (d.resource_type as string).toLowerCase() as ResourceType
-        if (perResource[rt] !== undefined) { perResource[rt] += d.amount; totalAllTime += d.amount }
-      }
-    } else {
-      // Registrierte: deposits (ENUM → lowercase normalisieren)
-      const { data: depositsData } = await supabase
-        .from('deposits').select('resource_type, amount')
-        .eq('user_id', member.user_id).eq('status', 'approved').is('deleted_at', null)
-      for (const d of depositsData ?? []) {
-        const rt = (d.resource_type as string).toLowerCase() as ResourceType
-        if (perResource[rt] !== undefined) { perResource[rt] += d.amount; totalAllTime += d.amount }
-      }
-      // Noch nicht übertragene historical_deposits dazurechnen
-      const { data: histData } = await supabase
-        .from('historical_deposits').select('resource_type, amount')
-        .eq('ingame_name', member.ingame_name)
-        .eq('clan_id', profile?.clan_id ?? '')
-        .eq('transferred', false)
-      for (const d of histData ?? []) {
-        const rt = (d.resource_type as string).toLowerCase() as ResourceType
-        if (perResource[rt] !== undefined) { perResource[rt] += d.amount; totalAllTime += d.amount }
-      }
+    const { data: histData } = await supabase
+      .from('historical_deposits').select('resource_type, amount')
+      .eq('ingame_name', member.ingame_name)
+      .eq('clan_id', profile?.clan_id ?? '')
+    for (const d of histData ?? []) {
+      const rt = (d.resource_type as string).toLowerCase() as ResourceType
+      if (perResource[rt] !== undefined) { perResource[rt] += d.amount; totalAllTime += d.amount }
     }
+    return { perResource, totalAllTime }
+  }
 
+  async function loadDetailForMember(member: BacklogMember) {
+    const perResource: Record<ResourceType, number> = { cash: 0, arms: 0, cargo: 0, metal: 0, diamond: 0 }
+    let totalAllTime = 0
+    const { data: depositsData } = await supabase
+      .from('deposits').select('resource_type, amount')
+      .eq('user_id', member.user_id).eq('status', 'approved').is('deleted_at', null)
+    for (const d of depositsData ?? []) {
+      const rt = (d.resource_type as string).toLowerCase() as ResourceType
+      if (perResource[rt] !== undefined) { perResource[rt] += d.amount; totalAllTime += d.amount }
+    }
+    const { data: histData } = await supabase
+      .from('historical_deposits').select('resource_type, amount')
+      .eq('ingame_name', member.ingame_name)
+      .eq('clan_id', profile?.clan_id ?? '')
+      .eq('transferred', false)
+    for (const d of histData ?? []) {
+      const rt = (d.resource_type as string).toLowerCase() as ResourceType
+      if (perResource[rt] !== undefined) { perResource[rt] += d.amount; totalAllTime += d.amount }
+    }
+    return { perResource, totalAllTime }
+  }
+
+  async function loadDetail(member: BacklogMember) {
+    if (selectedId === member.user_id) { closeDetail(); return }
+    setSelectedId(member.user_id)
+    setDetailLoading(true)
+    setDetail(null)
+    const { perResource, totalAllTime } = member.is_starter
+      ? await loadDetailForStarter(member)
+      : await loadDetailForMember(member)
     setDetail({
       user_id: member.user_id,
       ingame_name: member.ingame_name,
@@ -349,19 +344,13 @@ export default function HomeTab({ lang, onNavigate }: Props) {
     )
   }
 
-  function getISOWeek(date: Date): number {
-    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
-    d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7))
-    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
-    return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
-  }
-
   if (loading) return <div className="p-4 text-sm text-gray-400">...</div>
 
   const isBehind = (myStatus?.weeks_behind ?? 0) > 0 || (myStatus?.missing_resources?.length ?? 0) > 0
 
   return (
     <div className="p-4 space-y-4">
+
       {/* Begrüßung */}
       <div>
         <p className="text-base font-semibold text-gray-800">
@@ -374,7 +363,7 @@ export default function HomeTab({ lang, onNavigate }: Props) {
         isBehind ? (
           <div className="bg-red-50 border-2 border-red-400 rounded-xl p-3 space-y-2" data-tour-id="home-status">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-red-200 flex items-center justify-center text-sm flex-shrink-0">⚠️</div>
+              <div className="w-8 h-8 rounded-full bg-red-200 flex items-center justify-center text-sm flex-shrink-0">{'⚠️'}</div>
               <div>
                 <p className="text-sm font-medium text-red-800">{t.statusBehind}</p>
                 {myStatus.weeks_behind > 0 && (
@@ -397,7 +386,7 @@ export default function HomeTab({ lang, onNavigate }: Props) {
           </div>
         ) : (
           <div className="bg-green-50 border border-green-300 rounded-xl p-3 flex items-center gap-3" data-tour-id="home-status">
-            <div className="w-8 h-8 rounded-full bg-green-200 flex items-center justify-center text-sm flex-shrink-0">✅</div>
+            <div className="w-8 h-8 rounded-full bg-green-200 flex items-center justify-center text-sm flex-shrink-0">{'✅'}</div>
             <p className="text-sm font-medium text-green-800">{t.statusOk}</p>
           </div>
         )
@@ -417,95 +406,34 @@ export default function HomeTab({ lang, onNavigate }: Props) {
         {backlog.length === 0 ? (
           <p className="text-xs text-green-700">{t.noBacklog}</p>
         ) : (
-          <>
-            <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))' }}>
-              {backlog.map(member => (
-                <button
-                  key={member.user_id}
-                  onClick={() => loadDetail(member)}
-                  className={'text-left bg-white rounded-lg px-2.5 py-2 border transition-colors ' + (selectedId === member.user_id ? 'border-gray-400' : 'border-gray-100 hover:border-gray-300')}
-                >
-                  <p className="text-xs font-medium text-gray-800 truncate mb-1">{member.ingame_name}</p>
-                  {member.is_starter ? (
-                    <p className="text-xs font-medium text-blue-500 mb-1">{t.notRegistered}</p>
-                  ) : member.weeks_behind > 0 ? (
-                    <p className={'text-xs font-medium mb-1 ' + kwBadgeColor(member.weeks_behind)}>
-                      {member.weeks_behind + ' ' + t.weeksShort}
-                    </p>
-                  ) : null}
-                  <div className="flex gap-1 flex-wrap">
-                    {member.missing_resources.map(res => (
-                      <span key={res} className={'text-xs px-1 py-0.5 rounded ' + RESOURCE_COLORS[res]}>
-                        {RESOURCE_LABELS[res].emoji}
-                      </span>
-                    ))}
-                  </div>
-                </button>
-              ))}
-            </div>
-
-            {selectedId && (
-              <div className="bg-white border border-gray-200 rounded-xl p-3 space-y-3">
-                {detailLoading ? (
-                  <p className="text-xs text-gray-400 text-center py-2">...</p>
-                ) : detail ? (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-gray-800">{detail.ingame_name}</span>
-                        {detail.is_starter ? (
-                          <span className="text-xs font-medium text-blue-500">{t.notRegistered}</span>
-                        ) : detail.weeks_behind > 0 ? (
-                          <span className={'text-xs font-medium ' + kwBadgeColor(detail.weeks_behind)}>
-                            {detail.weeks_behind + ' ' + t.weeksShort + ' ' + t.behind}
-                          </span>
-                        ) : null}
-                      </div>
-                      <button
-                        onClick={() => { setSelectedId(null); setDetail(null) }}
-                        className="text-xs text-gray-400 border border-gray-200 rounded-lg px-2 py-1 hover:bg-gray-50"
-                      >
-                        {t.close}
-                      </button>
-                    </div>
-                    {detail.is_starter && (
-                      <p className="text-xs text-blue-600 bg-blue-50 rounded-lg px-3 py-2">
-                        {t.historicalData}
-                      </p>
-                    )}
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="bg-gray-50 rounded-lg px-3 py-2">
-                        <p className="text-xs text-gray-500 mb-0.5">{t.totalAll}</p>
-                        <p className="text-lg font-semibold text-gray-800">{fmtMio(detail.total_all_time)}</p>
-                      </div>
-                      <div className="bg-gray-50 rounded-lg px-3 py-2">
-                        <p className="text-xs text-gray-500 mb-0.5">{t.schwellwert}</p>
-                        <p className="text-lg font-semibold text-gray-800">{fmtMio(threshold)}</p>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      {RESOURCES.map(res => {
-                        const val = detail.per_resource[res]
-                        const pct = threshold > 0 ? Math.min(100, Math.round(val / threshold * 100)) : 100
-                        return (
-                          <div key={res} className="flex items-center gap-2">
-                            <span className="text-sm w-5 text-center">{RESOURCE_LABELS[res].emoji}</span>
-                            <span className="text-xs text-gray-500 w-12 flex-shrink-0">{RESOURCE_LABELS[res].label}</span>
-                            <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                              <div className={'h-full rounded-full ' + barColor(pct)} style={{ width: pct + '%' }} />
-                            </div>
-                            <span className={'text-xs font-medium w-20 text-right flex-shrink-0 ' + valColor(pct)}>
-                              {fmtMio(val) + ' / ' + fmtMio(threshold)}
-                            </span>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </>
+          <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))' }}>
+            {backlog.map(member => (
+              <button
+                key={member.user_id}
+                onClick={() => loadDetail(member)}
+                className={'text-left bg-white rounded-lg px-2.5 py-2 border transition-colors ' +
+                  (selectedId === member.user_id
+                    ? 'border-gray-400 ring-1 ring-gray-300'
+                    : 'border-gray-100 hover:border-gray-300')}
+              >
+                <p className="text-xs font-medium text-gray-800 truncate mb-1">{member.ingame_name}</p>
+                {member.is_starter ? (
+                  <p className="text-xs font-medium text-blue-500 mb-1">{t.notRegistered}</p>
+                ) : member.weeks_behind > 0 ? (
+                  <p className={'text-xs font-medium mb-1 ' + kwBadgeColor(member.weeks_behind)}>
+                    {member.weeks_behind + ' ' + t.weeksShort}
+                  </p>
                 ) : null}
-              </div>
-            )}
-          </>
+                <div className="flex gap-1 flex-wrap">
+                  {member.missing_resources.map(res => (
+                    <span key={res} className={'text-xs px-1 py-0.5 rounded ' + RESOURCE_COLORS[res]}>
+                      {RESOURCE_LABELS[res].emoji}
+                    </span>
+                  ))}
+                </div>
+              </button>
+            ))}
+          </div>
         )}
       </div>
 
@@ -514,6 +442,7 @@ export default function HomeTab({ lang, onNavigate }: Props) {
 
       {/* Doppel-Podest Ranking */}
       <div className="grid grid-cols-2 gap-2">
+
         {/* Bank-Ranking */}
         <div className="bg-white border border-gray-100 rounded-xl p-3" data-tour-id="home-ranking-bank">
           <div className="flex items-center justify-between mb-3">
@@ -624,6 +553,89 @@ export default function HomeTab({ lang, onNavigate }: Props) {
           ))}
         </div>
       </div>
+
+      {/* Detail-Modal — Wand der Schande */}
+      {selectedId && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
+          onClick={closeDetail}
+        >
+          <div
+            className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-4 pt-4 pb-2">
+              {detail ? (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-semibold text-gray-800">{detail.ingame_name}</span>
+                  {detail.is_starter ? (
+                    <span className="text-xs font-medium text-blue-500">{t.notRegistered}</span>
+                  ) : detail.weeks_behind > 0 ? (
+                    <span className={'text-xs font-medium ' + kwBadgeColor(detail.weeks_behind)}>
+                      {detail.weeks_behind + ' ' + t.weeksShort + ' ' + t.behind}
+                    </span>
+                  ) : null}
+                </div>
+              ) : (
+                <span className="text-sm font-semibold text-gray-400">{'...'}</span>
+              )}
+              <button
+                onClick={closeDetail}
+                className="text-gray-400 hover:text-gray-600 text-lg leading-none ml-2 flex-shrink-0"
+                aria-label="Modal schließen"
+              >
+                {'✕'}
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="px-4 pb-4 space-y-3">
+              {detailLoading ? (
+                <p className="text-xs text-gray-400 text-center py-6">{'...'}</p>
+              ) : detail ? (
+                <>
+                  {detail.is_starter && (
+                    <p className="text-xs text-blue-600 bg-blue-50 rounded-lg px-3 py-2">
+                      {t.historicalData}
+                    </p>
+                  )}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="bg-gray-50 rounded-lg px-3 py-2">
+                      <p className="text-xs text-gray-500 mb-0.5">{t.totalAll}</p>
+                      <p className="text-lg font-semibold text-gray-800">{fmtMio(detail.total_all_time)}</p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg px-3 py-2">
+                      <p className="text-xs text-gray-500 mb-0.5">{t.schwellwert}</p>
+                      <p className="text-lg font-semibold text-gray-800">{fmtMio(threshold)}</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {RESOURCES.map(res => {
+                      const val = detail.per_resource[res]
+                      const pct = threshold > 0 ? Math.min(100, Math.round(val / threshold * 100)) : 100
+                      return (
+                        <div key={res} className="flex items-center gap-2">
+                          <span className="text-sm w-5 text-center">{RESOURCE_LABELS[res].emoji}</span>
+                          <span className="text-xs text-gray-500 w-12 flex-shrink-0">{RESOURCE_LABELS[res].label}</span>
+                          <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                            <div className={'h-full rounded-full ' + barColor(pct)} style={{ width: pct + '%' }} />
+                          </div>
+                          <span className={'text-xs font-medium w-20 text-right flex-shrink-0 ' + valColor(pct)}>
+                            {fmtMio(val) + ' / ' + fmtMio(threshold)}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
