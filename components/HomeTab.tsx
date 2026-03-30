@@ -440,11 +440,11 @@ export default function HomeTab({ lang, onNavigate }: Props) {
             <span className="text-xs text-gray-500">{paidCount + '/' + totalMembers + ' ' + t.paid}</span>
           )}
         </div>
-        {members.length === 0 ? (
+        {backlog.length === 0 ? (
           <p className="text-xs text-green-700">{t.noBacklog}</p>
         ) : (
           <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))' }}>
-            {members.map(member => {
+            {backlog.map(member => {
               const isSelected = selectedId === member.user_id
               const cardBg = member.is_starter ? 'bg-blue-50' : 'bg-white'
               const cardBorder = member.is_starter
