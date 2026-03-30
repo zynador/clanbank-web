@@ -36,14 +36,14 @@ test.describe('HomeTab', () => {
     await expect(page.locator('text=/Clanbank/i').first()).toBeVisible()
   })
 
-  test('Admin sieht Clanbank-Rückstand Block', async ({ page }) => {
+  test('Admin sieht Clanbank-Status Block', async ({ page }) => {
     await loginAs(page, ADMIN_USER, ADMIN_PASS)
-    await expect(page.locator('text=⚠️ Clanbank-Rückstand')).toBeVisible()
+    await expect(page.locator('text=⚠️ Clanbank-Status')).toBeVisible()
   })
 
-  test('Mitglied sieht KEINEN Clanbank-Rückstand Block', async ({ page }) => {
+  test('Mitglied sieht Clanbank-Status Block', async ({ page }) => {
     await loginAs(page, MEMBER_USER, MEMBER_PASS)
-    await expect(page.locator('text=⚠️ Clanbank-Rückstand')).not.toBeVisible()
+    await expect(page.locator('text=⚠️ Clanbank-Status')).toBeVisible()
   })
 
   test('Schnellzugriff-Buttons vorhanden', async ({ page }) => {
