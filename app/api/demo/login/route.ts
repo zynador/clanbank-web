@@ -9,13 +9,14 @@ const DEMO_ACCOUNTS = {
   mitglied: { email: 'demo-mitglied@clanbank.local', password: 'DemoMitglied2026!', ingame_name: 'DemoMitglied', username: 'demomitglied', role: 'mitglied' },
 }
 
+type DemoAccount = typeof DEMO_ACCOUNTS[keyof typeof DEMO_ACCOUNTS]
+
 async function getOrCreateDemoUser(
   supabaseAdmin: ReturnType<typeof createClient>,
-  account: typeof DEMO_ACCOUNTS[keyof typeof DEMO_ACCOUNTS]
-) {
+  account: DemoAccount
+): Promise<string> {
   const { data: existing } = await supabaseAdmin.auth.admin.listUsers()
   const found = existing?.users?.find((u) => u.email === account.email)
-
   if (found) return found.id
 
   const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
@@ -35,7 +36,7 @@ async function getOrCreateDemoUser(
     ingame_name: account.ingame_name,
     role: account.role,
     is_test: true,
-  })
+  } as never)
 
   return created.user.id
 }
