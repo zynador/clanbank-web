@@ -2,9 +2,9 @@ import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 
 const DEMO_ACCOUNTS = {
-  admin:    { email: 'demo-admin@clanbank.local',    password: 'demo_admin_pw' },
-  offizier: { email: 'demo-offi@clanbank.local',     password: 'demo_offi_pw' },
-  mitglied: { email: 'demo-mitglied@clanbank.local', password: 'demo_mitglied_pw' },
+  admin:    { id: '00000000-0000-0000-0000-000000000010', email: 'demo-admin@clanbank.local',    password: 'demo_admin_pw' },
+  offizier: { id: '00000000-0000-0000-0000-000000000011', email: 'demo-offi@clanbank.local',     password: 'demo_offi_pw' },
+  mitglied: { id: '00000000-0000-0000-0000-000000000012', email: 'demo-mitglied@clanbank.local', password: 'demo_mitglied_pw' },
 }
 
 export async function POST(req: NextRequest) {
@@ -17,13 +17,31 @@ export async function POST(req: NextRequest) {
 
     const account = DEMO_ACCOUNTS[role as keyof typeof DEMO_ACCOUNTS]
 
-    const supabase = createClient(
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { persistSession: false, autoRefreshToken: false } }
+    )
+
+    // Passwort via Admin-API korrekt setzen (Supabase-eigenes Hashing)
+    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
+      account.id,
+      { password: account.password }
+    )
+
+    if (updateError) {
+      console.error('[demo/login] updateUser error:', updateError)
+      return NextResponse.json({ message: 'Demo-Setup fehlgeschlagen.' }, { status: 500 })
+    }
+
+    // Jetzt normal einloggen
+    const supabaseAnon = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       { auth: { persistSession: false, autoRefreshToken: false } }
     )
 
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabaseAnon.auth.signInWithPassword({
       email: account.email,
       password: account.password,
     })
