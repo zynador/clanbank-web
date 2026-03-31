@@ -35,9 +35,7 @@ function buildTourSteps(lang: 'de' | 'en'): TourStep[] {
       targetSelector: 'home-status',
       tab: 'home',
       title: de ? '👋 Dein Clanbank-Status' : '👋 Your Clanbank Status',
-      body: de
-        ? 'Hier siehst du auf einen Blick ob du mit deinen Einzahlungen aktuell bist. Grün = alles gut. Rot = du hast Rückstand.'
-        : 'Here you can see at a glance whether your deposits are up to date. Green = all good. Red = you are behind.',
+      body: de ? 'Hier siehst du auf einen Blick ob du mit deinen Einzahlungen aktuell bist. Grün = alles gut. Rot = du hast Rückstand.' : 'Here you can see at a glance whether your deposits are up to date. Green = all good. Red = you are behind.',
       roles: ['admin', 'offizier', 'mitglied'],
     },
     {
@@ -45,9 +43,7 @@ function buildTourSteps(lang: 'de' | 'en'): TourStep[] {
       targetSelector: 'home-ranking-bank',
       tab: 'home',
       title: de ? '🏦 Bank-Ranking' : '🏦 Bank Ranking',
-      body: de
-        ? 'Die Top 5 Einzahler des Clans auf einen Blick. Klicke auf "→ Mehr" um das vollständige Ranking zu sehen.'
-        : 'The top 5 depositors at a glance. Click "→ More" to see the full ranking.',
+      body: de ? 'Die Top 5 Einzahler des Clans auf einen Blick. Klicke auf "→ Mehr" um das vollständige Ranking zu sehen.' : 'The top 5 depositors at a glance. Click "→ More" to see the full ranking.',
       roles: ['admin', 'offizier', 'mitglied'],
     },
     {
@@ -55,9 +51,7 @@ function buildTourSteps(lang: 'de' | 'en'): TourStep[] {
       targetSelector: 'deposits-add-btn',
       tab: 'deposits',
       title: de ? '💰 Einzahlung erfassen' : '💰 Record a Deposit',
-      body: de
-        ? 'Lade einen Screenshot deiner Transaktion hoch — die KI liest Ressource und Menge automatisch aus. Danach einfach speichern.'
-        : 'Upload a screenshot of your transaction — AI reads resource and amount automatically. Then just save.',
+      body: de ? 'Lade einen Screenshot deiner Transaktion hoch — die KI liest Ressource und Menge automatisch aus. Danach einfach speichern.' : 'Upload a screenshot of your transaction — AI reads resource and amount automatically. Then just save.',
       roles: ['admin', 'offizier', 'mitglied'],
     },
     {
@@ -65,9 +59,7 @@ function buildTourSteps(lang: 'de' | 'en'): TourStep[] {
       targetSelector: 'fcu-ranking-btn',
       tab: 'fcu',
       title: de ? '🎯 FCU-Gesamtranking' : '🎯 FCU Overall Ranking',
-      body: de
-        ? 'Hier findest du alle FCU-Events und das Gesamtranking über alle Events. Klicke auf "Gesamtranking" um deine Punkte zu sehen.'
-        : 'Here you find all FCU events and the overall ranking. Click "Overall Ranking" to see your points.',
+      body: de ? 'Hier findest du alle FCU-Events und das Gesamtranking über alle Events. Klicke auf "Gesamtranking" um deine Punkte zu sehen.' : 'Here you find all FCU events and the overall ranking. Click "Overall Ranking" to see your points.',
       roles: ['admin', 'offizier', 'mitglied'],
     },
     {
@@ -75,9 +67,7 @@ function buildTourSteps(lang: 'de' | 'en'): TourStep[] {
       targetSelector: 'home-backlog',
       tab: 'home',
       title: de ? '⚠️ Wand der Schande' : '⚠️ Backlog Wall',
-      body: de
-        ? 'Alle Mitglieder mit Einzahlungsrückstand auf einen Blick. Klicke auf eine Kachel für Details zu Ressourcen und Fortschritt.'
-        : 'All members with deposit backlog at a glance. Click a tile for details on resources and progress.',
+      body: de ? 'Alle Mitglieder mit Einzahlungsrückstand auf einen Blick. Klicke auf eine Kachel für Details zu Ressourcen und Fortschritt.' : 'All members with deposit backlog at a glance. Click a tile for details on resources and progress.',
       roles: ['admin', 'offizier'],
     },
     {
@@ -85,9 +75,7 @@ function buildTourSteps(lang: 'de' | 'en'): TourStep[] {
       targetSelector: 'members-search',
       tab: 'mitglieder',
       title: de ? '👥 Mitgliederverwaltung' : '👥 Member Management',
-      body: de
-        ? 'Suche nach Mitgliedern, prüfe ihren Registrierungsstatus und verwalte Rollen, Raidleiter-Flags und Ausnahmestatus.'
-        : 'Search for members, check their registration status and manage roles, raid leader flags and exemptions.',
+      body: de ? 'Suche nach Mitgliedern, prüfe ihren Registrierungsstatus und verwalte Rollen, Raidleiter-Flags und Ausnahmestatus.' : 'Search for members, check their registration status and manage roles, raid leader flags and exemptions.',
       roles: ['admin', 'offizier'],
     },
     {
@@ -95,9 +83,7 @@ function buildTourSteps(lang: 'de' | 'en'): TourStep[] {
       targetSelector: 'fcu-list',
       tab: 'fcu',
       title: de ? '📋 FCU-Events verwalten' : '📋 Manage FCU Events',
-      body: de
-        ? 'Lege neue FCU-Events an, lade Screenshots hoch und bestätige die Ergebnisse nach OCR-Prüfung.'
-        : 'Create new FCU events, upload screenshots and confirm results after OCR review.',
+      body: de ? 'Lege neue FCU-Events an, lade Screenshots hoch und bestätige die Ergebnisse nach OCR-Prüfung.' : 'Create new FCU events, upload screenshots and confirm results after OCR review.',
       roles: ['admin', 'offizier'],
     },
     {
@@ -105,9 +91,7 @@ function buildTourSteps(lang: 'de' | 'en'): TourStep[] {
       targetSelector: 'admin-password-reset',
       tab: 'verwaltung',
       title: de ? '🔑 Passwort zurücksetzen' : '🔑 Reset Password',
-      body: de
-        ? 'Setze das Passwort eines Mitglieds direkt in der App und gib es per Discord weiter. Das Mitglied kann es danach selbst ändern.'
-        : 'Reset a member\'s password directly in the app and share it via Discord. The member can change it afterwards.',
+      body: de ? 'Setze das Passwort eines Mitglieds direkt in der App und gib es per Discord weiter. Das Mitglied kann es danach selbst ändern.' : "Reset a member's password directly in the app and share it via Discord. The member can change it afterwards.",
       roles: ['admin'],
     },
     {
@@ -115,9 +99,7 @@ function buildTourSteps(lang: 'de' | 'en'): TourStep[] {
       targetSelector: 'admin-bank-import',
       tab: 'verwaltung',
       title: de ? '📊 Bankstand-Import' : '📊 Bank Import',
-      body: de
-        ? 'Importiere historische Einzahlungsdaten aus Excel. Registrierte Spieler werden direkt verbucht, nicht-registrierte landen in der historischen Liste.'
-        : 'Import historical deposit data from Excel. Registered players are booked directly, unregistered ones go into the historical list.',
+      body: de ? 'Importiere historische Einzahlungsdaten aus Excel. Registrierte Spieler werden direkt verbucht, nicht-registrierte landen in der historischen Liste.' : 'Import historical deposit data from Excel. Registered players are booked directly, unregistered ones go into the historical list.',
       roles: ['admin'],
     },
   ]
@@ -145,7 +127,6 @@ function DashboardContent() {
   const isDemo = !!(profile as unknown as Record<string, unknown>)?.is_test
   const canSeeAuszahlungen = isOfficerOrAdmin || isRaidleiter
   const role = (profile?.role as UserRole) ?? 'mitglied'
-
   const allSteps = buildTourSteps(lang)
   const tourSteps = allSteps.filter(s => s.roles.includes(role))
 
@@ -166,11 +147,7 @@ function DashboardContent() {
 
   useEffect(() => {
     if (!profile?.id) return
-    supabase
-      .from('profiles')
-      .select('is_raidleiter')
-      .eq('id', profile.id)
-      .single()
+    supabase.from('profiles').select('is_raidleiter').eq('id', profile.id).single()
       .then(({ data }) => {
         if (data) setIsRaidleiter(!!(data as { is_raidleiter: boolean }).is_raidleiter)
       })
@@ -185,9 +162,7 @@ function DashboardContent() {
 
   useEffect(() => {
     if (!isOfficerOrAdmin) return
-    supabase
-      .from('starter_members')
-      .select('id', { count: 'exact', head: true })
+    supabase.from('starter_members').select('id', { count: 'exact', head: true })
       .eq('status', 'claimed_pending')
       .then(({ count }) => {
         if (typeof count === 'number') setPendingClaimsCount(count)
@@ -207,10 +182,7 @@ function DashboardContent() {
     setShowTour(false)
     if (isDemo) return
     try {
-      await supabase.rpc('update_tour_progress', {
-        p_last_step: tourSteps.length - 1,
-        p_completed: true,
-      })
+      await supabase.rpc('update_tour_progress', { p_last_step: tourSteps.length - 1, p_completed: true })
     } catch {}
   }
 
@@ -218,10 +190,7 @@ function DashboardContent() {
     setShowTour(false)
     if (isDemo) return
     try {
-      await supabase.rpc('update_tour_progress', {
-        p_last_step: 0,
-        p_completed: false,
-      })
+      await supabase.rpc('update_tour_progress', { p_last_step: 0, p_completed: false })
     } catch {}
   }
 
@@ -263,6 +232,7 @@ function DashboardContent() {
     fcu: t.fcu, mitglieder: t.mitglieder, freigabe: t.freigabe,
     vorschlaege: t.vorschlaege, warnungen: t.warnungen, verwaltung: t.verwaltung,
   }
+
   const tabIcon: Record<Tab, string> = {
     home: '🏠', deposits: '💰', battle: '⚔️', ranking: '🏆', fcu: '🎯',
     mitglieder: '👥', freigabe: '✅', vorschlaege: '💡', warnungen: '⚠️', verwaltung: '⚙️',
@@ -287,7 +257,6 @@ function DashboardContent() {
 
   return (
     <div className="min-h-screen bg-[#0f1117] text-gray-100">
-      {/* Header */}
       <header className="border-b border-gray-800 bg-[#161822] sticky top-0 z-20">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="relative group">
@@ -300,43 +269,19 @@ function DashboardContent() {
           </div>
           <div className="flex items-center gap-2">
             {profile?.ingame_name && (
-              <span className="text-xs text-gray-400 truncate max-w-[120px]">
-                {'👤 ' + profile.ingame_name}
-              </span>
+              <span className="text-xs text-gray-400 truncate max-w-[120px]">{'👤 ' + profile.ingame_name}</span>
             )}
-            <button
-              onClick={() => setShowGuides(true)}
-              className="text-xs text-gray-400 hover:text-teal-400 px-2 py-1 rounded border border-gray-700 hover:border-teal-600 transition-colors"
-              title={lang === 'de' ? 'Guides' : 'Guides'}
-            >
+            <button onClick={() => setShowGuides(true)} className="text-xs text-gray-400 hover:text-teal-400 px-2 py-1 rounded border border-gray-700 hover:border-teal-600 transition-colors">
               {'📚'}
             </button>
-            
-              href="/demo"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-gray-400 hover:text-teal-400 px-2 py-1 rounded border border-gray-700 hover:border-teal-600 transition-colors"
-            >
-              {'🎬'}
-            </a>
-            <button
-              onClick={toggleLang}
-              className="text-xs text-gray-400 hover:text-teal-400 px-2 py-1 rounded border border-gray-700 hover:border-teal-600"
-            >
+            <a href="/demo" target="_blank" rel="noopener noreferrer" className="text-xs text-gray-400 hover:text-teal-400 px-2 py-1 rounded border border-gray-700 hover:border-teal-600 transition-colors">{'🎬'}</a>
+            <button onClick={toggleLang} className="text-xs text-gray-400 hover:text-teal-400 px-2 py-1 rounded border border-gray-700 hover:border-teal-600">
               {'🌐 ' + (lang === 'de' ? 'EN' : 'DE')}
             </button>
-            <button
-              onClick={() => signOut()}
-              className="text-xs text-gray-400 hover:text-red-400 px-2 py-1 rounded border border-gray-700 hover:border-red-600"
-              title={t.logout}
-            >
+            <button onClick={() => signOut()} className="text-xs text-gray-400 hover:text-red-400 px-2 py-1 rounded border border-gray-700 hover:border-red-600">
               {'🚪'}
             </button>
-            <button
-              onClick={() => setDrawerOpen(true)}
-              className="flex flex-col gap-1 p-2 rounded hover:bg-gray-800"
-              aria-label="Menü öffnen"
-            >
+            <button onClick={() => setDrawerOpen(true)} className="flex flex-col gap-1 p-2 rounded hover:bg-gray-800" aria-label="Menü öffnen">
               <span className="block w-5 h-0.5 bg-gray-300"></span>
               <span className="block w-5 h-0.5 bg-gray-300"></span>
               <span className="block w-5 h-0.5 bg-gray-300"></span>
@@ -344,13 +289,10 @@ function DashboardContent() {
           </div>
         </div>
         <div className="max-w-2xl mx-auto px-4 pb-2 flex items-center gap-2">
-          <span className="text-sm text-gray-400">
-            {tabIcon[activeTab] + ' ' + tabLabel[activeTab]}
-          </span>
+          <span className="text-sm text-gray-400">{tabIcon[activeTab] + ' ' + tabLabel[activeTab]}</span>
         </div>
       </header>
 
-      {/* Drawer */}
       {drawerOpen && (
         <div className="fixed inset-0 z-30 flex">
           <div className="w-64 bg-[#161822] border-r border-gray-700 flex flex-col h-full overflow-y-auto">
@@ -360,9 +302,7 @@ function DashboardContent() {
                   {(profile?.ingame_name ?? '?').slice(0, 2).toUpperCase()}
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-gray-100 truncate">
-                    {profile?.ingame_name ?? profile?.username}
-                  </p>
+                  <p className="text-sm font-medium text-gray-100 truncate">{profile?.ingame_name ?? profile?.username}</p>
                   <p className="text-xs text-gray-500 capitalize">{profile?.role}</p>
                 </div>
               </div>
@@ -371,59 +311,32 @@ function DashboardContent() {
               {visibleTabs.map(tab => {
                 const badge = badgeFor(tab)
                 return (
-                  <button
-                    key={tab}
-                    onClick={() => navigate(tab)}
-                    className={
-                      'w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-colors ' +
-                      (activeTab === tab
-                        ? 'bg-teal-900/40 text-teal-300 font-medium'
-                        : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200')
-                    }
-                  >
+                  <button key={tab} onClick={() => navigate(tab)} className={'w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-colors ' + (activeTab === tab ? 'bg-teal-900/40 text-teal-300 font-medium' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200')}>
                     <span className="flex items-center gap-2.5">
                       <span>{tabIcon[tab]}</span>
                       <span>{tabLabel[tab]}</span>
                     </span>
                     {badge > 0 && (
-                      <span className="bg-red-900/60 text-red-400 border border-red-800 text-[10px] font-medium rounded-full px-1.5 py-0.5 leading-none">
-                        {badge}
-                      </span>
+                      <span className="bg-red-900/60 text-red-400 border border-red-800 text-[10px] font-medium rounded-full px-1.5 py-0.5 leading-none">{badge}</span>
                     )}
                   </button>
                 )
               })}
             </nav>
             <div className="px-2 py-3 border-t border-gray-700 space-y-0.5">
-              <button
-                onClick={() => { setDrawerOpen(false); setShowGuides(true) }}
-                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-gray-800 hover:text-gray-200"
-              >
-                <span>{'📚'}</span>
-                <span>{lang === 'de' ? 'Guides' : 'Guides'}</span>
+              <button onClick={() => { setDrawerOpen(false); setShowGuides(true) }} className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-gray-800 hover:text-gray-200">
+                <span>{'📚'}</span><span>{lang === 'de' ? 'Guides' : 'Guides'}</span>
               </button>
               {!isDemo && (
-                <button
-                  onClick={() => { setDrawerOpen(false); setShowTour(true) }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-gray-800 hover:text-gray-200"
-                >
-                  <span>{'🗺️'}</span>
-                  <span>{lang === 'de' ? 'Tour starten' : 'Start Tour'}</span>
+                <button onClick={() => { setDrawerOpen(false); setShowTour(true) }} className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-gray-800 hover:text-gray-200">
+                  <span>{'🗺️'}</span><span>{lang === 'de' ? 'Tour starten' : 'Start Tour'}</span>
                 </button>
               )}
-              <button
-                onClick={() => { setDrawerOpen(false); setShowWelcome(true) }}
-                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-gray-800 hover:text-gray-200"
-              >
-                <span>{'❓'}</span>
-                <span>{lang === 'de' ? 'Hilfe' : 'Help'}</span>
+              <button onClick={() => { setDrawerOpen(false); setShowWelcome(true) }} className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-gray-800 hover:text-gray-200">
+                <span>{'❓'}</span><span>{lang === 'de' ? 'Hilfe' : 'Help'}</span>
               </button>
-              <button
-                onClick={() => signOut()}
-                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-gray-800 hover:text-red-400"
-              >
-                <span>{'🚪'}</span>
-                <span>{t.logout}</span>
+              <button onClick={() => signOut()} className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-gray-800 hover:text-red-400">
+                <span>{'🚪'}</span><span>{t.logout}</span>
               </button>
             </div>
           </div>
@@ -431,11 +344,8 @@ function DashboardContent() {
         </div>
       )}
 
-      {/* Hauptinhalt */}
       <main className="max-w-2xl mx-auto">
-        {activeTab === 'home' && (
-          <HomeTab lang={lang} onNavigate={(tab) => navigate(tab as Tab)} />
-        )}
+        {activeTab === 'home' && <HomeTab lang={lang} onNavigate={(tab) => navigate(tab as Tab)} />}
         {activeTab === 'deposits' && <DepositsTab lang={lang} />}
         {activeTab === 'battle' && canSeeAuszahlungen && (
           <div className="space-y-6 p-4">
@@ -443,17 +353,13 @@ function DashboardContent() {
               <h2 className="text-base font-medium text-gray-300 mb-4 flex items-center gap-2">
                 {'📋 ' + t.upload_title}
                 {isRaidleiter && !isOfficerOrAdmin && (
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 border border-yellow-500/20">
-                    {'⚔️ Raidleiter'}
-                  </span>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 border border-yellow-500/20">{'⚔️ Raidleiter'}</span>
                 )}
               </h2>
               <BattleReportUpload lang={lang} onComplete={(id) => setLastBattleReportId(id)} />
             </section>
             <section className="bg-[#161822] border border-gray-800 rounded-xl p-5">
-              <h2 className="text-base font-medium text-gray-300 mb-4">
-                {'💰 ' + t.payout_title}
-              </h2>
+              <h2 className="text-base font-medium text-gray-300 mb-4">{'💰 ' + t.payout_title}</h2>
               <PayoutCalculation lang={lang} />
             </section>
           </div>
@@ -466,9 +372,7 @@ function DashboardContent() {
         {activeTab === 'fcu' && <FCUEventTab lang={lang} />}
         {activeTab === 'mitglieder' && isOfficerOrAdmin && (
           <section className="bg-[#161822] border border-gray-800 rounded-xl m-4 p-5">
-            <h2 className="text-base font-medium text-gray-300 mb-4">
-              {'👥 ' + t.mitglieder}
-            </h2>
+            <h2 className="text-base font-medium text-gray-300 mb-4">{'👥 ' + t.mitglieder}</h2>
             <MembersTab lang={lang} />
           </section>
         )}
@@ -487,31 +391,13 @@ function DashboardContent() {
         {activeTab === 'verwaltung' && isAdmin && <AdminPanel />}
       </main>
 
-      {/* Modals */}
-      <WelcomeModal
-        role={role}
-        isOpen={showWelcome}
-        onClose={handleWelcomeClose}
-      />
+      <WelcomeModal role={role} isOpen={showWelcome} onClose={handleWelcomeClose} />
       <HelpButton onClick={() => setShowWelcome(true)} lang={lang} />
-
-      {showGuides && (
-        <GuidesModal lang={lang} onClose={() => setShowGuides(false)} />
-      )}
-
+      {showGuides && <GuidesModal lang={lang} onClose={() => setShowGuides(false)} />}
       {showTour && tourSteps.length > 0 && (
-        <GuidedTour
-          steps={tourSteps}
-          lang={lang}
-          onNavigate={(tab) => navigate(tab as Tab)}
-          onComplete={handleTourComplete}
-          onSkip={handleTourSkip}
-        />
+        <GuidedTour steps={tourSteps} lang={lang} onNavigate={(tab) => navigate(tab as Tab)} onComplete={handleTourComplete} onSkip={handleTourSkip} />
       )}
-
-      {!isDemo && !showTour && (
-        <TourButton onClick={() => setShowTour(true)} lang={lang} />
-      )}
+      {!isDemo && !showTour && <TourButton onClick={() => setShowTour(true)} lang={lang} />}
     </div>
   )
 }
