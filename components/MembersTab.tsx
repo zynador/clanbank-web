@@ -144,7 +144,7 @@ export default function MembersTab({ lang }: { lang: Lang }) {
       await supabase.from('name_history').insert({ user_id: m.profile_id, old_ingame_name: originalIngame, new_ingame_name: trimmed })
     }
     const { data: kwData } = await supabase.rpc('set_member_start_kw', { p_user_id: m.profile_id, p_start_kw: editStartKw, p_start_year: editStartYear })
-    if (kwData && !(kwData as any).success) { showMsg((kwData as any).message, 'error'); setSavingEdit(false); return }
+    if (kwData && !(kwData as { success: boolean }).success) { showMsg((kwData as { message: string }).message, 'error'); setSavingEdit(false); return }
     showMsg(d(lang, 'Mitglied aktualisiert', 'Member updated'))
     setEditingId(null)
     loadMembers()
@@ -154,33 +154,33 @@ export default function MembersTab({ lang }: { lang: Lang }) {
   const handleRaidleiter = async (m: MemberEntry) => {
     if (!m.profile_id) return
     const { data, error } = await supabase.rpc('set_raidleiter_flag', { p_target_user_id: m.profile_id, p_value: !m.is_raidleiter })
-    if (error || !(data as any)?.success) { showMsg((data as any)?.message || d(lang, 'Fehler', 'Error'), 'error') }
+    if (error || !(data as { success: boolean })?.success) { showMsg((data as { message: string })?.message || d(lang, 'Fehler', 'Error'), 'error') }
     else { showMsg(!m.is_raidleiter ? d(lang, 'Raidleiter gesetzt', 'Raid leader set') : d(lang, 'Raidleiter entfernt', 'Raid leader removed')); loadMembers() }
   }
 
   const handleMarkLeft = async (m: MemberEntry) => {
     const { data, error } = await supabase.rpc('mark_member_left', { p_profile_id: m.profile_id, p_starter_id: m.starter_id })
-    if (error || !(data as any)?.success) { showMsg((data as any)?.message || d(lang, 'Fehler', 'Error'), 'error') }
+    if (error || !(data as { success: boolean })?.success) { showMsg((data as { message: string })?.message || d(lang, 'Fehler', 'Error'), 'error') }
     else { showMsg(d(lang, 'Als ausgetreten markiert', 'Marked as left')); setExpandedId(null); loadMembers() }
   }
 
   const handleReactivate = async (m: MemberEntry) => {
     const { data, error } = await supabase.rpc('reactivate_member', { p_profile_id: m.profile_id, p_starter_id: m.starter_id })
-    if (error || !(data as any)?.success) { showMsg((data as any)?.message || d(lang, 'Fehler', 'Error'), 'error') }
+    if (error || !(data as { success: boolean })?.success) { showMsg((data as { message: string })?.message || d(lang, 'Fehler', 'Error'), 'error') }
     else { showMsg(d(lang, 'Mitglied reaktiviert', 'Member reactivated')); setExpandedId(null); loadMembers() }
   }
 
   const handleConfirmClaim = async (m: MemberEntry) => {
     if (!m.starter_id) return
     const { data, error } = await supabase.rpc('confirm_starter_claim', { p_starter_id: m.starter_id })
-    if (error || !(data as any)?.success) { showMsg((data as any)?.message || d(lang, 'Fehler', 'Error'), 'error') }
+    if (error || !(data as { success: boolean })?.success) { showMsg((data as { message: string })?.message || d(lang, 'Fehler', 'Error'), 'error') }
     else { showMsg(d(lang, 'Claim best\u00e4tigt', 'Claim confirmed')); loadMembers() }
   }
 
   const handleRejectClaim = async (m: MemberEntry) => {
     if (!m.starter_id) return
     const { data, error } = await supabase.rpc('reject_starter_claim', { p_starter_id: m.starter_id })
-    if (error || !(data as any)?.success) { showMsg((data as any)?.message || d(lang, 'Fehler', 'Error'), 'error') }
+    if (error || !(data as { success: boolean })?.success) { showMsg((data as { message: string })?.message || d(lang, 'Fehler', 'Error'), 'error') }
     else { showMsg(d(lang, 'Claim abgelehnt', 'Claim rejected')); loadMembers() }
   }
 
@@ -188,7 +188,7 @@ export default function MembersTab({ lang }: { lang: Lang }) {
     if (!newName.trim() || !profile?.clan_id) return
     setAdding(true)
     const { data, error } = await supabase.rpc('add_clan_member', { p_clan_id: profile.clan_id, p_ingame_name: newName.trim() })
-    if (error || !(data as any)?.success) { showMsg((data as any)?.message || d(lang, 'Fehler', 'Error'), 'error') }
+    if (error || !(data as { success: boolean })?.success) { showMsg((data as { message: string })?.message || d(lang, 'Fehler', 'Error'), 'error') }
     else { showMsg(d(lang, 'Mitglied hinzugef\u00fcgt', 'Member added')); setNewName(''); setShowAddForm(false); loadMembers() }
     setAdding(false)
   }
@@ -213,6 +213,7 @@ export default function MembersTab({ lang }: { lang: Lang }) {
       {/* Suchfeld */}
       <div style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
         <input
+          data-tour-id="members-search"
           type="text"
           placeholder={d(lang, '\uD83D\uDD0D Suchen...', '\uD83D\uDD0D Search...')}
           value={searchTerm}
@@ -267,7 +268,6 @@ export default function MembersTab({ lang }: { lang: Lang }) {
         const leftDate = m.left_clan_at ? new Date(m.left_clan_at).toLocaleDateString('de-DE') : ''
         return (
           <div key={key} style={{ background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 'var(--border-radius-lg)', marginBottom: '6px', opacity: isLeft ? 0.65 : 1, overflow: 'hidden' }}>
-            {/* Header */}
             <div onClick={() => setExpandedId(isExpanded ? null : key)} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', cursor: 'pointer' }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: '14px', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textDecoration: isLeft ? 'line-through' : 'none', color: isLeft ? 'var(--color-text-secondary)' : 'var(--color-text-primary)' }}>{m.ingame_name}</div>
@@ -279,13 +279,11 @@ export default function MembersTab({ lang }: { lang: Lang }) {
                 )}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-                {/* Badges inline */}
                 <span style={{ fontSize: '11px', padding: '2px 7px', borderRadius: '99px', background: rb.bg, color: rb.color }}>{rb.label}</span>
                 <span style={{ fontSize: '11px', padding: '2px 7px', borderRadius: '99px', background: sb.bg, color: sb.color }}>{sb.label}</span>
                 <span style={{ fontSize: '13px', color: 'var(--color-text-secondary)' }}>{isExpanded ? '\u25b2' : '\u25bc'}</span>
               </div>
             </div>
-            {/* Extra Badges (Raidleiter, Ausnahme) */}
             {(m.is_raidleiter || (!isLeft && m.profile_id && getExemptionForUser(m.profile_id))) && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', padding: '0 12px 8px' }}>
                 {m.is_raidleiter && (
@@ -298,7 +296,6 @@ export default function MembersTab({ lang }: { lang: Lang }) {
                 )}
               </div>
             )}
-            {/* Actions */}
             {isExpanded && (
               editingId === key ? (
                 <div style={{ borderTop: '0.5px solid var(--color-border-tertiary)', padding: '12px' }}>
