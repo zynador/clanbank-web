@@ -18,18 +18,110 @@ import HomeTab from '@/components/HomeTab'
 import FCUEventTab from '@/components/FCUEventTab'
 import MembersTab from '@/components/MembersTab'
 import GuidesModal from '@/components/GuidesModal'
+import GuidedTour, { TourStep } from '@/components/GuidedTour'
+import TourButton from '@/components/TourButton'
 
 type Tab =
-  | 'home'
-  | 'deposits'
-  | 'battle'
-  | 'ranking'
-  | 'fcu'
-  | 'mitglieder'
-  | 'freigabe'
-  | 'vorschlaege'
-  | 'warnungen'
-  | 'verwaltung'
+  | 'home' | 'deposits' | 'battle' | 'ranking' | 'fcu'
+  | 'mitglieder' | 'freigabe' | 'vorschlaege' | 'warnungen' | 'verwaltung'
+
+type UserRole = 'admin' | 'offizier' | 'mitglied'
+
+function buildTourSteps(lang: 'de' | 'en'): TourStep[] {
+  const de = lang === 'de'
+  return [
+    {
+      id: 'home-status',
+      targetSelector: 'home-status',
+      tab: 'home',
+      title: de ? '👋 Dein Clanbank-Status' : '👋 Your Clanbank Status',
+      body: de
+        ? 'Hier siehst du auf einen Blick ob du mit deinen Einzahlungen aktuell bist. Grün = alles gut. Rot = du hast Rückstand.'
+        : 'Here you can see at a glance whether your deposits are up to date. Green = all good. Red = you are behind.',
+      roles: ['admin', 'offizier', 'mitglied'],
+    },
+    {
+      id: 'home-ranking-bank',
+      targetSelector: 'home-ranking-bank',
+      tab: 'home',
+      title: de ? '🏦 Bank-Ranking' : '🏦 Bank Ranking',
+      body: de
+        ? 'Die Top 5 Einzahler des Clans auf einen Blick. Klicke auf "→ Mehr" um das vollständige Ranking zu sehen.'
+        : 'The top 5 depositors at a glance. Click "→ More" to see the full ranking.',
+      roles: ['admin', 'offizier', 'mitglied'],
+    },
+    {
+      id: 'deposits-add',
+      targetSelector: 'deposits-add-btn',
+      tab: 'deposits',
+      title: de ? '💰 Einzahlung erfassen' : '💰 Record a Deposit',
+      body: de
+        ? 'Lade einen Screenshot deiner Transaktion hoch — die KI liest Ressource und Menge automatisch aus. Danach einfach speichern.'
+        : 'Upload a screenshot of your transaction — AI reads resource and amount automatically. Then just save.',
+      roles: ['admin', 'offizier', 'mitglied'],
+    },
+    {
+      id: 'fcu-ranking',
+      targetSelector: 'fcu-ranking-btn',
+      tab: 'fcu',
+      title: de ? '🎯 FCU-Gesamtranking' : '🎯 FCU Overall Ranking',
+      body: de
+        ? 'Hier findest du alle FCU-Events und das Gesamtranking über alle Events. Klicke auf "Gesamtranking" um deine Punkte zu sehen.'
+        : 'Here you find all FCU events and the overall ranking. Click "Overall Ranking" to see your points.',
+      roles: ['admin', 'offizier', 'mitglied'],
+    },
+    {
+      id: 'home-backlog',
+      targetSelector: 'home-backlog',
+      tab: 'home',
+      title: de ? '⚠️ Wand der Schande' : '⚠️ Backlog Wall',
+      body: de
+        ? 'Alle Mitglieder mit Einzahlungsrückstand auf einen Blick. Klicke auf eine Kachel für Details zu Ressourcen und Fortschritt.'
+        : 'All members with deposit backlog at a glance. Click a tile for details on resources and progress.',
+      roles: ['admin', 'offizier'],
+    },
+    {
+      id: 'members-search',
+      targetSelector: 'members-search',
+      tab: 'mitglieder',
+      title: de ? '👥 Mitgliederverwaltung' : '👥 Member Management',
+      body: de
+        ? 'Suche nach Mitgliedern, prüfe ihren Registrierungsstatus und verwalte Rollen, Raidleiter-Flags und Ausnahmestatus.'
+        : 'Search for members, check their registration status and manage roles, raid leader flags and exemptions.',
+      roles: ['admin', 'offizier'],
+    },
+    {
+      id: 'fcu-list',
+      targetSelector: 'fcu-list',
+      tab: 'fcu',
+      title: de ? '📋 FCU-Events verwalten' : '📋 Manage FCU Events',
+      body: de
+        ? 'Lege neue FCU-Events an, lade Screenshots hoch und bestätige die Ergebnisse nach OCR-Prüfung.'
+        : 'Create new FCU events, upload screenshots and confirm results after OCR review.',
+      roles: ['admin', 'offizier'],
+    },
+    {
+      id: 'admin-password-reset',
+      targetSelector: 'admin-password-reset',
+      tab: 'verwaltung',
+      title: de ? '🔑 Passwort zurücksetzen' : '🔑 Reset Password',
+      body: de
+        ? 'Setze das Passwort eines Mitglieds direkt in der App und gib es per Discord weiter. Das Mitglied kann es danach selbst ändern.'
+        : 'Reset a member\'s password directly in the app and share it via Discord. The member can change it afterwards.',
+      roles: ['admin'],
+    },
+    {
+      id: 'admin-bank-import',
+      targetSelector: 'admin-bank-import',
+      tab: 'verwaltung',
+      title: de ? '📊 Bankstand-Import' : '📊 Bank Import',
+      body: de
+        ? 'Importiere historische Einzahlungsdaten aus Excel. Registrierte Spieler werden direkt verbucht, nicht-registrierte landen in der historischen Liste.'
+        : 'Import historical deposit data from Excel. Registered players are booked directly, unregistered ones go into the historical list.',
+      roles: ['admin'],
+    },
+  ]
+}
 
 export default function DashboardPage() {
   return <ProtectedRoute><DashboardContent /></ProtectedRoute>
@@ -41,6 +133,7 @@ function DashboardContent() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [showWelcome, setShowWelcome] = useState(false)
   const [showGuides, setShowGuides] = useState(false)
+  const [showTour, setShowTour] = useState(false)
   const [lang, setLang] = useState<'de' | 'en'>('de')
   const [alertsCount, setAlertsCount] = useState(0)
   const [pendingClaimsCount, setPendingClaimsCount] = useState(0)
@@ -49,8 +142,12 @@ function DashboardContent() {
 
   const isOfficerOrAdmin = profile?.role === 'admin' || profile?.role === 'offizier'
   const isAdmin = profile?.role === 'admin'
+  const isDemo = !!(profile as unknown as Record<string, unknown>)?.is_test
   const canSeeAuszahlungen = isOfficerOrAdmin || isRaidleiter
-  const role = (profile?.role as 'admin' | 'offizier' | 'mitglied') ?? 'mitglied'
+  const role = (profile?.role as UserRole) ?? 'mitglied'
+
+  const allSteps = buildTourSteps(lang)
+  const tourSteps = allSteps.filter(s => s.roles.includes(role))
 
   useEffect(() => {
     try {
@@ -97,6 +194,42 @@ function DashboardContent() {
       })
   }, [isOfficerOrAdmin])
 
+  async function checkAndStartTour() {
+    if (isDemo) return
+    try {
+      const { data } = await supabase.rpc('get_or_create_tour_progress')
+      const progress = data as { completed: boolean; last_step: number } | null
+      if (!progress?.completed) setShowTour(true)
+    } catch {}
+  }
+
+  async function handleTourComplete() {
+    setShowTour(false)
+    if (isDemo) return
+    try {
+      await supabase.rpc('update_tour_progress', {
+        p_last_step: tourSteps.length - 1,
+        p_completed: true,
+      })
+    } catch {}
+  }
+
+  async function handleTourSkip() {
+    setShowTour(false)
+    if (isDemo) return
+    try {
+      await supabase.rpc('update_tour_progress', {
+        p_last_step: 0,
+        p_completed: false,
+      })
+    } catch {}
+  }
+
+  function handleWelcomeClose() {
+    setShowWelcome(false)
+    checkAndStartTour()
+  }
+
   function toggleLang() {
     const next = lang === 'de' ? 'en' : 'de'
     setLang(next)
@@ -126,37 +259,19 @@ function DashboardContent() {
   }
 
   const tabLabel: Record<Tab, string> = {
-    home: t.home,
-    deposits: t.deposits,
-    battle: t.battle,
-    ranking: t.ranking,
-    fcu: t.fcu,
-    mitglieder: t.mitglieder,
-    freigabe: t.freigabe,
-    vorschlaege: t.vorschlaege,
-    warnungen: t.warnungen,
-    verwaltung: t.verwaltung,
+    home: t.home, deposits: t.deposits, battle: t.battle, ranking: t.ranking,
+    fcu: t.fcu, mitglieder: t.mitglieder, freigabe: t.freigabe,
+    vorschlaege: t.vorschlaege, warnungen: t.warnungen, verwaltung: t.verwaltung,
   }
-
   const tabIcon: Record<Tab, string> = {
-    home: '🏠',
-    deposits: '💰',
-    battle: '⚔️',
-    ranking: '🏆',
-    fcu: '🎯',
-    mitglieder: '👥',
-    freigabe: '✅',
-    vorschlaege: '💡',
-    warnungen: '⚠️',
-    verwaltung: '⚙️',
+    home: '🏠', deposits: '💰', battle: '⚔️', ranking: '🏆', fcu: '🎯',
+    mitglieder: '👥', freigabe: '✅', vorschlaege: '💡', warnungen: '⚠️', verwaltung: '⚙️',
   }
 
   const visibleTabs: Tab[] = [
-    'home',
-    'deposits',
+    'home', 'deposits',
     ...(canSeeAuszahlungen ? ['battle' as Tab] : []),
-    'ranking',
-    'fcu',
+    'ranking', 'fcu',
     ...(isOfficerOrAdmin ? ['mitglieder' as Tab] : []),
     ...(isOfficerOrAdmin ? ['freigabe' as Tab] : []),
     'vorschlaege',
@@ -172,12 +287,9 @@ function DashboardContent() {
 
   return (
     <div className="min-h-screen bg-[#0f1117] text-gray-100">
-
       {/* Header */}
       <header className="border-b border-gray-800 bg-[#161822] sticky top-0 z-20">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
-
-          {/* Logo / Home Button */}
           <div className="relative group">
             <button onClick={() => navigate('home')} className="flex items-center">
               <Logo />
@@ -186,16 +298,12 @@ function DashboardContent() {
               {lang === 'de' ? 'Zur Startseite' : 'Go to Home'}
             </div>
           </div>
-
-          {/* Header Actions */}
           <div className="flex items-center gap-2">
             {profile?.ingame_name && (
               <span className="text-xs text-gray-400 truncate max-w-[120px]">
                 {'👤 ' + profile.ingame_name}
               </span>
             )}
-
-            {/* Guides Button */}
             <button
               onClick={() => setShowGuides(true)}
               className="text-xs text-gray-400 hover:text-teal-400 px-2 py-1 rounded border border-gray-700 hover:border-teal-600 transition-colors"
@@ -203,9 +311,7 @@ function DashboardContent() {
             >
               {'📚'}
             </button>
-
-            {/* Demo Button */}
-            <a
+            
               href="/demo"
               target="_blank"
               rel="noopener noreferrer"
@@ -214,16 +320,12 @@ function DashboardContent() {
             >
               {'🎬'}
             </a>
-
-            {/* Language Toggle */}
             <button
               onClick={toggleLang}
               className="text-xs text-gray-400 hover:text-teal-400 px-2 py-1 rounded border border-gray-700 hover:border-teal-600"
             >
               {'🌐 ' + (lang === 'de' ? 'EN' : 'DE')}
             </button>
-
-            {/* Sign Out */}
             <button
               onClick={() => signOut()}
               className="text-xs text-gray-400 hover:text-red-400 px-2 py-1 rounded border border-gray-700 hover:border-red-600"
@@ -231,8 +333,6 @@ function DashboardContent() {
             >
               {'🚪'}
             </button>
-
-            {/* Hamburger */}
             <button
               onClick={() => setDrawerOpen(true)}
               className="flex flex-col gap-1 p-2 rounded hover:bg-gray-800"
@@ -244,8 +344,6 @@ function DashboardContent() {
             </button>
           </div>
         </div>
-
-        {/* Breadcrumb */}
         <div className="max-w-2xl mx-auto px-4 pb-2 flex items-center gap-2">
           <span className="text-sm text-gray-400">
             {tabIcon[activeTab] + ' ' + tabLabel[activeTab]}
@@ -253,7 +351,7 @@ function DashboardContent() {
         </div>
       </header>
 
-      {/* Drawer Overlay */}
+      {/* Drawer */}
       {drawerOpen && (
         <div className="fixed inset-0 z-30 flex">
           <div className="w-64 bg-[#161822] border-r border-gray-700 flex flex-col h-full overflow-y-auto">
@@ -270,7 +368,6 @@ function DashboardContent() {
                 </div>
               </div>
             </div>
-
             <nav className="flex-1 px-2 py-3 space-y-0.5">
               {visibleTabs.map(tab => {
                 const badge = badgeFor(tab)
@@ -298,7 +395,6 @@ function DashboardContent() {
                 )
               })}
             </nav>
-
             <div className="px-2 py-3 border-t border-gray-700 space-y-0.5">
               <button
                 onClick={() => { setDrawerOpen(false); setShowGuides(true) }}
@@ -307,6 +403,15 @@ function DashboardContent() {
                 <span>{'📚'}</span>
                 <span>{lang === 'de' ? 'Guides' : 'Guides'}</span>
               </button>
+              {!isDemo && (
+                <button
+                  onClick={() => { setDrawerOpen(false); setShowTour(true) }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-gray-800 hover:text-gray-200"
+                >
+                  <span>{'🗺️'}</span>
+                  <span>{lang === 'de' ? 'Tour starten' : 'Start Tour'}</span>
+                </button>
+              )}
               <button
                 onClick={() => { setDrawerOpen(false); setShowWelcome(true) }}
                 className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-gray-800 hover:text-gray-200"
@@ -332,9 +437,7 @@ function DashboardContent() {
         {activeTab === 'home' && (
           <HomeTab lang={lang} onNavigate={(tab) => navigate(tab as Tab)} />
         )}
-        {activeTab === 'deposits' && (
-          <DepositsTab lang={lang} />
-        )}
+        {activeTab === 'deposits' && <DepositsTab lang={lang} />}
         {activeTab === 'battle' && canSeeAuszahlungen && (
           <div className="space-y-6 p-4">
             <section className="bg-[#161822] border border-gray-800 rounded-xl p-5">
@@ -361,9 +464,7 @@ function DashboardContent() {
             <RankingTab lang={lang} />
           </section>
         )}
-        {activeTab === 'fcu' && (
-          <FCUEventTab lang={lang} />
-        )}
+        {activeTab === 'fcu' && <FCUEventTab lang={lang} />}
         {activeTab === 'mitglieder' && isOfficerOrAdmin && (
           <section className="bg-[#161822] border border-gray-800 rounded-xl m-4 p-5">
             <h2 className="text-base font-medium text-gray-300 mb-4">
@@ -378,24 +479,39 @@ function DashboardContent() {
             <ApprovalQueue />
           </section>
         )}
-        {activeTab === 'vorschlaege' && (
-          <SuggestionBox lang={lang} />
-        )}
+        {activeTab === 'vorschlaege' && <SuggestionBox lang={lang} />}
         {activeTab === 'warnungen' && isOfficerOrAdmin && (
           <section className="bg-[#161822] border border-gray-800 rounded-xl m-4 p-5">
             <SecurityAlerts lang={lang} onCountChange={(n) => setAlertsCount(n)} />
           </section>
         )}
-        {activeTab === 'verwaltung' && isAdmin && (
-          <AdminPanel />
-        )}
+        {activeTab === 'verwaltung' && isAdmin && <AdminPanel />}
       </main>
 
       {/* Modals */}
-      <WelcomeModal role={role} isOpen={showWelcome} onClose={() => setShowWelcome(false)} />
+      <WelcomeModal
+        role={role}
+        isOpen={showWelcome}
+        onClose={handleWelcomeClose}
+      />
       <HelpButton onClick={() => setShowWelcome(true)} lang={lang} />
+
       {showGuides && (
         <GuidesModal lang={lang} onClose={() => setShowGuides(false)} />
+      )}
+
+      {showTour && tourSteps.length > 0 && (
+        <GuidedTour
+          steps={tourSteps}
+          lang={lang}
+          onNavigate={(tab) => navigate(tab as Tab)}
+          onComplete={handleTourComplete}
+          onSkip={handleTourSkip}
+        />
+      )}
+
+      {!isDemo && !showTour && (
+        <TourButton onClick={() => setShowTour(true)} lang={lang} />
       )}
     </div>
   )
