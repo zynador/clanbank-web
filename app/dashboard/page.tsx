@@ -316,7 +316,6 @@ function DashboardContent() {
               target="_blank"
               rel="noopener noreferrer"
               className="text-xs text-gray-400 hover:text-teal-400 px-2 py-1 rounded border border-gray-700 hover:border-teal-600 transition-colors"
-              title={lang === 'de' ? 'Demo ansehen' : 'View Demo'}
             >
               {'🎬'}
             </a>
