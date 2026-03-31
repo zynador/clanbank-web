@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 
 const DEMO_CLAN_ID = '00000000-0000-0000-0000-000000000002'
@@ -11,12 +11,10 @@ const DEMO_ACCOUNTS = {
 
 type DemoAccount = typeof DEMO_ACCOUNTS[keyof typeof DEMO_ACCOUNTS]
 
-async function getOrCreateDemoUser(
-  supabaseAdmin: ReturnType<typeof createClient>,
-  account: DemoAccount
-): Promise<string> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getOrCreateDemoUser(supabaseAdmin: SupabaseClient<any>, account: DemoAccount): Promise<string> {
   const { data: existing } = await supabaseAdmin.auth.admin.listUsers()
-  const found = existing?.users?.find((u) => u.email === account.email)
+  const found = existing?.users?.find((u: { email: string }) => u.email === account.email)
   if (found) return found.id
 
   const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
@@ -36,7 +34,7 @@ async function getOrCreateDemoUser(
     ingame_name: account.ingame_name,
     role: account.role,
     is_test: true,
-  } as never)
+  })
 
   return created.user.id
 }
@@ -51,7 +49,8 @@ export async function POST(req: NextRequest) {
 
     const account = DEMO_ACCOUNTS[role as keyof typeof DEMO_ACCOUNTS]
 
-    const supabaseAdmin = createClient(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const supabaseAdmin: SupabaseClient<any> = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
       { auth: { persistSession: false, autoRefreshToken: false } }
