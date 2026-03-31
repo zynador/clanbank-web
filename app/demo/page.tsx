@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabaseClient'
 
 type DemoRole = 'admin' | 'offizier' | 'mitglied'
 
@@ -58,7 +58,6 @@ const ROLE_CARDS: RoleCard[] = [
 ]
 
 export default function DemoPage() {
-  const router = useRouter()
   const [loading, setLoading] = useState<DemoRole | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -71,13 +70,27 @@ export default function DemoPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ role }),
       })
-      if (!res.ok) {
-        const data = await res.json()
+
+      const data = await res.json()
+
+      if (!res.ok || !data.success) {
         setError(data.message || 'Login fehlgeschlagen.')
         setLoading(null)
         return
       }
-      router.push('/dashboard')
+
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+      })
+
+      if (sessionError) {
+        setError('Session konnte nicht gesetzt werden.')
+        setLoading(null)
+        return
+      }
+
+      window.location.href = '/dashboard'
     } catch {
       setError('Verbindungsfehler. Bitte erneut versuchen.')
       setLoading(null)
@@ -88,7 +101,6 @@ export default function DemoPage() {
     <div style={{ minHeight: '100vh', backgroundColor: '#0f172a', color: '#f1f5f9' }}
       className="flex flex-col items-center justify-center p-6">
 
-      {/* Logo + Headline */}
       <div className="text-center mb-10">
         <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>{'🏦'}</div>
         <h1 style={{ fontSize: '1.75rem', fontWeight: 700, color: '#f1f5f9', marginBottom: '0.5rem' }}>
@@ -100,7 +112,6 @@ export default function DemoPage() {
         </p>
       </div>
 
-      {/* Fehlermeldung */}
       {error && (
         <div style={{
           backgroundColor: 'rgba(239,68,68,0.15)',
@@ -117,7 +128,6 @@ export default function DemoPage() {
         </div>
       )}
 
-      {/* Rollenkarten */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
@@ -160,7 +170,6 @@ export default function DemoPage() {
         ))}
       </div>
 
-      {/* Footer */}
       <p style={{ color: '#475569', fontSize: '0.85rem' }}>
         {'Bereits Mitglied? '}
         <a href="/login" style={{ color: '#3b82f6', textDecoration: 'underline' }}>
