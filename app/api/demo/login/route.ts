@@ -14,7 +14,7 @@ type DemoAccount = typeof DEMO_ACCOUNTS[keyof typeof DEMO_ACCOUNTS]
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getOrCreateDemoUser(supabaseAdmin: SupabaseClient<any>, account: DemoAccount): Promise<string> {
   const { data: existing } = await supabaseAdmin.auth.admin.listUsers()
-  const found = existing?.users?.find((u: { email: string }) => u.email === account.email)
+  const found = existing?.users?.find((u) => u.email === account.email)
   if (found) return found.id
 
   const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
