@@ -1,6 +1,6 @@
 # ClanBank — Codestruktur
 
-> **Letzte Aktualisierung:** 30.03.2026 | Fahrplan V37
+> **Letzte Aktualisierung:** 31.03.2026 | Fahrplan V38
 > **Raw-URL für neue Chat-Sessions:**
 > `https://raw.githubusercontent.com/zynador/clanbank-web/main/CODESTRUKTUR.md`
 
@@ -23,9 +23,9 @@ clanbank-web/
 │   │       └── login/
 │   │           └── route.ts      ← Demo-Gastaccount erstellen + Session setzen (Service Role Key)
 │   ├── dashboard/
-│   │   └── page.tsx              ← Haupt-App nach Login (Hamburger Drawer, tour_progress Check)
+│   │   └── page.tsx              ← Haupt-App nach Login (Header: 📚 Guides + 🎬 Demo Buttons, tour_progress Check)
 │   ├── demo/
-│   │   └── page.tsx              ← Öffentliche Demo-Einstiegsseite (Rollenwahl, kein Auth-Check)
+│   │   └── page.tsx              ← Öffentliche Placeholder-Seite ("Demo folgt in Kürze", kein Auth-Check)
 │   ├── login/
 │   │   └── page.tsx              ← Login-Seite
 │   ├── register/
@@ -47,6 +47,7 @@ clanbank-web/
 │   ├── FCURankingView.tsx        ← Gesamtranking über alle FCU Events
 │   ├── FCUUploadPanel.tsx        ← Multi-Screenshot Upload + OCR pro Screen
 │   ├── GuidedTour.tsx            ← Floating Tooltip + Highlight-Ring (NUR Member-Tour)
+│   ├── GuidesModal.tsx           ← In-App Lesemodus für Spiel- und App-Guides (DE/EN) [NEU V38]
 │   ├── HelpButton.tsx
 │   ├── HistoricalDepositsPanel.tsx ← Admin: Status aller historical_deposits
 │   ├── HomeTab.tsx               ← Startseite (Status, Backlog, Ankündigungen, Doppel-Podest Ranking)
@@ -68,6 +69,16 @@ clanbank-web/
 ├── lib/
 │   ├── auth-context.tsx          ← useAuth() Hook
 │   └── supabaseClient.ts         ← supabase Client (IMMER von hier importieren)
+├── public/
+│   └── guides/                   ← [NEU V38] Guides als Markdown (Vercel static)
+│       ├── game/                 ← Spiel-Guides (je DE + EN)
+│       │   ├── formationen-de.md / formationen-en.md
+│       │   ├── turmkampf-de.md / turmkampf-en.md
+│       │   ├── waffen-de.md / waffen-en.md
+│       │   ├── t4-de.md / t4-en.md
+│       │   ├── spiel-ziele-de.md / spiel-ziele-en.md
+│       │   └── leitgedanke-de.md / leitgedanke-en.md
+│       └── app/                  ← App-Guides (noch leer, vorbereitet)
 ├── tests/                        ← Playwright E2E-Tests (von tsconfig ausgeschlossen)
 │   ├── playwright.config.ts
 │   ├── auth.spec.ts
@@ -119,6 +130,15 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 - **loadDetail():** aufgeteilt in `loadDetailForStarter()` + `loadDetailForMember()` (je < 30 Zeilen)
 - **Modal:** `fixed inset-0 z-50`, Backdrop `rgba(0,0,0,0.45)`, Klick außen schließt
 - **data-tour-id Attribute:** `home-status`, `home-ranking-bank`, `home-ranking-fcu`, `home-backlog`
+
+---
+
+### `GuidesModal.tsx` ← [NEU V38]
+- **Props:** `lang: Lang`, `onClose: () => void`
+- **Zwei Reiter:** `game` (Spiel-Guides) / `app` (App-Guides, initial leer)
+- **Laden:** `fetch('/guides/[category]/[file]-[lang].md')` — Fallback auf `-de.md` wenn EN-Datei 404
+- **Markdown-Parser:** inline, kein externes Package — unterstützt `#`, `##`, `###`, `- ` Listen, Absätze
+- **Neuen Guide hinzufügen:** Eintrag in `GAME_GUIDES`-Array + Markdown-Datei in `public/guides/game/`
 
 ---
 
@@ -183,8 +203,8 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 
 ### `app/demo/page.tsx`
 - **Kein Auth-Check** — vollständig öffentlich
-- **Klick auf Karte:** POST `/api/demo/login` → Redirect `/dashboard`
-- **Kein GuidedTour** im Demo-Modus
+- **Aktuell (V38):** Placeholder — "Demo folgt in Kürze" + Link zu `/login`
+- **Geplant (Idee 7):** Rollenwahl → POST `/api/demo/login` → Redirect `/dashboard`, kein GuidedTour im Demo-Modus
 
 ---
 
@@ -238,7 +258,37 @@ type Tab =
 
 ---
 
-## 8. data-tour-id Attribute (Member-Tour)
+## 8. Guides-System (V38) ← [NEU]
+
+### Dateipfade
+```
+public/guides/game/[name]-de.md   ← Deutsch
+public/guides/game/[name]-en.md   ← Englisch (Fallback auf DE wenn 404)
+public/guides/app/[name]-de.md    ← App-Guides (noch leer)
+```
+
+### Neuen Guide hinzufügen
+1. Markdown-Datei anlegen: `public/guides/game/[name]-de.md` + optional `[name]-en.md`
+2. Eintrag in `GuidesModal.tsx` in `GAME_GUIDES`-Array:
+```typescript
+{ id: 'mein-guide', title_de: 'Mein Guide', title_en: 'My Guide', file: 'mein-guide' }
+```
+
+### Unterstützte Markdown-Syntax
+- `# Titel` → H1 teal
+- `## Abschnitt` → H2 grau mit Trennlinie
+- `### Unterabschnitt` → H3 teal klein
+- `- Listenpunkt` → Bullet-Liste
+- Normaler Text → Absatz
+
+### Header-Buttons (dashboard/page.tsx) ← [NEU V38]
+- `📚` → `setShowGuides(true)` → `<GuidesModal />` (neuer State `showGuides: boolean`)
+- `🎬` → `<a href="/demo" target="_blank">` (öffnet Demo-Seite in neuem Tab)
+- Beide auch im Hamburger-Drawer unter „Guides" sichtbar
+
+---
+
+## 9. data-tour-id Attribute (Member-Tour)
 
 | data-tour-id | Komponente | Element |
 |---|---|---|
@@ -256,9 +306,9 @@ type Tab =
 
 ---
 
-## 9. Playwright E2E-Tests
+## 10. Playwright E2E-Tests
 
-### Offene Punkte (Stand V37)
+### Offene Punkte (Stand V38)
 Keine offenen Punkte.
 
 ### loginAs()-Muster
@@ -279,7 +329,7 @@ async function loginAs(page: any, user: string, pass: string) {
 
 ---
 
-## 10. Key-Patterns
+## 11. Key-Patterns
 
 ### Imports
 ```typescript
@@ -335,18 +385,19 @@ const activeStarters = (starterRows ?? []).filter(...)
 ### Kein lucide-react
 ```typescript
 // ❌ import { AlertCircle } from 'lucide-react'
-// ✅ Emoji: ⚠️ ✅ ❌ 💡
+// ✅ Emoji: ⚠️ ✅ ❌ 💡 📚 🎬
 ```
 
 ---
 
-## 11. Auth & Rollen
+## 12. Auth & Rollen
 
 | | Admin | Offizier | Mitglied |
 |--|-------|----------|---------|
 | Wand der Schande sehen | ✅ | ✅ | ✅ |
 | Mitgliederliste sehen | ✅ | ✅ | ❌ |
 | AdminPanel | ✅ | ❌ | ❌ |
+| Guides lesen | ✅ | ✅ | ✅ |
 | Member-Tour Schritte | ✅ 1–9 | ➖ 1–7 | ➖ 1–4 |
 
 **Auth-Pattern:**
@@ -357,7 +408,7 @@ const activeStarters = (starterRows ?? []).filter(...)
 
 ---
 
-## 12. Bekannte Fallstricke
+## 13. Bekannte Fallstricke
 
 | Problem | Lösung |
 |---------|--------|
@@ -380,6 +431,9 @@ const activeStarters = (starterRows ?? []).filter(...)
 | GitHub Actions Node.js Deprecation | `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"` + `node-version: 22` in `playwright.yml` |
 | UNION ALL mit ORDER BY | In Subquery wrappen |
 | xlsx Turbopack-Interop | `const XLSX = xlsxMod.default ?? xlsxMod` |
+| GuidesModal: EN-Datei fehlt (404) | Automatischer Fallback auf DE-Version |
+| Guides nicht erreichbar in Produktion | Dateien müssen in `public/guides/` liegen — Vercel liefert static files aus `/public` |
+| GitHub Repo noch öffentlich | Nach Feature-Abschluss auf privat stellen (in Roadmap V38) |
 
 ---
 
