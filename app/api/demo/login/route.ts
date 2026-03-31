@@ -1,42 +1,10 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js'
+import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 
-const DEMO_CLAN_ID = '00000000-0000-0000-0000-000000000002'
-
 const DEMO_ACCOUNTS = {
-  admin:    { email: 'demo-admin@clanbank.local',    password: 'DemoAdmin2026!',    ingame_name: 'DemoAdmin',    username: 'demoadmin',    role: 'admin' },
-  offizier: { email: 'demo-offi@clanbank.local',     password: 'DemoOffi2026!',     ingame_name: 'DemoOffi',     username: 'demooffi',     role: 'offizier' },
-  mitglied: { email: 'demo-mitglied@clanbank.local', password: 'DemoMitglied2026!', ingame_name: 'DemoMitglied', username: 'demomitglied', role: 'mitglied' },
-}
-
-type DemoAccount = typeof DEMO_ACCOUNTS[keyof typeof DEMO_ACCOUNTS]
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function getOrCreateDemoUser(supabaseAdmin: SupabaseClient<any>, account: DemoAccount): Promise<string> {
-  const { data: existing } = await supabaseAdmin.auth.admin.listUsers()
-  const found = existing?.users?.find((u) => u.email === account.email)
-  if (found) return found.id
-
-  const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
-    email: account.email,
-    password: account.password,
-    email_confirm: true,
-  })
-
-  if (error || !created?.user) {
-    throw new Error('createUser failed: ' + error?.message)
-  }
-
-  await supabaseAdmin.from('profiles').insert({
-    id: created.user.id,
-    clan_id: DEMO_CLAN_ID,
-    username: account.username,
-    ingame_name: account.ingame_name,
-    role: account.role,
-    is_test: true,
-  })
-
-  return created.user.id
+  admin:    { email: 'demo-admin@clanbank.local',    password: 'DemoAdmin2026!' },
+  offizier: { email: 'demo-offi@clanbank.local',     password: 'DemoOffi2026!' },
+  mitglied: { email: 'demo-mitglied@clanbank.local', password: 'DemoMitglied2026!' },
 }
 
 export async function POST(req: NextRequest) {
@@ -49,22 +17,13 @@ export async function POST(req: NextRequest) {
 
     const account = DEMO_ACCOUNTS[role as keyof typeof DEMO_ACCOUNTS]
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const supabaseAdmin: SupabaseClient<any> = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      { auth: { persistSession: false, autoRefreshToken: false } }
-    )
-
-    await getOrCreateDemoUser(supabaseAdmin, account)
-
-    const supabaseAnon = createClient(
+    const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       { auth: { persistSession: false, autoRefreshToken: false } }
     )
 
-    const { data, error } = await supabaseAnon.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email: account.email,
       password: account.password,
     })
