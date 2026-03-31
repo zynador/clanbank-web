@@ -1,5 +1,4 @@
 'use client'
-
 import { useEffect, useState, useCallback } from 'react'
 import { useAuth } from '@/lib/auth-context'
 import { supabase } from '@/lib/supabaseClient'
@@ -54,15 +53,15 @@ function StatusBadge({ status, lang }: { status: DepositStatus; lang: Lang }) {
   const badge =
     status === 'approved' ? (
       <span className="text-xs px-2 py-0.5 rounded-full bg-green-900/40 text-green-400 border border-green-800">
-        ✓ {lang === 'de' ? 'Genehmigt' : 'Approved'}
+        {'✓ ' + (lang === 'de' ? 'Genehmigt' : 'Approved')}
       </span>
     ) : status === 'pending' ? (
       <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-900/40 text-yellow-400 border border-yellow-800">
-        ⏳ {lang === 'de' ? 'Ausstehend' : 'Pending'}
+        {'⏳ ' + (lang === 'de' ? 'Ausstehend' : 'Pending')}
       </span>
     ) : (
       <span className="text-xs px-2 py-0.5 rounded-full bg-red-900/40 text-red-400 border border-red-800">
-        ✗ {lang === 'de' ? 'Abgelehnt' : 'Rejected'}
+        {'✗ ' + (lang === 'de' ? 'Abgelehnt' : 'Rejected')}
       </span>
     )
   return (
@@ -106,6 +105,7 @@ export default function DepositsTab({ lang }: { lang: Lang }) {
   const [submitting, setSubmitting] = useState(false)
   const [isManualMode, setIsManualMode] = useState(true)
   const [gameTimestamps, setGameTimestamps] = useState<string[]>([])
+
   const isOfficerOrAdmin = profile?.role === 'admin' || profile?.role === 'offizier'
 
   function handleOcrResult(amounts: Record<string, string>, timestamps: string[]) {
@@ -146,8 +146,14 @@ export default function DepositsTab({ lang }: { lang: Lang }) {
   async function handleSubmit() {
     if (!profile) return
     const hasAmount = RESOURCE_ORDER.some((r) => parseFloat(formAmounts[r]) > 0)
-    if (!hasAmount) { setError(lang === 'de' ? 'Mindestens eine Ressource muss > 0 sein.' : 'At least one resource must be > 0.'); return }
-    if (!screenshotUrl) { setError(lang === 'de' ? 'Bitte lade einen Screenshot hoch (Pflichtfeld).' : 'Please upload a screenshot (required).'); return }
+    if (!hasAmount) {
+      setError(lang === 'de' ? 'Mindestens eine Ressource muss > 0 sein.' : 'At least one resource must be > 0.')
+      return
+    }
+    if (!screenshotUrl) {
+      setError(lang === 'de' ? 'Bitte lade einen Screenshot hoch (Pflichtfeld).' : 'Please upload a screenshot (required).')
+      return
+    }
     setSubmitting(true)
     setError(null)
     const { error: err } = await supabase.rpc('create_bulk_deposit', {
@@ -204,43 +210,29 @@ export default function DepositsTab({ lang }: { lang: Lang }) {
     if (n >= 1_000) return (n / 1_000).toFixed(1).replace(/\.0$/, '') + 'K'
     return String(n)
   }
+
   const formatDate = (s: string) =>
     new Date(s).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
 
   const groups = groupDeposits(deposits)
 
   const t = {
-    newDeposit:  { de: 'Neue Einzahlung', en: 'New Deposit' },
-    tip_form: {
-      de: 'Ablauf: Screenshot von der Transaktion an "Bam bamm" hochladen → KI liest Werte aus → prüfen → speichern.',
-      en: 'Process: Upload screenshot of the transaction to "Bam bamm" → AI reads values → verify → save.',
-    },
-    notiz:       { de: 'Notiz (optional)', en: 'Note (optional)' },
-    screenshot:  { de: 'Screenshot', en: 'Screenshot' },
-    tip_screenshot: {
-      de: 'Mach im Spiel sofort nach der Überweisung an "Bam bamm" einen Screenshot. Pflichtfeld – ohne Screenshot keine Einzahlung.',
-      en: 'Take a screenshot in-game right after sending to "Bam bamm". Required — no deposit without screenshot.',
-    },
-    tip_ocr: {
-      de: 'Die KI liest Ressource und Menge automatisch aus dem Screenshot aus. Bitte Werte prüfen bevor du "Werte übernehmen" klickst.',
-      en: 'The AI automatically reads resource type and amount from the screenshot. Please verify values before clicking "Apply Values".',
-    },
-    tip_manual: {
-      de: 'Nur nutzen wenn die KI-Erkennung fehlschlägt. Manuelle Eingaben werden von einem Offizier geprüft und zählen erst nach Genehmigung.',
-      en: 'Only use if AI recognition fails. Manual entries are reviewed by an Officer and only count after approval.',
-    },
-    save:        { de: 'Einzahlung speichern', en: 'Save Deposit' },
-    saving:      { de: 'Speichern...', en: 'Saving...' },
-    list:        { de: 'Einzahlungen', en: 'Deposits' },
-    tip_list: {
-      de: 'Alle deine Einzahlungen. Nur genehmigte (✓) zählen in der Rangliste. Ausstehende (⏳) warten auf Offizier-Prüfung.',
-      en: 'All your deposits. Only approved (✓) count in rankings. Pending (⏳) are waiting for Officer review.',
-    },
-    loading:     { de: 'Lade...', en: 'Loading...' },
-    empty:       { de: 'Keine Einzahlungen gefunden.', en: 'No deposits found.' },
-    resubmit:    { de: '↺ Erneut einreichen', en: '↺ Resubmit' },
-    delete:      { de: 'Löschen', en: 'Delete' },
-    rejected:    { de: 'Abgelehnt', en: 'Rejected' },
+    newDeposit: { de: 'Neue Einzahlung', en: 'New Deposit' },
+    tip_form: { de: 'Ablauf: Screenshot von der Transaktion an "Bam bamm" hochladen → KI liest Werte aus → prüfen → speichern.', en: 'Process: Upload screenshot of the transaction to "Bam bamm" → AI reads values → verify → save.' },
+    notiz: { de: 'Notiz (optional)', en: 'Note (optional)' },
+    screenshot: { de: 'Screenshot', en: 'Screenshot' },
+    tip_screenshot: { de: 'Mach im Spiel sofort nach der Überweisung an "Bam bamm" einen Screenshot. Pflichtfeld – ohne Screenshot keine Einzahlung.', en: 'Take a screenshot in-game right after sending to "Bam bamm". Required — no deposit without screenshot.' },
+    tip_ocr: { de: 'Die KI liest Ressource und Menge automatisch aus dem Screenshot aus. Bitte Werte prüfen bevor du "Werte übernehmen" klickst.', en: 'The AI automatically reads resource type and amount from the screenshot. Please verify values before clicking "Apply Values".' },
+    tip_manual: { de: 'Nur nutzen wenn die KI-Erkennung fehlschlägt. Manuelle Eingaben werden von einem Offizier geprüft und zählen erst nach Genehmigung.', en: 'Only use if AI recognition fails. Manual entries are reviewed by an Officer and only count after approval.' },
+    save: { de: 'Einzahlung speichern', en: 'Save Deposit' },
+    saving: { de: 'Speichern...', en: 'Saving...' },
+    list: { de: 'Einzahlungen', en: 'Deposits' },
+    tip_list: { de: 'Alle deine Einzahlungen. Nur genehmigte (✓) zählen in der Rangliste. Ausstehende (⏳) warten auf Offizier-Prüfung.', en: 'All your deposits. Only approved (✓) count in rankings. Pending (⏳) are waiting for Officer review.' },
+    loading: { de: 'Lade...', en: 'Loading...' },
+    empty: { de: 'Keine Einzahlungen gefunden.', en: 'No deposits found.' },
+    resubmit: { de: '↺ Erneut einreichen', en: '↺ Resubmit' },
+    delete: { de: 'Löschen', en: 'Delete' },
+    rejected: { de: 'Abgelehnt', en: 'Rejected' },
   }
 
   return (
@@ -258,12 +250,12 @@ export default function DepositsTab({ lang }: { lang: Lang }) {
         </div>
       )}
 
-      <section className="bg-[#161822] border border-gray-800 rounded-xl p-5">
+      {/* Neue Einzahlung */}
+      <section data-tour-id="deposits-add-btn" className="bg-[#161822] border border-gray-800 rounded-xl p-5">
         <h2 className="text-base font-medium text-gray-300 mb-4 flex items-center">
           {t.newDeposit[lang]}
           <InfoTooltip de={t.tip_form.de} en={t.tip_form.en} lang={lang} position="bottom" />
         </h2>
-
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
           {RESOURCE_ORDER.map((r) => (
             <div key={r}>
@@ -279,7 +271,6 @@ export default function DepositsTab({ lang }: { lang: Lang }) {
             </div>
           ))}
         </div>
-
         <div className="mb-4">
           <label className="block text-xs text-gray-500 mb-1">{t.notiz[lang]}</label>
           <input
@@ -290,7 +281,6 @@ export default function DepositsTab({ lang }: { lang: Lang }) {
             className="w-full bg-[#0f1117] border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-teal-500"
           />
         </div>
-
         <div className="mb-4">
           <label className="block text-xs text-gray-500 mb-1 flex items-center gap-1">
             {t.screenshot[lang]}
@@ -317,12 +307,11 @@ export default function DepositsTab({ lang }: { lang: Lang }) {
           </div>
           {isManualMode && screenshotUrl && (
             <p className="text-xs text-yellow-500/80 mt-2 flex items-center gap-1">
-              ⚠️ {lang === 'de' ? 'Manuelle Eingabe' : 'Manual entry'}
+              {'⚠️ ' + (lang === 'de' ? 'Manuelle Eingabe' : 'Manual entry')}
               <InfoTooltip de={t.tip_manual.de} en={t.tip_manual.en} lang={lang} position="bottom" />
             </p>
           )}
         </div>
-
         <button
           onClick={handleSubmit}
           disabled={submitting}
@@ -332,12 +321,12 @@ export default function DepositsTab({ lang }: { lang: Lang }) {
         </button>
       </section>
 
-      <section className="bg-[#161822] border border-gray-800 rounded-xl p-5">
+      {/* Einzahlungsliste */}
+      <section data-tour-id="deposits-list" className="bg-[#161822] border border-gray-800 rounded-xl p-5">
         <h2 className="text-base font-medium text-gray-300 mb-4 flex items-center">
           {t.list[lang]}
           <InfoTooltip de={t.tip_list.de} en={t.tip_list.en} lang={lang} position="bottom" />
         </h2>
-
         {loading ? (
           <p className="text-gray-500 text-sm">{t.loading[lang]}</p>
         ) : groups.length === 0 ? (
@@ -361,7 +350,7 @@ export default function DepositsTab({ lang }: { lang: Lang }) {
                     <div className="flex flex-wrap gap-x-3 gap-y-1 mb-2">
                       {group.deposits.map((dep) => (
                         <span key={dep.id} className="text-sm font-medium text-teal-400">
-                          {dep.resource_type} {formatAmount(dep.amount)}
+                          {dep.resource_type + ' ' + formatAmount(dep.amount)}
                         </span>
                       ))}
                     </div>
@@ -370,7 +359,7 @@ export default function DepositsTab({ lang }: { lang: Lang }) {
                     )}
                     {group.status === 'rejected' && group.deposits[0].rejection_reason && (
                       <p className="text-xs text-red-400 bg-red-900/20 rounded px-2 py-1 mb-2">
-                        {t.rejected[lang]}: {group.deposits[0].rejection_reason}
+                        {t.rejected[lang] + ': ' + group.deposits[0].rejection_reason}
                       </p>
                     )}
                     <div className="flex gap-2 flex-wrap mt-2">
