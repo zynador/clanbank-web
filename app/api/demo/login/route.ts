@@ -2,9 +2,9 @@ import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 
 const DEMO_ACCOUNTS = {
-  admin:    { id: '00000000-0000-0000-0000-000000000010', email: 'demo-admin@clanbank.local',    password: 'demo_admin_pw' },
-  offizier: { id: '00000000-0000-0000-0000-000000000011', email: 'demo-offi@clanbank.local',     password: 'demo_offi_pw' },
-  mitglied: { id: '00000000-0000-0000-0000-000000000012', email: 'demo-mitglied@clanbank.local', password: 'demo_mitglied_pw' },
+  admin:    { id: '00000000-0000-0000-0000-000000000010' },
+  offizier: { id: '00000000-0000-0000-0000-000000000011' },
+  mitglied: { id: '00000000-0000-0000-0000-000000000012' },
 }
 
 export async function POST(req: NextRequest) {
@@ -23,31 +23,12 @@ export async function POST(req: NextRequest) {
       { auth: { persistSession: false, autoRefreshToken: false } }
     )
 
-    // Passwort via Admin-API korrekt setzen (Supabase-eigenes Hashing)
-    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
-      account.id,
-      { password: account.password }
-    )
+    const { data, error } = await supabaseAdmin.auth.admin.createSession({
+      user_id: account.id,
+    } as { user_id: string })
 
-    if (updateError) {
-      console.error('[demo/login] updateUser error:', updateError)
-      return NextResponse.json({ message: 'Demo-Setup fehlgeschlagen.' }, { status: 500 })
-    }
-
-    // Jetzt normal einloggen
-    const supabaseAnon = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { auth: { persistSession: false, autoRefreshToken: false } }
-    )
-
-    const { data, error } = await supabaseAnon.auth.signInWithPassword({
-      email: account.email,
-      password: account.password,
-    })
-
-    if (error || !data.session) {
-      console.error('[demo/login] signIn error:', error)
+    if (error || !data?.session) {
+      console.error('[demo/login] createSession error:', error)
       return NextResponse.json({ message: 'Demo-Login fehlgeschlagen.' }, { status: 500 })
     }
 
