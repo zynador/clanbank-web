@@ -1,10 +1,43 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 
+const DEMO_CLAN_ID = '00000000-0000-0000-0000-000000000002'
+
 const DEMO_ACCOUNTS = {
-  admin:    { email: 'demo-admin@clanbank.local' },
-  offizier: { email: 'demo-offi@clanbank.local' },
-  mitglied: { email: 'demo-mitglied@clanbank.local' },
+  admin:    { email: 'demo-admin@clanbank.local',    password: 'DemoAdmin2026!',    ingame_name: 'DemoAdmin',    username: 'demoadmin',    role: 'admin' },
+  offizier: { email: 'demo-offi@clanbank.local',     password: 'DemoOffi2026!',     ingame_name: 'DemoOffi',     username: 'demooffi',     role: 'offizier' },
+  mitglied: { email: 'demo-mitglied@clanbank.local', password: 'DemoMitglied2026!', ingame_name: 'DemoMitglied', username: 'demomitglied', role: 'mitglied' },
+}
+
+async function getOrCreateDemoUser(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  account: typeof DEMO_ACCOUNTS[keyof typeof DEMO_ACCOUNTS]
+) {
+  const { data: existing } = await supabaseAdmin.auth.admin.listUsers()
+  const found = existing?.users?.find((u) => u.email === account.email)
+
+  if (found) return found.id
+
+  const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
+    email: account.email,
+    password: account.password,
+    email_confirm: true,
+  })
+
+  if (error || !created?.user) {
+    throw new Error('createUser failed: ' + error?.message)
+  }
+
+  await supabaseAdmin.from('profiles').insert({
+    id: created.user.id,
+    clan_id: DEMO_CLAN_ID,
+    username: account.username,
+    ingame_name: account.ingame_name,
+    role: account.role,
+    is_test: true,
+  })
+
+  return created.user.id
 }
 
 export async function POST(req: NextRequest) {
@@ -23,15 +56,7 @@ export async function POST(req: NextRequest) {
       { auth: { persistSession: false, autoRefreshToken: false } }
     )
 
-    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
-      type: 'magiclink',
-      email: account.email,
-    })
-
-    if (linkError || !linkData?.properties?.hashed_token) {
-      console.error('[demo/login] generateLink error:', linkError)
-      return NextResponse.json({ message: 'Demo-Login fehlgeschlagen.' }, { status: 500 })
-    }
+    await getOrCreateDemoUser(supabaseAdmin, account)
 
     const supabaseAnon = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -39,21 +64,20 @@ export async function POST(req: NextRequest) {
       { auth: { persistSession: false, autoRefreshToken: false } }
     )
 
-    const { data: sessionData, error: sessionError } = await supabaseAnon.auth.verifyOtp({
+    const { data, error } = await supabaseAnon.auth.signInWithPassword({
       email: account.email,
-      token: linkData.properties.hashed_token,
-      type: 'magiclink',
+      password: account.password,
     })
 
-    if (sessionError || !sessionData?.session) {
-      console.error('[demo/login] verifyOtp error:', sessionError)
+    if (error || !data.session) {
+      console.error('[demo/login] signIn error:', error)
       return NextResponse.json({ message: 'Demo-Login fehlgeschlagen.' }, { status: 500 })
     }
 
     return NextResponse.json({
       success: true,
-      access_token: sessionData.session.access_token,
-      refresh_token: sessionData.session.refresh_token,
+      access_token: data.session.access_token,
+      refresh_token: data.session.refresh_token,
     })
   } catch (err) {
     console.error('[demo/login] unexpected error:', err)
