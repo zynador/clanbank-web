@@ -2,9 +2,9 @@ import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 
 const DEMO_ACCOUNTS = {
-  admin:    { id: '00000000-0000-0000-0000-000000000010' },
-  offizier: { id: '00000000-0000-0000-0000-000000000011' },
-  mitglied: { id: '00000000-0000-0000-0000-000000000012' },
+  admin:    { email: 'demo-admin@clanbank.local' },
+  offizier: { email: 'demo-offi@clanbank.local' },
+  mitglied: { email: 'demo-mitglied@clanbank.local' },
 }
 
 export async function POST(req: NextRequest) {
@@ -23,19 +23,37 @@ export async function POST(req: NextRequest) {
       { auth: { persistSession: false, autoRefreshToken: false } }
     )
 
-    const { data, error } = await supabaseAdmin.auth.admin.createSession({
-      user_id: account.id,
-    } as { user_id: string })
+    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+      type: 'magiclink',
+      email: account.email,
+    })
 
-    if (error || !data?.session) {
-      console.error('[demo/login] createSession error:', error)
+    if (linkError || !linkData?.properties?.hashed_token) {
+      console.error('[demo/login] generateLink error:', linkError)
+      return NextResponse.json({ message: 'Demo-Login fehlgeschlagen.' }, { status: 500 })
+    }
+
+    const supabaseAnon = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { auth: { persistSession: false, autoRefreshToken: false } }
+    )
+
+    const { data: sessionData, error: sessionError } = await supabaseAnon.auth.verifyOtp({
+      email: account.email,
+      token: linkData.properties.hashed_token,
+      type: 'magiclink',
+    })
+
+    if (sessionError || !sessionData?.session) {
+      console.error('[demo/login] verifyOtp error:', sessionError)
       return NextResponse.json({ message: 'Demo-Login fehlgeschlagen.' }, { status: 500 })
     }
 
     return NextResponse.json({
       success: true,
-      access_token: data.session.access_token,
-      refresh_token: data.session.refresh_token,
+      access_token: sessionData.session.access_token,
+      refresh_token: sessionData.session.refresh_token,
     })
   } catch (err) {
     console.error('[demo/login] unexpected error:', err)
