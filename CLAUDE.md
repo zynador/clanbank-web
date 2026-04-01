@@ -44,7 +44,7 @@ Erlaubte Alternativen: `unknown` + Type Guard, konkretes Interface, generischer 
 
 ### Funktionen unter 30 Zeilen
 
-Jede Funktion — Handler, Hook, Hilfsfunktion — bleibt unter 30 Zeilen. Größere Logik wird in benannte Hilfsfunktionen aufgeteilt.
+Jede Funktion — Handler, Hook, Hilfsfunktion — bleibt unter 30 Zeilen. Größere Logik wird in benannte Hilfsfunktionen aufgeteilt. Diese Regel gilt für **einzelne Funktionen**, nicht für die Dateilänge insgesamt.
 
 ```typescript
 // ❌ handleSave() mit 60 Zeilen
@@ -60,6 +60,35 @@ async function handleSave() {
   await callRpc(url)
 }
 ```
+
+### Vollständige Dateien — keine Snippets
+
+Jede Änderung wird als **vollständige Datei** geliefert. Niemals nur `str_replace`-Snippets oder Teiländerungen als Lieferobjekt — der Nutzer spielt immer die komplette Datei in GitHub ein.
+
+```
+// ❌ "Ersetze Zeile 47 durch..."
+// ✅ Komplette Datei mit allen Änderungen integriert
+```
+
+### Kein `lucide-react`
+
+Das Paket `lucide-react` ist nicht installiert und darf nicht verwendet werden. Stattdessen: Emojis oder Unicode-Zeichen direkt im JSX.
+
+```typescript
+// ❌ import { AlertCircle } from 'lucide-react'
+// ✅ <span>⚠️</span>  oder  {'⚠️ ' + text}
+```
+
+### Template Literals vermeiden (Turbopack)
+
+Template Literals (`` `${x}` ``) innerhalb von JSX können unter Turbopack zu Parse-Fehlern führen. Stattdessen String-Konkatenation verwenden.
+
+```typescript
+// ❌ const label = `Hallo ${name}`  ← in JSX problematisch
+// ✅ const label = 'Hallo ' + name
+```
+
+Außerhalb von JSX (z. B. in reinen `.ts`-Hilfsfunktionen) sind Template Literals unbedenklich.
 
 ### Tests für jeden neuen `app/api/`-Endpunkt
 
