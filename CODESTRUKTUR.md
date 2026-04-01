@@ -1,6 +1,6 @@
 # ClanBank — Codestruktur
 
-> **Letzte Aktualisierung:** 31.03.2026 | Fahrplan V38
+> **Letzte Aktualisierung:** 01.04.2026 | Fahrplan V39
 > **Raw-URL für neue Chat-Sessions:**
 > `https://raw.githubusercontent.com/zynador/clanbank-web/main/CODESTRUKTUR.md`
 
@@ -23,9 +23,9 @@ clanbank-web/
 │   │       └── login/
 │   │           └── route.ts      ← Demo-Gastaccount erstellen + Session setzen (Service Role Key)
 │   ├── dashboard/
-│   │   └── page.tsx              ← Haupt-App nach Login (Header: 📚 Guides + 🎬 Demo Buttons, tour_progress Check)
+│   │   └── page.tsx              ← Haupt-App nach Login (Demo-Banner für is_test-User, 📚 Guides + 🎬 Demo Buttons, tour_progress Check)
 │   ├── demo/
-│   │   └── page.tsx              ← Öffentliche Placeholder-Seite ("Demo folgt in Kürze", kein Auth-Check)
+│   │   └── page.tsx              ← Öffentliche Rollenwahl-Seite (Admin/Offizier/Mitglied → /api/demo/login)
 │   ├── login/
 │   │   └── page.tsx              ← Login-Seite
 │   ├── register/
@@ -33,7 +33,7 @@ clanbank-web/
 │   ├── globals.css               ← @import "tailwindcss" (Tailwind v4, keine tailwind.config.ts)
 │   └── layout.tsx
 ├── components/
-│   ├── AdminPanel.tsx
+│   ├── AdminPanel.tsx            ← isDemo-Check: Einladungscode ausgeblendet für Demo-User
 │   ├── AnnouncementWidget.tsx    ← Admin-Ankündigungen (erstellen/löschen/anpinnen)
 │   ├── ApprovalQueue.tsx
 │   ├── BacklogWidget.tsx
@@ -46,8 +46,8 @@ clanbank-web/
 │   ├── FCUResultsEditor.tsx      ← OCR-Ergebnisse prüfen, Namen korrigieren, speichern
 │   ├── FCURankingView.tsx        ← Gesamtranking über alle FCU Events
 │   ├── FCUUploadPanel.tsx        ← Multi-Screenshot Upload + OCR pro Screen
-│   ├── GuidedTour.tsx            ← Floating Tooltip + Highlight-Ring (NUR Member-Tour)
-│   ├── GuidesModal.tsx           ← In-App Lesemodus für Spiel- und App-Guides (DE/EN) [NEU V38]
+│   ├── GuidedTour.tsx            ← Floating Tooltip + Highlight-Ring (NUR Member-Tour, NICHT für Demo)
+│   ├── GuidesModal.tsx           ← In-App Lesemodus für Spiel- und App-Guides (DE/EN)
 │   ├── HelpButton.tsx
 │   ├── HistoricalDepositsPanel.tsx ← Admin: Status aller historical_deposits
 │   ├── HomeTab.tsx               ← Startseite (Status, Backlog, Ankündigungen, Doppel-Podest Ranking)
@@ -62,7 +62,7 @@ clanbank-web/
 │   ├── SecurityAlerts.tsx
 │   ├── StarterMembersPanel.tsx
 │   ├── SuggestionBox.tsx
-│   ├── TourButton.tsx            ← Schwebender ? Button unten rechts (Member-Tour Trigger)
+│   ├── TourButton.tsx            ← Schwebender ? Button unten rechts (Member-Tour Trigger, nur wenn !isDemo)
 │   └── WelcomeModal.tsx
 ├── hooks/
 │   └── useExemptions.ts          ← Custom Hook für member_exemptions
@@ -70,7 +70,7 @@ clanbank-web/
 │   ├── auth-context.tsx          ← useAuth() Hook
 │   └── supabaseClient.ts         ← supabase Client (IMMER von hier importieren)
 ├── public/
-│   └── guides/                   ← [NEU V38] Guides als Markdown (Vercel static)
+│   └── guides/                   ← Guides als Markdown (Vercel static)
 │       ├── game/                 ← Spiel-Guides (je DE + EN)
 │       │   ├── formationen-de.md / formationen-en.md
 │       │   ├── turmkampf-de.md / turmkampf-en.md
@@ -108,6 +108,30 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 
 ---
 
+### `dashboard/page.tsx`
+- **isDemo:** `const isDemo = !!(profile as unknown as Record<string, unknown>)?.is_test`
+- **Demo-Banner:** Direkt nach `<div className="min-h-screen bg-[#0f1117] text-gray-100">`, nur wenn `isDemo=true`
+  ```tsx
+  {isDemo && (
+    <div className="bg-teal-700 text-white text-xs text-center py-1.5 font-medium tracking-wide">
+      {'🎬 DEMO — ' + (lang === 'de' ? 'Alle Daten sind Beispieldaten...' : 'All data is sample data...')}
+    </div>
+  )}
+  ```
+- **Tour:** `checkAndStartTour()` nach `handleWelcomeClose()`. Demo-User überspringen (`if (isDemo) return`)
+- **TourButton:** Nur wenn `!isDemo && !showTour`
+- **Drawer:** "Tour starten" Eintrag nur wenn `!isDemo`
+
+---
+
+### `AdminPanel.tsx`
+- **Props:** keine (liest `lang` aus `localStorage`)
+- **isDemo:** `const { user, profile } = useAuth()` + `const isDemo = !!(profile as unknown as Record<string, unknown>)?.is_test`
+- **Einladungscode-Block:** Wenn `isDemo` → Platzhalter-Box ("🎬 Im Demo-Modus nicht verfügbar"), sonst normaler MAFIA2026-Block
+- **Alle anderen Sektionen** (Passwort-Reset, Bank-Accounts, Import) auch für Demo-User sichtbar
+
+---
+
 ### `HomeTab.tsx`
 - **Props:** `lang: Lang`, `onNavigate: (tab: string) => void`
 - **Key-Sections:**
@@ -123,9 +147,6 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 - **loadBacklog():**
   - Supabase-Query-Ergebnis heißt `starterRows` (nicht `starters`) — kein Konflikt mit State
   - Bulk-Query `historical_deposits` per `.in('ingame_name', starterNames)` für alle Starter auf einmal
-  - Pro Starter: Ressourcen summieren, gegen `(currentKw - 2) × 5M` prüfen
-  - Fehlende Ressourcen → `startersBehind` → Wand der Schande
-  - Alles grün → `startersPaid` → `starters`-State (eigener Abschnitt)
   - **paidSet:** `d.resource_type` IMMER `.toLowerCase()` — DB liefert `'Cash'`, RESOURCES-Array `'cash'`
 - **loadDetail():** aufgeteilt in `loadDetailForStarter()` + `loadDetailForMember()` (je < 30 Zeilen)
 - **Modal:** `fixed inset-0 z-50`, Backdrop `rgba(0,0,0,0.45)`, Klick außen schließt
@@ -133,21 +154,12 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 
 ---
 
-### `GuidesModal.tsx` ← [NEU V38]
+### `GuidesModal.tsx`
 - **Props:** `lang: Lang`, `onClose: () => void`
 - **Zwei Reiter:** `game` (Spiel-Guides) / `app` (App-Guides, initial leer)
 - **Laden:** `fetch('/guides/[category]/[file]-[lang].md')` — Fallback auf `-de.md` wenn EN-Datei 404
 - **Markdown-Parser:** inline, kein externes Package — unterstützt `#`, `##`, `###`, `- ` Listen, Absätze
 - **Neuen Guide hinzufügen:** Eintrag in `GAME_GUIDES`-Array + Markdown-Datei in `public/guides/game/`
-
----
-
-### `MembersTab.tsx`
-- **Props:** `lang: Lang`
-- **Sichtbar für:** `admin` und `offizier`
-- **Entfernt (V33):** Avatar-Kreis, Match-Dot, Match-Legende
-- **RPC:** `get_members_list`
-- **data-tour-id:** `members-search`
 
 ---
 
@@ -158,15 +170,18 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 
 ---
 
+### `app/demo/page.tsx`
+- **Kein Auth-Check** — vollständig öffentlich
+- **Rollenwahl:** Admin / Offizier / Mitglied — Klick → POST `/api/demo/login` → Redirect `/dashboard`
+- **Demo-Clan-UUID:** `00000000-0000-0000-0000-000000000002`
+- **Kein DEMO2026-Code** — direkt zugänglich ohne Einladungscode
+
+---
+
 ### `BankImportPanel.tsx`
 - **xlsx-Import:** `const xlsxMod = await import('xlsx') as any; const XLSX = xlsxMod.default ?? xlsxMod`
 - **RPC:** `import_historical_deposits`
 - **data-tour-id:** `admin-bank-import`
-
----
-
-### `AdminPanel.tsx`
-- **data-tour-id Attribute:** `admin-password-reset`, `admin-bank-import`
 
 ---
 
@@ -196,6 +211,7 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 ### `app/api/demo/login/route.ts`
 - **Methode:** POST / **Env:** `SUPABASE_SERVICE_ROLE_KEY`
 - **Demo-Clan-UUID:** `00000000-0000-0000-0000-000000000002`
+- **Ablauf:** Rolle wählen → passenden is_test-Profil finden → `auth.admin.createSession()` → Redirect `/dashboard`
 
 ---
 
@@ -203,8 +219,8 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 
 ### `app/demo/page.tsx`
 - **Kein Auth-Check** — vollständig öffentlich
-- **Aktuell (V38):** Placeholder — "Demo folgt in Kürze" + Link zu `/login`
-- **Geplant (Idee 7):** Rollenwahl → POST `/api/demo/login` → Redirect `/dashboard`, kein GuidedTour im Demo-Modus
+- **Aktuell (V39):** Rollenwahl-Seite mit 3 Karten (Admin/Offizier/Mitglied) — voll funktionsfähig
+- **Kein GuidedTour** im Demo-Modus (isDemo-Check in dashboard/page.tsx verhindert Tour-Start)
 
 ---
 
@@ -258,7 +274,7 @@ type Tab =
 
 ---
 
-## 8. Guides-System (V38) ← [NEU]
+## 8. Guides-System
 
 ### Dateipfade
 ```
@@ -274,21 +290,41 @@ public/guides/app/[name]-de.md    ← App-Guides (noch leer)
 { id: 'mein-guide', title_de: 'Mein Guide', title_en: 'My Guide', file: 'mein-guide' }
 ```
 
-### Unterstützte Markdown-Syntax
-- `# Titel` → H1 teal
-- `## Abschnitt` → H2 grau mit Trennlinie
-- `### Unterabschnitt` → H3 teal klein
-- `- Listenpunkt` → Bullet-Liste
-- Normaler Text → Absatz
-
-### Header-Buttons (dashboard/page.tsx) ← [NEU V38]
-- `📚` → `setShowGuides(true)` → `<GuidesModal />` (neuer State `showGuides: boolean`)
+### Header-Buttons (dashboard/page.tsx)
+- `📚` → `setShowGuides(true)` → `<GuidesModal />`
 - `🎬` → `<a href="/demo" target="_blank">` (öffnet Demo-Seite in neuem Tab)
 - Beide auch im Hamburger-Drawer unter „Guides" sichtbar
 
 ---
 
-## 9. data-tour-id Attribute (Member-Tour)
+## 9. Demo-System (Idee 7) ← [ERLEDIGT V39]
+
+### Ablauf
+1. `/demo` → Rollenwahl (öffentlich, kein Auth)
+2. Klick → POST `/api/demo/login` → Session für is_test-Profil → Redirect `/dashboard`
+3. `dashboard/page.tsx`: `isDemo=true` → Demo-Banner anzeigen, Tour + TourButton ausblenden
+4. `AdminPanel.tsx`: `isDemo=true` → Einladungscode-Block ersetzt durch Platzhalter
+
+### Demo-Clan Seed-Daten
+| Tabelle | Inhalt |
+|---------|--------|
+| profiles (is_test=true) | 5 Mitglieder: 1 Admin (DemoAdmin), 1 Offizier (DemoOffi), 3 Mitglieder |
+| deposits | 22 historische Einzahlungen, alle 5 Ressourcentypen |
+| fcu_events | 2 abgeschlossene FCU-Events mit Ergebnissen |
+| battle_reports | 1 Kampfbericht mit Auszahlungen |
+| announcements | 2 Ankündigungen (1 angepinnt) |
+| starter_members | 3 nicht-registrierte Starter (AlphaWolf, SilverBull, NightRider) |
+| historical_deposits | 5 Einträge für Demo-Starter |
+
+### isDemo-Pattern
+```typescript
+// In dashboard/page.tsx und AdminPanel.tsx:
+const isDemo = !!(profile as unknown as Record<string, unknown>)?.is_test
+```
+
+---
+
+## 10. data-tour-id Attribute (Member-Tour)
 
 | data-tour-id | Komponente | Element |
 |---|---|---|
@@ -306,10 +342,9 @@ public/guides/app/[name]-de.md    ← App-Guides (noch leer)
 
 ---
 
-## 10. Playwright E2E-Tests
+## 11. Playwright E2E-Tests
 
-### Offene Punkte (Stand V38)
-Keine offenen Punkte.
+### Stand V39 — 29/29 grün (keine offenen Punkte)
 
 ### loginAs()-Muster
 ```typescript
@@ -329,13 +364,20 @@ async function loginAs(page: any, user: string, pass: string) {
 
 ---
 
-## 11. Key-Patterns
+## 12. Key-Patterns
 
 ### Imports
 ```typescript
 import { supabase } from '@/lib/supabaseClient'
 import { useAuth } from '@/lib/auth-context'
 const { user, profile, loading, signOut } = useAuth()
+```
+
+### isDemo-Check
+```typescript
+// IMMER so — profile muss aus useAuth() kommen, nicht nur user
+const { user, profile } = useAuth()
+const isDemo = !!(profile as unknown as Record<string, unknown>)?.is_test
 ```
 
 ### resource_type normalisieren (HomeTab loadBacklog + loadDetail)
@@ -390,7 +432,7 @@ const activeStarters = (starterRows ?? []).filter(...)
 
 ---
 
-## 12. Auth & Rollen
+## 13. Auth & Rollen
 
 | | Admin | Offizier | Mitglied |
 |--|-------|----------|---------|
@@ -399,6 +441,7 @@ const activeStarters = (starterRows ?? []).filter(...)
 | AdminPanel | ✅ | ❌ | ❌ |
 | Guides lesen | ✅ | ✅ | ✅ |
 | Member-Tour Schritte | ✅ 1–9 | ➖ 1–7 | ➖ 1–4 |
+| Demo-Tour | ✅ | ✅ | ✅ (kein GuidedTour, freies Navigieren) |
 
 **Auth-Pattern:**
 - Fake-Email: `username@clanbank.local`
@@ -408,7 +451,7 @@ const activeStarters = (starterRows ?? []).filter(...)
 
 ---
 
-## 13. Bekannte Fallstricke
+## 14. Bekannte Fallstricke
 
 | Problem | Lösung |
 |---------|--------|
@@ -427,13 +470,15 @@ const activeStarters = (starterRows ?? []).filter(...)
 | TypeScript: 'members' not found | State umbenannt → alle JSX-Refs (`members.length`, `members.map`) mitumbenennen |
 | Avatar-Kreise in Ranking/Members | ❌ Entfernt (V33) |
 | Demo-RLS: nur SELECT | RLS-Policies auf Demo-Clan-UUID |
-| tour_progress für Demo-Nutzer | Nicht in DB schreiben — Demo hat keinen GuidedTour |
+| tour_progress für Demo-Nutzer | Nicht in DB schreiben — isDemo-Check in checkAndStartTour() |
 | GitHub Actions Node.js Deprecation | `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"` + `node-version: 22` in `playwright.yml` |
 | UNION ALL mit ORDER BY | In Subquery wrappen |
 | xlsx Turbopack-Interop | `const XLSX = xlsxMod.default ?? xlsxMod` |
 | GuidesModal: EN-Datei fehlt (404) | Automatischer Fallback auf DE-Version |
 | Guides nicht erreichbar in Produktion | Dateien müssen in `public/guides/` liegen — Vercel liefert static files aus `/public` |
-| GitHub Repo noch öffentlich | Nach Feature-Abschluss auf privat stellen (in Roadmap V38) |
+| isDemo in AdminPanel: nur `user` aus useAuth() | `const { user, profile } = useAuth()` — profile wird für isDemo benötigt |
+| Demo-Banner nicht sichtbar | `isDemo = !!(profile as unknown as Record<string, unknown>)?.is_test` — is_test-Flag im Profile |
+| GitHub Repo noch öffentlich | Nach Feature-Abschluss auf privat stellen (in Roadmap V39) |
 
 ---
 
