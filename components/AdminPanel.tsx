@@ -1,4 +1,5 @@
 'use client'
+
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { useAuth } from '@/lib/auth-context'
@@ -11,7 +12,8 @@ type Lang = 'de' | 'en'
 type Member = { id: string; ingame_name: string; display_name: string; is_bank: boolean }
 
 export default function AdminPanel() {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
+  const isDemo = !!(profile as unknown as Record<string, unknown>)?.is_test
   const [lang, setLang] = useState<Lang>('de')
   const [inviteCode, setInviteCode] = useState<string | null>(null)
   const [generatingCode, setGeneratingCode] = useState(false)
@@ -70,7 +72,10 @@ export default function AdminPanel() {
 
   async function handleResetPassword() {
     if (!selectedUserId || !newPassword || newPassword.length < 6) {
-      setFeedback({ type: 'error', text: lang === 'de' ? 'Mitglied wählen + Passwort mind. 6 Zeichen.' : 'Select member + password min. 6 chars.' })
+      setFeedback({
+        type: 'error',
+        text: lang === 'de' ? 'Mitglied wählen + Passwort mind. 6 Zeichen.' : 'Select member + password min. 6 chars.',
+      })
       return
     }
     setResetting(true)
@@ -78,12 +83,18 @@ export default function AdminPanel() {
       const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch('/api/admin/reset-password', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (session?.access_token ?? '') },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + (session?.access_token ?? ''),
+        },
         body: JSON.stringify({ targetUserId: selectedUserId, newPassword }),
       })
       const result = await res.json()
       if (result.success) {
-        setFeedback({ type: 'success', text: lang === 'de' ? '✅ Passwort gesetzt. Bitte an Spieler weitergeben.' : '✅ Password set. Share it with the player.' })
+        setFeedback({
+          type: 'success',
+          text: lang === 'de' ? '✅ Passwort gesetzt. Bitte an Spieler weitergeben.' : '✅ Password set. Share it with the player.',
+        })
         setNewPassword('')
         setSelectedUserId('')
       } else {
@@ -106,9 +117,11 @@ export default function AdminPanel() {
       setFeedback({ type: 'error', text: lang === 'de' ? 'Fehler beim Speichern.' : 'Error saving.' })
     } else {
       const label = member.ingame_name || member.display_name
-      setFeedback({ type: 'success', text: newValue
-        ? (lang === 'de' ? '🏦 ' + label + ' als Bank markiert.' : '🏦 ' + label + ' marked as bank.')
-        : (lang === 'de' ? label + ' ist kein Bank-Account mehr.' : label + ' is no longer a bank account.'),
+      setFeedback({
+        type: 'success',
+        text: newValue
+          ? (lang === 'de' ? '🏦 ' + label + ' als Bank markiert.' : '🏦 ' + label + ' marked as bank.')
+          : (lang === 'de' ? label + ' ist kein Bank-Account mehr.' : label + ' is no longer a bank account.'),
       })
       setBankTargetId('')
       await loadMembers()
@@ -122,19 +135,28 @@ export default function AdminPanel() {
   const t = {
     code_title: { de: 'Einladungscode', en: 'Invitation Code' },
     active_code: { de: 'Aktiver Clan-Code:', en: 'Active clan code:' },
-    tip_code: { de: '⚠️ Normalerweise nicht nötig! Der allgemeine Clan-Code MAFIA2026 ist bereits aktiv und gilt für alle neuen Spieler. Einen neuen Code nur generieren wenn MAFIA2026 kompromittiert wurde.', en: '⚠️ Usually not needed! The general clan code MAFIA2026 is already active for all new players. Only generate a new code if MAFIA2026 has been compromised.' },
+    tip_code: {
+      de: '⚠️ Normalerweise nicht nötig! Der allgemeine Clan-Code MAFIA2026 ist bereits aktiv und gilt für alle neuen Spieler. Einen neuen Code nur generieren wenn MAFIA2026 kompromittiert wurde.',
+      en: '⚠️ Usually not needed! The general clan code MAFIA2026 is already active for all new players. Only generate a new code if MAFIA2026 has been compromised.',
+    },
     copy: { de: 'Kopieren', en: 'Copy' },
     copied: { de: 'Code kopiert!', en: 'Code copied!' },
     generate: { de: 'Notfall: Neuen Code generieren', en: 'Emergency: Generate new code' },
     generating: { de: 'Erstelle...', en: 'Generating...' },
-    tip_generate: { de: '⚠️ Nur im Notfall nutzen! Für normale Registrierungen einfach den Code MAFIA2026 weitergeben — der funktioniert immer.', en: '⚠️ Emergency use only! For normal registrations just share the code MAFIA2026 — that always works.' },
+    tip_generate: {
+      de: '⚠️ Nur im Notfall nutzen! Für normale Registrierungen einfach den Code MAFIA2026 weitergeben — der funktioniert immer.',
+      en: '⚠️ Emergency use only! For normal registrations just share the code MAFIA2026 — that always works.',
+    },
     pw_title: { de: 'Passwort zurücksetzen', en: 'Reset Password' },
     pw_select: { de: 'Mitglied wählen…', en: 'Select member…' },
     pw_label: { de: 'Neues Passwort', en: 'New password' },
     pw_button: { de: 'Passwort setzen', en: 'Set password' },
     pw_setting: { de: 'Setze…', en: 'Setting…' },
     pw_copy: { de: 'Passwort kopieren', en: 'Copy password' },
-    pw_tip: { de: 'Setzt das Passwort eines Mitglieds direkt. Das neue Passwort per Discord o.ä. weitergeben. Das Mitglied sollte es danach selbst ändern.', en: 'Sets a member\'s password directly. Share the new password via Discord etc. The member should change it afterwards.' },
+    pw_tip: {
+      de: 'Setzt das Passwort eines Mitglieds direkt. Das neue Passwort per Discord o.ä. weitergeben. Das Mitglied sollte es danach selbst ändern.',
+      en: "Sets a member's password directly. Share the new password via Discord etc. The member should change it afterwards.",
+    },
     bank_title: { de: 'Bank-Accounts', en: 'Bank Accounts' },
     bank_select: { de: 'Mitglied wählen…', en: 'Select member…' },
     bank_mark: { de: 'Als Bank markieren', en: 'Mark as bank' },
@@ -142,62 +164,80 @@ export default function AdminPanel() {
     bank_saving: { de: 'Speichere…', en: 'Saving…' },
     bank_current: { de: 'Aktuelle Bank-Accounts:', en: 'Current bank accounts:' },
     bank_none: { de: 'Keine Bank-Accounts definiert.', en: 'No bank accounts defined.' },
-    bank_tip: { de: 'Bank-Accounts (z.B. Bam bamm) erscheinen nicht im Ranking und nicht in der Wand der Schande. Sie können weiterhin Einzahlungen tätigen, werden aber aus allen Auswertungen ausgeblendet.', en: 'Bank accounts (e.g. Bam bamm) do not appear in rankings or the backlog wall. They can still make deposits but are excluded from all evaluations.' },
+    bank_tip: {
+      de: 'Bank-Accounts (z.B. Bam bamm) erscheinen nicht im Ranking und nicht in der Wand der Schande. Sie können weiterhin Einzahlungen tätigen, werden aber aus allen Auswertungen ausgeblendet.',
+      en: 'Bank accounts (e.g. Bam bamm) do not appear in rankings or the backlog wall. They can still make deposits but are excluded from all evaluations.',
+    },
   }
 
   return (
     <div className="space-y-6">
       {/* Feedback */}
       {feedback && (
-        <div className={'px-4 py-3 rounded-lg text-sm ' + (feedback.type === 'success' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20')}>
+        <div className={'px-4 py-3 rounded-lg text-sm ' + (feedback.type === 'success'
+          ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+          : 'bg-red-500/10 text-red-400 border border-red-500/20')}>
           {feedback.text}
         </div>
       )}
 
-      {/* Einladungscode */}
-      <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-5">
-        <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider mb-4 flex items-center">
-          {t.code_title[lang]}
-          <InfoTooltip de={t.tip_code.de} en={t.tip_code.en} lang={lang} position="bottom" />
-        </h3>
-        <div className="flex items-center gap-3 mb-4">
-          <span className="text-xs text-zinc-400">{t.active_code[lang]}</span>
-          <code className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-emerald-400 font-mono text-lg tracking-widest">
-            MAFIA2026
-          </code>
-          <button
-            onClick={() => { navigator.clipboard.writeText('MAFIA2026'); setFeedback({ type: 'success', text: t.copied[lang] }) }}
-            className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 text-sm rounded-lg transition-colors"
-          >
-            {'📋 ' + t.copy[lang]}
-          </button>
+      {/* Einladungscode — für Demo-User ausgeblendet */}
+      {isDemo ? (
+        <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-5">
+          <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider mb-3">
+            {t.code_title[lang]}
+          </h3>
+          <p className="text-xs text-zinc-500 italic">
+            {lang === 'de'
+              ? '🎬 Im Demo-Modus nicht verfügbar.'
+              : '🎬 Not available in demo mode.'}
+          </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="inline-flex items-center gap-1">
+      ) : (
+        <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-5">
+          <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider mb-4 flex items-center">
+            {t.code_title[lang]}
+            <InfoTooltip de={t.tip_code.de} en={t.tip_code.en} lang={lang} position="bottom" />
+          </h3>
+          <div className="flex items-center gap-3 mb-4">
+            <span className="text-xs text-zinc-400">{t.active_code[lang]}</span>
+            <code className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-emerald-400 font-mono text-lg tracking-widest">
+              MAFIA2026
+            </code>
             <button
-              onClick={handleGenerateCode}
-              disabled={generatingCode}
-              className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-zinc-300 text-sm font-medium rounded-lg transition-colors"
+              onClick={() => { navigator.clipboard.writeText('MAFIA2026'); setFeedback({ type: 'success', text: t.copied[lang] }) }}
+              className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 text-sm rounded-lg transition-colors"
             >
-              {generatingCode ? t.generating[lang] : t.generate[lang]}
+              {'📋 ' + t.copy[lang]}
             </button>
-            <InfoTooltip de={t.tip_generate.de} en={t.tip_generate.en} lang={lang} position="bottom" />
-          </span>
-          {inviteCode && (
-            <div className="flex items-center gap-2">
-              <code className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-emerald-400 font-mono text-lg tracking-widest">
-                {inviteCode}
-              </code>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="inline-flex items-center gap-1">
               <button
-                onClick={() => { navigator.clipboard.writeText(inviteCode); setFeedback({ type: 'success', text: t.copied[lang] }) }}
-                className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm rounded-lg transition-colors"
+                onClick={handleGenerateCode}
+                disabled={generatingCode}
+                className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-zinc-300 text-sm font-medium rounded-lg transition-colors"
               >
-                {'📋 ' + t.copy[lang]}
+                {generatingCode ? t.generating[lang] : t.generate[lang]}
               </button>
-            </div>
-          )}
+              <InfoTooltip de={t.tip_generate.de} en={t.tip_generate.en} lang={lang} position="bottom" />
+            </span>
+            {inviteCode && (
+              <div className="flex items-center gap-2">
+                <code className="px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-emerald-400 font-mono text-lg tracking-widest">
+                  {inviteCode}
+                </code>
+                <button
+                  onClick={() => { navigator.clipboard.writeText(inviteCode); setFeedback({ type: 'success', text: t.copied[lang] }) }}
+                  className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm rounded-lg transition-colors"
+                >
+                  {'📋 ' + t.copy[lang]}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Passwort zurücksetzen */}
       <div data-tour-id="admin-password-reset" className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-5">
@@ -285,9 +325,14 @@ export default function AdminPanel() {
           <button
             onClick={handleToggleBank}
             disabled={togglingBank || !bankTargetId}
-            className={'w-full px-4 py-2 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors ' + (selectedBankMember?.is_bank ? 'bg-red-700 hover:bg-red-600' : 'bg-teal-700 hover:bg-teal-600')}
+            className={'w-full px-4 py-2 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors ' +
+              (selectedBankMember?.is_bank ? 'bg-red-700 hover:bg-red-600' : 'bg-teal-700 hover:bg-teal-600')}
           >
-            {togglingBank ? t.bank_saving[lang] : selectedBankMember?.is_bank ? '✖ ' + t.bank_unmark[lang] : '🏦 ' + t.bank_mark[lang]}
+            {togglingBank
+              ? t.bank_saving[lang]
+              : selectedBankMember?.is_bank
+                ? '✖ ' + t.bank_unmark[lang]
+                : '🏦 ' + t.bank_mark[lang]}
           </button>
         </div>
       </div>
