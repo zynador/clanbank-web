@@ -1,4 +1,5 @@
 'use client'
+
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 
@@ -26,6 +27,7 @@ const APP_GUIDES: Guide[] = []
 interface Props {
   lang: Lang
   onClose: () => void
+  isDemo?: boolean
 }
 
 function flushListBuffer(items: string[], result: ReactNode[], key: { v: number }) {
@@ -171,11 +173,89 @@ function CategoryTabs({ category, onChange, lang }: {
   )
 }
 
-export default function GuidesModal({ lang, onClose }: Props) {
+function DemoPlaceholder({ lang, onClose }: { lang: Lang; onClose: () => void }) {
+  const isDE = lang === 'de'
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
+      onClick={onClose}
+    >
+      <div
+        className="rounded-2xl w-full max-w-md shadow-2xl flex flex-col overflow-hidden"
+        style={{ background: '#111111', border: '0.5px solid rgba(201,168,76,0.2)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div
+          className="flex items-center justify-between px-5 py-4 flex-shrink-0"
+          style={{ borderBottom: '0.5px solid rgba(201,168,76,0.12)' }}
+        >
+          <h2
+            className="text-base font-semibold"
+            style={{ color: 'rgba(201,168,76,0.8)' }}
+          >
+            {'📚 ' + (isDE ? 'Guides' : 'Guides')}
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-xl leading-none w-7 h-7 flex items-center justify-center rounded"
+            style={{ color: 'rgba(201,168,76,0.4)' }}
+            aria-label="Schließen"
+          >
+            {'✕'}
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex flex-col items-center text-center px-8 py-10 gap-4">
+          <div style={{ fontSize: '2.5rem' }}>{'📖'}</div>
+
+          <p
+            className="font-semibold text-base"
+            style={{ fontFamily: 'Georgia, serif', color: '#E8C87A' }}
+          >
+            {isDE ? 'Clan-Guides' : 'Clan Guides'}
+          </p>
+
+          <div style={{ width: 32, height: '0.5px', background: 'rgba(201,168,76,0.25)' }} />
+
+          <p
+            className="text-sm leading-relaxed max-w-xs"
+            style={{ color: 'rgba(201,168,76,0.5)' }}
+          >
+            {isDE
+              ? 'Hier können clan-spezifische Guides hochgeladen werden — von Spielstrategien bis zu App-Anleitungen. Im Live-Betrieb steht hier das Wissen eures Clans.'
+              : 'Clan-specific guides can be uploaded here — from game strategies to app tutorials. In live operation, this is where your clan\'s knowledge lives.'}
+          </p>
+
+          <div
+            className="w-full rounded-lg px-4 py-3 text-xs leading-relaxed"
+            style={{
+              background: 'rgba(201,168,76,0.05)',
+              border: '0.5px solid rgba(201,168,76,0.15)',
+              color: 'rgba(201,168,76,0.4)',
+            }}
+          >
+            {'🎬 ' + (isDE
+              ? 'Demo-Modus — Inhalte sind nicht öffentlich sichtbar.'
+              : 'Demo mode — content is not publicly visible.')}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default function GuidesModal({ lang, onClose, isDemo }: Props) {
   const [category, setCategory] = useState<GuideCategory>('game')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [content, setContent] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
+  if (isDemo) {
+    return <DemoPlaceholder lang={lang} onClose={onClose} />
+  }
 
   const guides = category === 'game' ? GAME_GUIDES : APP_GUIDES
   const selectedGuide = guides.find(g => g.id === selectedId) ?? null
@@ -212,12 +292,7 @@ export default function GuidesModal({ lang, onClose }: Props) {
         <CategoryTabs category={category} onChange={handleCategoryChange} lang={lang} />
         <div className="flex flex-1 overflow-hidden">
           <div className="w-48 border-r border-gray-700 overflow-y-auto flex-shrink-0">
-            <GuidesList
-              guides={guides}
-              selected={selectedId}
-              onSelect={handleSelect}
-              lang={lang}
-            />
+            <GuidesList guides={guides} selected={selectedId} onSelect={handleSelect} lang={lang} />
           </div>
           <div className="flex-1 overflow-y-auto p-5">
             {selectedGuide && (
