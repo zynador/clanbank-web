@@ -1,4 +1,5 @@
 "use client"
+
 import { useState, FormEvent, useEffect } from "react"
 import { useAuth } from "@/lib/auth-context"
 import { useRouter } from "next/navigation"
@@ -36,7 +37,10 @@ export default function LoginPage() {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: "#0C0A08" }}>
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: "#C9A84C", borderTopColor: "transparent" }} />
+          <div
+            className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin"
+            style={{ borderColor: "#C9A84C", borderTopColor: "transparent" }}
+          />
           <p className="text-sm" style={{ color: "rgba(201,168,76,0.5)" }}>Laden...</p>
         </div>
       </div>
@@ -53,31 +57,42 @@ export default function LoginPage() {
           style={{ background: "#111111", border: "0.5px solid rgba(201,168,76,0.2)" }}
         >
           <Logo size={54} />
-
-          <p className="mt-4 mb-1 text-xs font-semibold tracking-widest uppercase" style={{ color: "rgba(201,168,76,0.45)" }}>
+          <p
+            className="mt-4 mb-1 text-xs font-semibold tracking-widest uppercase"
+            style={{ color: "rgba(201,168,76,0.45)" }}
+          >
             The Grand Mafia
           </p>
-          <p className="mb-4 font-bold text-3xl tracking-wide" style={{ fontFamily: "Georgia, serif", color: "#E8C87A" }}>
+          <p
+            className="mb-4 font-bold text-3xl tracking-wide"
+            style={{ fontFamily: "Georgia, serif", color: "#E8C87A" }}
+          >
             Consigliere
           </p>
-
           <div className="mb-4" style={{ width: 40, height: "0.5px", background: "rgba(201,168,76,0.25)" }} />
-
           <p className="mb-5 text-xs leading-relaxed" style={{ color: "#777570" }}>
             Ressourcen · Rankings · Battle Reports · FCU Events
           </p>
-
           <div
             className="w-full pt-4 flex flex-col items-center gap-1"
             style={{ borderTop: "0.5px solid rgba(201,168,76,0.12)" }}
           >
-            <span className="text-xs font-medium tracking-widest uppercase" style={{ color: "rgba(201,168,76,0.4)" }}>
+            <span
+              className="text-xs font-medium tracking-widest uppercase"
+              style={{ color: "rgba(201,168,76,0.4)" }}
+            >
               powered by
             </span>
-            <span className="font-bold tracking-wide" style={{ fontFamily: "Georgia, serif", fontSize: 13, color: "rgba(201,168,76,0.75)" }}>
+            <span
+              className="font-bold tracking-wide"
+              style={{ fontFamily: "Georgia, serif", fontSize: 13, color: "rgba(201,168,76,0.75)" }}
+            >
               Camorra Elite [1Ca]
             </span>
-            <span className="text-xs italic" style={{ fontFamily: "Georgia, serif", color: "rgba(201,168,76,0.3)" }}>
+            <span
+              className="text-xs italic"
+              style={{ fontFamily: "Georgia, serif", color: "rgba(201,168,76,0.3)" }}
+            >
               Eurer Vicar
             </span>
           </div>
@@ -91,7 +106,11 @@ export default function LoginPage() {
             </div>
           )}
           <div>
-            <label htmlFor="username" className="block text-sm font-medium mb-1" style={{ color: "rgba(201,168,76,0.6)" }}>
+            <label
+              htmlFor="username"
+              className="block text-sm font-medium mb-1"
+              style={{ color: "rgba(201,168,76,0.6)" }}
+            >
               Benutzername
             </label>
             <input
@@ -111,7 +130,11 @@ export default function LoginPage() {
             />
           </div>
           <div>
-            <label htmlFor="password" className="block text-sm font-medium mb-1" style={{ color: "rgba(201,168,76,0.6)" }}>
+            <label
+              htmlFor="password"
+              className="block text-sm font-medium mb-1"
+              style={{ color: "rgba(201,168,76,0.6)" }}
+            >
               Passwort
             </label>
             <input
@@ -145,12 +168,29 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="text-center text-sm" style={{ color: "rgba(201,168,76,0.3)" }}>
-          Noch kein Konto?{" "}
-          <Link href="/register" style={{ color: "rgba(201,168,76,0.6)" }}>
-            Registrieren
+        {/* Footer Links */}
+        <div className="flex flex-col items-center gap-3">
+          <p className="text-center text-sm" style={{ color: "rgba(201,168,76,0.3)" }}>
+            {"Noch kein Konto? "}
+            <Link href="/register" style={{ color: "rgba(201,168,76,0.6)" }}>
+              Registrieren
+            </Link>
+          </p>
+
+          <div style={{ width: "100%", height: "0.5px", background: "rgba(201,168,76,0.1)" }} />
+
+          <Link
+            href="/demo"
+            className="w-full text-center text-sm py-2 px-4 rounded-lg transition-colors"
+            style={{
+              background: "rgba(201,168,76,0.07)",
+              border: "0.5px solid rgba(201,168,76,0.2)",
+              color: "rgba(201,168,76,0.7)",
+            }}
+          >
+            {"🎬 App ohne Login erkunden"}
           </Link>
-        </p>
+        </div>
 
       </div>
     </div>
