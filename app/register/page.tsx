@@ -104,7 +104,7 @@ export default function RegisterPage() {
     setStep("credentials")
   }
 
-  // Called after successful signUp — user is now authenticated
+  // Wird nach signUp aufgerufen — User ist jetzt authentifiziert → RLS erlaubt Zugriff
   async function fetchStarters() {
     setLoadingStarters(true)
     const { data } = await supabase
@@ -199,7 +199,7 @@ export default function RegisterPage() {
           <form onSubmit={handleValidateCode} className="space-y-4">
             <h2 className="text-lg font-semibold text-center"
               style={{ color: G.gold, fontFamily: "Georgia, serif" }}>Registrierung</h2>
-            <p className="text-sm text-center" style={{ color: G.goldFaint }}>
+            <p className="text-sm text-center" style={{ color: G.goldMid }}>
               Gib deinen Einladungscode ein, um fortzufahren.
             </p>
             {error && <ErrorBox msg={error} />}
@@ -219,9 +219,9 @@ export default function RegisterPage() {
               style={{ ...btnPrimary, cursor: submitting ? "not-allowed" : "pointer" }}>
               {submitting ? "Prüfe..." : "Code prüfen"}
             </button>
-            <p className="text-center text-sm" style={{ color: G.goldFaint }}>
+            <p className="text-center text-sm" style={{ color: G.goldLow }}>
               {'Bereits registriert? '}
-              <Link href="/login" style={{ color: G.goldLow }}>Anmelden</Link>
+              <Link href="/login" style={{ color: G.goldMid }}>Anmelden</Link>
             </p>
           </form>
         )}
@@ -236,7 +236,7 @@ export default function RegisterPage() {
             <div className="space-y-1">
               <InputField id="username" label="Benutzername *"
                 value={username} onChange={setUsername} required placeholder="Für den Login" />
-              <p className="text-xs" style={{ color: G.goldFaint }}>
+              <p className="text-xs" style={{ color: G.goldLow }}>
                 Nur für den Login — kann frei gewählt werden.
               </p>
             </div>
@@ -265,14 +265,14 @@ export default function RegisterPage() {
             <div className="text-center space-y-1">
               <h2 className="text-lg font-semibold"
                 style={{ color: G.gold, fontFamily: "Georgia, serif" }}>Dein Ingame-Name</h2>
-              <p className="text-sm" style={{ color: G.goldFaint }}>
+              <p className="text-sm" style={{ color: G.goldMid }}>
                 Wähle deinen Namen aus der Clan-Liste.
               </p>
             </div>
             {error && <ErrorBox msg={error} />}
 
             {loadingStarters ? (
-              <p className="text-center text-sm" style={{ color: G.goldFaint }}>Lade Clan-Liste...</p>
+              <p className="text-center text-sm" style={{ color: G.goldMid }}>Lade Clan-Liste...</p>
             ) : nameMode === "list" && starterMembers.length > 0 ? (
               <div className="space-y-3">
                 <select value={selectedStarterId}
@@ -287,15 +287,15 @@ export default function RegisterPage() {
                 <button type="button"
                   onClick={() => { setNameMode("manual"); setSelectedStarterId(""); setError(null) }}
                   className="text-xs underline w-full text-center"
-                  style={{ color: G.goldFaint, background: 'none', border: 'none', cursor: 'pointer' }}>
+                  style={{ color: G.goldMid, background: 'none', border: 'none', cursor: 'pointer' }}>
                   Mein Name steht nicht in der Liste
                 </button>
               </div>
             ) : (
               <div className="space-y-3">
                 <div className="rounded-lg p-3"
-                  style={{ background: 'rgba(180,120,0,0.08)', border: '0.5px solid rgba(201,168,76,0.2)' }}>
-                  <p className="text-xs" style={{ color: G.goldMid }}>
+                  style={{ background: 'rgba(180,120,0,0.12)', border: '0.5px solid rgba(201,168,76,0.3)' }}>
+                  <p className="text-xs" style={{ color: G.gold }}>
                     ℹ️ Dein Name wurde noch nicht importiert. Gib ihn genau so ein wie im Spiel — ein Admin ordnet dich zu.
                   </p>
                 </div>
@@ -306,7 +306,7 @@ export default function RegisterPage() {
                   <button type="button"
                     onClick={() => { setNameMode("list"); setManualName(""); setError(null) }}
                     className="text-xs underline w-full text-center"
-                    style={{ color: G.goldFaint, background: 'none', border: 'none', cursor: 'pointer' }}>
+                    style={{ color: G.goldMid, background: 'none', border: 'none', cursor: 'pointer' }}>
                     Zurück zur Clan-Liste
                   </button>
                 )}
