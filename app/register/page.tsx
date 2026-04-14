@@ -6,22 +6,69 @@ import Link from "next/link"
 import { supabase } from "@/lib/supabaseClient"
 import Logo from "@/components/Logo"
 
-type Step = "code" | "details" | "claim" | "success"
+type Step = "code" | "name" | "credentials" | "success"
+type NameMode = "list" | "manual"
+type SuccessType = "claimed" | "manual"
 
-interface StarterMember {
-  id: string
-  ingame_name: string
-  display_name: string | null
+interface StarterMember { id: string; ingame_name: string }
+
+const G = {
+  bg:        '#0C0A08',
+  bg3:       '#1C1508',
+  border:    'rgba(201,168,76,0.18)',
+  borderHi:  'rgba(201,168,76,0.35)',
+  gold:      '#E8C87A',
+  goldMid:   'rgba(201,168,76,0.55)',
+  goldLow:   'rgba(201,168,76,0.3)',
+  goldFaint: 'rgba(201,168,76,0.15)',
+}
+
+function InputField({ id, label, type = 'text', value, onChange, required = false, placeholder }: {
+  id: string; label: string; type?: string; value: string
+  onChange: (v: string) => void; required?: boolean; placeholder?: string
+}) {
+  return (
+    <div>
+      <label htmlFor={id} className="block text-sm font-medium mb-1"
+        style={{ color: G.goldMid }}>{label}
+      </label>
+      <input id={id} type={type} value={value} onChange={e => onChange(e.target.value)}
+        required={required} placeholder={placeholder}
+        className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
+        style={{ background: G.bg3, border: '0.5px solid ' + G.border, color: G.gold }}
+      />
+    </div>
+  )
+}
+
+function ErrorBox({ msg }: { msg: string }) {
+  return (
+    <div className="bg-red-900/30 border border-red-800 text-red-300 text-sm rounded-lg p-3">
+      {msg}
+    </div>
+  )
+}
+
+function ClanBadge({ name }: { name: string }) {
+  return (
+    <div className="rounded-lg p-3 text-center"
+      style={{ background: G.goldFaint, border: '0.5px solid ' + G.border }}>
+      <p className="text-sm" style={{ color: G.goldMid }}>
+        {'Clan: '}
+        <span className="font-semibold" style={{ color: G.gold }}>{name}</span>
+      </p>
+    </div>
+  )
 }
 
 export default function RegisterPage() {
   const { signUp, session, loading } = useAuth()
   const router = useRouter()
+
   const [step, setStep] = useState<Step>("code")
   const [inviteCode, setInviteCode] = useState("")
   const [clanName, setClanName] = useState("")
   const [username, setUsername] = useState("")
-  const [displayName, setDisplayName] = useState("")
   const [ingameName, setIngameName] = useState("")
   const [password, setPassword] = useState("")
   const [passwordConfirm, setPasswordConfirm] = useState("")
@@ -29,13 +76,31 @@ export default function RegisterPage() {
   const [submitting, setSubmitting] = useState(false)
   const [starterMembers, setStarterMembers] = useState<StarterMember[]>([])
   const [selectedStarterId, setSelectedStarterId] = useState<string>("")
-  const [claimDone, setClaimDone] = useState(false)
+  const [nameMode, setNameMode] = useState<NameMode>("list")
+  const [manualName, setManualName] = useState("")
+  const [successType, setSuccessType] = useState<SuccessType>("claimed")
+  const [loadingStarters, setLoadingStarters] = useState(false)
 
   useEffect(() => {
-    if (!loading && session && step === "code") {
-      router.replace("/dashboard")
-    }
+    if (!loading && session && step === "code") router.replace("/dashboard")
   }, [session, loading, router, step])
+
+  useEffect(() => {
+    if (step !== "success") return
+    const t = setTimeout(() => router.replace("/dashboard"), 3000)
+    return () => clearTimeout(t)
+  }, [step, router])
+
+  async function fetchStarters() {
+    setLoadingStarters(true)
+    const { data } = await supabase
+      .from("starter_members").select("id, ingame_name")
+      .eq("status", "unclaimed").order("ingame_name")
+    const starters = (data as StarterMember[]) || []
+    setStarterMembers(starters)
+    if (starters.length === 0) setNameMode("manual")
+    setLoadingStarters(false)
+  }
 
   async function handleValidateCode(e: FormEvent) {
     e.preventDefault()
@@ -46,9 +111,36 @@ export default function RegisterPage() {
     })
     setSubmitting(false)
     if (rpcError) { setError("Fehler bei der Code-Prüfung: " + rpcError.message); return }
-    if (!data || !data.valid) { setError(data?.error || "Ungültiger oder bereits verwendeter Code."); return }
+    if (!data?.valid) { setError(data?.error || "Ungültiger oder bereits verwendeter Code."); return }
     setClanName(data.clan_name)
-    setStep("details")
+    await fetchStarters()
+    setStep("name")
+  }
+
+  function handleNameNext() {
+    setError(null)
+    const resolved = nameMode === "list"
+      ? (starterMembers.find(m => m.id === selectedStarterId)?.ingame_name ?? "")
+      : manualName.trim()
+    if (!resolved) {
+      setError(nameMode === "list"
+        ? "Bitte wähle deinen Namen aus der Liste."
+        : "Bitte gib deinen Ingame-Namen ein.")
+      return
+    }
+    setIngameName(resolved)
+    setStep("credentials")
+  }
+
+  async function handlePostSignup() {
+    if (nameMode !== "list" || !selectedStarterId) {
+      setSuccessType("manual")
+      setStep("success")
+      return
+    }
+    const { data } = await supabase.rpc("claim_starter_profile", { starter_id: selectedStarterId })
+    setSuccessType((data as { success: boolean })?.success ? "claimed" : "manual")
+    setStep("success")
   }
 
   async function handleRegister(e: FormEvent) {
@@ -59,184 +151,198 @@ export default function RegisterPage() {
     if (username.length < 3) { setError("Benutzername muss mindestens 3 Zeichen lang sein."); return }
     setSubmitting(true)
     const { error: signUpError } = await signUp({
-      username,
-      password,
-      displayName: displayName || username,
-      ingameName: ingameName || username,
+      username, password,
+      displayName: ingameName,
+      ingameName,
       inviteCode: inviteCode.trim().toUpperCase(),
     })
+    if (signUpError) { setError(signUpError); setSubmitting(false); return }
+    await handlePostSignup()
     setSubmitting(false)
-    if (signUpError) { setError(signUpError); return }
-    const { data: starters } = await supabase
-      .from("starter_members")
-      .select("id, ingame_name, display_name")
-      .eq("status", "unclaimed")
-      .order("ingame_name")
-    setStarterMembers((starters as StarterMember[]) || [])
-    setStep("claim")
   }
 
-  async function handleClaim() {
-    if (!selectedStarterId) return
-    setSubmitting(true)
-    setError(null)
-    const { data, error: rpcError } = await supabase.rpc("claim_starter_profile", {
-      starter_id: selectedStarterId,
-    })
-    setSubmitting(false)
-    if (rpcError || !(data as { success: boolean })?.success) {
-      setError(rpcError?.message || (data as { message: string })?.message || "Fehler beim Einreichen.")
-      return
-    }
-    setClaimDone(true)
-    setStep("success")
+  const btnPrimary = {
+    background: 'rgba(201,168,76,0.2)',
+    border: '0.5px solid ' + G.borderHi,
+    color: G.gold,
   }
-
-  useEffect(() => {
-    if (step === "success") {
-      const t = setTimeout(() => router.replace("/dashboard"), 2500)
-      return () => clearTimeout(t)
-    }
-  }, [step, router])
+  const btnSecondary = {
+    background: G.bg3,
+    border: '0.5px solid rgba(201,168,76,0.12)',
+    color: G.goldLow,
+  }
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "#0C0A08" }}>
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: "#C9A84C", borderTopColor: "transparent" }} />
-          <p className="text-sm" style={{ color: "rgba(201,168,76,0.5)" }}>Laden...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: G.bg }}>
+        <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin"
+          style={{ borderColor: G.gold, borderTopColor: "transparent" }} />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: "#0C0A08" }}>
+    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: G.bg }}>
       <div className="w-full max-w-sm space-y-8">
 
-        {/* Logo */}
-        <div className="flex justify-center">
-          <Logo size={48} />
-        </div>
+        <div className="flex justify-center"><Logo size={48} /></div>
 
-        {/* Step 1: Code */}
+        {/* ── Step 1: Einladungscode ── */}
         {step === "code" && (
           <form onSubmit={handleValidateCode} className="space-y-4">
-            <h2 className="text-lg font-semibold text-center" style={{ color: "#E8C87A", fontFamily: "Georgia, serif" }}>Registrierung</h2>
-            <p className="text-sm text-center" style={{ color: "rgba(201,168,76,0.4)" }}>
+            <h2 className="text-lg font-semibold text-center"
+              style={{ color: G.gold, fontFamily: "Georgia, serif" }}>Registrierung</h2>
+            <p className="text-sm text-center" style={{ color: G.goldFaint }}>
               Gib deinen Einladungscode ein, um fortzufahren.
             </p>
-            {error && <div className="bg-red-900/30 border border-red-800 text-red-300 text-sm rounded-lg p-3">{error}</div>}
+            {error && <ErrorBox msg={error} />}
             <div>
-              <label htmlFor="inviteCode" className="block text-sm font-medium mb-1" style={{ color: "rgba(201,168,76,0.6)" }}>Einladungscode</label>
-              <input
-                id="inviteCode" type="text" value={inviteCode}
-                onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+              <label htmlFor="inviteCode" className="block text-sm font-medium mb-1"
+                style={{ color: G.goldMid }}>Einladungscode</label>
+              <input id="inviteCode" type="text" value={inviteCode}
+                onChange={e => setInviteCode(e.target.value.toUpperCase())}
                 required maxLength={10}
                 className="w-full px-3 py-2 rounded-lg text-center tracking-widest text-lg focus:outline-none"
-                style={{ background: "#1C1508", border: "0.5px solid rgba(201,168,76,0.2)", color: "#E8C87A" }}
+                style={{ background: G.bg3, border: '0.5px solid ' + G.border, color: G.gold }}
                 placeholder="XXXXXX"
               />
             </div>
             <button type="submit" disabled={submitting || inviteCode.length < 4}
-              className="w-full py-2 px-4 font-medium rounded-lg text-sm transition-colors"
-              style={{ background: "rgba(201,168,76,0.2)", border: "0.5px solid rgba(201,168,76,0.35)", color: "#E8C87A", cursor: submitting ? "not-allowed" : "pointer" }}>
+              className="w-full py-2 px-4 font-medium rounded-lg text-sm"
+              style={{ ...btnPrimary, cursor: submitting ? "not-allowed" : "pointer" }}>
               {submitting ? "Prüfe..." : "Code prüfen"}
             </button>
-            <p className="text-center text-sm" style={{ color: "rgba(201,168,76,0.3)" }}>
-              Bereits registriert?{" "}
-              <Link href="/login" style={{ color: "rgba(201,168,76,0.6)" }}>Anmelden</Link>
+            <p className="text-center text-sm" style={{ color: G.goldFaint }}>
+              {'Bereits registriert? '}
+              <Link href="/login" style={{ color: G.goldLow }}>Anmelden</Link>
             </p>
           </form>
         )}
 
-        {/* Step 2: Details */}
-        {step === "details" && (
-          <form onSubmit={handleRegister} className="space-y-4">
-            <div className="rounded-lg p-3 text-center" style={{ background: "rgba(201,168,76,0.07)", border: "0.5px solid rgba(201,168,76,0.2)" }}>
-              <p className="text-sm" style={{ color: "rgba(201,168,76,0.7)" }}>Clan: <span className="font-semibold">{clanName}</span></p>
+        {/* ── Step 2: Ingame-Name wählen ── */}
+        {step === "name" && (
+          <div className="space-y-5">
+            <ClanBadge name={clanName} />
+            <div className="text-center space-y-1">
+              <h2 className="text-lg font-semibold"
+                style={{ color: G.gold, fontFamily: "Georgia, serif" }}>Dein Ingame-Name</h2>
+              <p className="text-sm" style={{ color: G.goldFaint }}>
+                Wähle deinen Namen aus der Clan-Liste.
+              </p>
             </div>
-            {error && <div className="bg-red-900/30 border border-red-800 text-red-300 text-sm rounded-lg p-3">{error}</div>}
-            {(["username", "displayName", "ingameName", "password", "passwordConfirm"] as const).map((field) => (
-              <div key={field}>
-                <label htmlFor={field} className="block text-sm font-medium mb-1" style={{ color: "rgba(201,168,76,0.6)" }}>
-                  {field === "username" ? "Benutzername *" : field === "displayName" ? "Anzeigename" : field === "ingameName" ? "Ingame-Name" : field === "password" ? "Passwort *" : "Passwort wiederholen *"}
-                </label>
-                <input
-                  id={field}
-                  type={field.toLowerCase().includes("password") ? "password" : "text"}
-                  value={field === "username" ? username : field === "displayName" ? displayName : field === "ingameName" ? ingameName : field === "password" ? password : passwordConfirm}
-                  onChange={(e) => { const v = e.target.value; if (field === "username") setUsername(v); else if (field === "displayName") setDisplayName(v); else if (field === "ingameName") setIngameName(v); else if (field === "password") setPassword(v); else setPasswordConfirm(v) }}
-                  required={["username", "password", "passwordConfirm"].includes(field)}
+            {error && <ErrorBox msg={error} />}
+
+            {loadingStarters ? (
+              <p className="text-center text-sm" style={{ color: G.goldFaint }}>Lade Clan-Liste...</p>
+            ) : nameMode === "list" && starterMembers.length > 0 ? (
+              <div className="space-y-3">
+                <select value={selectedStarterId}
+                  onChange={e => { setSelectedStarterId(e.target.value); setError(null) }}
                   className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
-                  style={{ background: "#1C1508", border: "0.5px solid rgba(201,168,76,0.2)", color: "#E8C87A" }}
-                />
+                  style={{ background: G.bg3, border: '0.5px solid ' + G.border, color: G.gold }}>
+                  <option value="">— Bitte wählen —</option>
+                  {starterMembers.map(m => (
+                    <option key={m.id} value={m.id}>{m.ingame_name}</option>
+                  ))}
+                </select>
+                <button type="button"
+                  onClick={() => { setNameMode("manual"); setSelectedStarterId(""); setError(null) }}
+                  className="text-xs underline w-full text-center"
+                  style={{ color: G.goldFaint, background: 'none', border: 'none', cursor: 'pointer' }}>
+                  Mein Name steht nicht in der Liste
+                </button>
               </div>
-            ))}
+            ) : (
+              <div className="space-y-3">
+                <div className="rounded-lg p-3"
+                  style={{ background: 'rgba(180,120,0,0.08)', border: '0.5px solid rgba(201,168,76,0.2)' }}>
+                  <p className="text-xs" style={{ color: G.goldMid }}>
+                    ℹ️ Dein Name wurde noch nicht importiert. Gib ihn genau so ein wie im Spiel — ein Admin ordnet dich zu.
+                  </p>
+                </div>
+                <InputField id="manualName" label="Dein Ingame-Name"
+                  value={manualName} onChange={setManualName}
+                  required placeholder="Genau so wie im Spiel" />
+                {starterMembers.length > 0 && (
+                  <button type="button"
+                    onClick={() => { setNameMode("list"); setManualName(""); setError(null) }}
+                    className="text-xs underline w-full text-center"
+                    style={{ color: G.goldFaint, background: 'none', border: 'none', cursor: 'pointer' }}>
+                    Zurück zur Clan-Liste
+                  </button>
+                )}
+              </div>
+            )}
+
             <div className="flex gap-3">
               <button type="button" onClick={() => { setStep("code"); setError(null) }}
-                className="px-4 py-2 rounded-lg text-sm transition-colors"
-                style={{ background: "#1C1508", border: "0.5px solid rgba(201,168,76,0.15)", color: "rgba(201,168,76,0.5)" }}>
+                className="px-4 py-2 rounded-lg text-sm" style={btnSecondary}>
+                Zurück
+              </button>
+              <button type="button" onClick={handleNameNext} disabled={loadingStarters}
+                className="flex-1 py-2 px-4 font-medium rounded-lg text-sm"
+                style={{ ...btnPrimary, cursor: loadingStarters ? "not-allowed" : "pointer" }}>
+                Weiter
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Step 3: Zugangsdaten ── */}
+        {step === "credentials" && (
+          <form onSubmit={handleRegister} className="space-y-4">
+            <ClanBadge name={clanName} />
+            <div className="text-center space-y-1">
+              <h2 className="text-lg font-semibold"
+                style={{ color: G.gold, fontFamily: "Georgia, serif" }}>Zugangsdaten</h2>
+              <p className="text-sm" style={{ color: G.goldFaint }}>
+                {'Registrierung als: '}
+                <span style={{ color: G.gold }}>{ingameName}</span>
+              </p>
+            </div>
+            {error && <ErrorBox msg={error} />}
+            <div className="space-y-1">
+              <InputField id="username" label="Benutzername *"
+                value={username} onChange={setUsername} required placeholder="Für den Login" />
+              <p className="text-xs" style={{ color: G.goldFaint }}>
+                Nur für den Login — kann frei gewählt werden.
+              </p>
+            </div>
+            <InputField id="password" label="Passwort *" type="password"
+              value={password} onChange={setPassword} required />
+            <InputField id="passwordConfirm" label="Passwort wiederholen *" type="password"
+              value={passwordConfirm} onChange={setPasswordConfirm} required />
+            <div className="flex gap-3">
+              <button type="button" onClick={() => { setStep("name"); setError(null) }}
+                className="px-4 py-2 rounded-lg text-sm" style={btnSecondary}>
                 Zurück
               </button>
               <button type="submit" disabled={submitting}
-                className="flex-1 py-2 px-4 font-medium rounded-lg text-sm transition-colors"
-                style={{ background: "rgba(201,168,76,0.2)", border: "0.5px solid rgba(201,168,76,0.35)", color: "#E8C87A", cursor: submitting ? "not-allowed" : "pointer" }}>
+                className="flex-1 py-2 px-4 font-medium rounded-lg text-sm"
+                style={{ ...btnPrimary, cursor: submitting ? "not-allowed" : "pointer" }}>
                 {submitting ? "Registriere..." : "Registrieren"}
               </button>
             </div>
           </form>
         )}
 
-        {/* Step 3: Starter-Claim */}
-        {step === "claim" && (
-          <div className="space-y-5">
-            <div className="rounded-lg p-3 text-center" style={{ background: "rgba(201,168,76,0.07)", border: "0.5px solid rgba(201,168,76,0.2)" }}>
-              <p className="text-sm" style={{ color: "rgba(201,168,76,0.7)" }}>Registrierung erfolgreich ✓</p>
-            </div>
-            <div className="text-center space-y-1">
-              <h2 className="text-lg font-semibold" style={{ color: "#E8C87A", fontFamily: "Georgia, serif" }}>Bist du bereits Clan-Mitglied?</h2>
-              <p className="text-sm" style={{ color: "rgba(201,168,76,0.4)" }}>Wähle deinen Namen aus der Clan-Liste, falls du bereits eingetragen bist.</p>
-            </div>
-            {error && <div className="bg-red-900/30 border border-red-800 text-red-300 text-sm rounded-lg p-3">{error}</div>}
-            {starterMembers.length > 0 ? (
-              <div className="space-y-3">
-                <select value={selectedStarterId} onChange={(e) => { setSelectedStarterId(e.target.value); setError(null) }}
-                  className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
-                  style={{ background: "#1C1508", border: "0.5px solid rgba(201,168,76,0.2)", color: "#E8C87A" }}>
-                  <option value="">— Ich bin nicht in der Liste —</option>
-                  {starterMembers.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.ingame_name + (m.display_name && m.display_name !== m.ingame_name ? " (" + m.display_name + ")" : "")}
-                    </option>
-                  ))}
-                </select>
-                <button onClick={handleClaim} disabled={!selectedStarterId || submitting}
-                  className="w-full py-2 px-4 font-medium rounded-lg text-sm"
-                  style={{ background: "rgba(201,168,76,0.2)", border: "0.5px solid rgba(201,168,76,0.35)", color: "#E8C87A", cursor: !selectedStarterId || submitting ? "not-allowed" : "pointer" }}>
-                  {submitting ? "Einreichen..." : "Zuordnung beantragen"}
-                </button>
-              </div>
-            ) : (
-              <p className="text-sm text-center" style={{ color: "rgba(201,168,76,0.3)" }}>Keine offenen Einträge vorhanden.</p>
-            )}
-            <button onClick={() => setStep("success")} disabled={submitting}
-              className="w-full py-2 px-4 rounded-lg text-sm transition-colors"
-              style={{ background: "#1C1508", border: "0.5px solid rgba(201,168,76,0.12)", color: "rgba(201,168,76,0.4)" }}>
-              Überspringen – ich bin neu im Clan
-            </button>
-          </div>
-        )}
-
-        {/* Success */}
+        {/* ── Success ── */}
         {step === "success" && (
-          <div className="rounded-lg p-6 text-center space-y-4" style={{ background: "#111111", border: "0.5px solid rgba(201,168,76,0.2)" }}>
+          <div className="rounded-lg p-6 text-center space-y-4"
+            style={{ background: '#111111', border: '0.5px solid ' + G.border }}>
             <div className="text-4xl">✓</div>
-            <h2 className="text-lg font-semibold" style={{ color: "#E8C87A", fontFamily: "Georgia, serif" }}>Willkommen bei TGM Consigliere!</h2>
-            {claimDone ? (
-              <p className="text-sm" style={{ color: "rgba(201,168,76,0.5)" }}>Zuordnung eingereicht – wartet auf Admin-Bestätigung. Du wirst weitergeleitet...</p>
+            <h2 className="text-lg font-semibold"
+              style={{ color: G.gold, fontFamily: "Georgia, serif" }}>
+              Willkommen bei TGM Consigliere!
+            </h2>
+            {successType === "claimed" ? (
+              <p className="text-sm" style={{ color: G.goldMid }}>
+                Zuordnung eingereicht — ein Admin wird deinen Namen bestätigen. Du wirst weitergeleitet...
+              </p>
             ) : (
-              <p className="text-sm" style={{ color: "rgba(201,168,76,0.4)" }}>Dein Konto wurde erstellt. Du wirst gleich weitergeleitet...</p>
+              <p className="text-sm" style={{ color: G.goldMid }}>
+                Konto erstellt — ein Admin ordnet deinen Ingame-Namen zu. Du wirst weitergeleitet...
+              </p>
             )}
           </div>
         )}
