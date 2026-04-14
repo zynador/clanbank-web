@@ -6,7 +6,7 @@ import Link from "next/link"
 import { supabase } from "@/lib/supabaseClient"
 import Logo from "@/components/Logo"
 
-type Step = "code" | "name" | "credentials" | "success"
+type Step = "code" | "credentials" | "name" | "success"
 type NameMode = "list" | "manual"
 type SuccessType = "claimed" | "manual"
 
@@ -69,7 +69,6 @@ export default function RegisterPage() {
   const [inviteCode, setInviteCode] = useState("")
   const [clanName, setClanName] = useState("")
   const [username, setUsername] = useState("")
-  const [ingameName, setIngameName] = useState("")
   const [password, setPassword] = useState("")
   const [passwordConfirm, setPasswordConfirm] = useState("")
   const [error, setError] = useState<string | null>(null)
@@ -91,17 +90,6 @@ export default function RegisterPage() {
     return () => clearTimeout(t)
   }, [step, router])
 
-  async function fetchStarters() {
-    setLoadingStarters(true)
-    const { data } = await supabase
-      .from("starter_members").select("id, ingame_name")
-      .eq("status", "unclaimed").order("ingame_name")
-    const starters = (data as StarterMember[]) || []
-    setStarterMembers(starters)
-    if (starters.length === 0) setNameMode("manual")
-    setLoadingStarters(false)
-  }
-
   async function handleValidateCode(e: FormEvent) {
     e.preventDefault()
     setError(null)
@@ -113,11 +101,51 @@ export default function RegisterPage() {
     if (rpcError) { setError("Fehler bei der Code-Prüfung: " + rpcError.message); return }
     if (!data?.valid) { setError(data?.error || "Ungültiger oder bereits verwendeter Code."); return }
     setClanName(data.clan_name)
+    setStep("credentials")
+  }
+
+  // Called after successful signUp — user is now authenticated
+  async function fetchStarters() {
+    setLoadingStarters(true)
+    const { data } = await supabase
+      .from("starter_members").select("id, ingame_name")
+      .eq("status", "unclaimed").order("ingame_name")
+    const starters = (data as StarterMember[]) || []
+    setStarterMembers(starters)
+    if (starters.length === 0) setNameMode("manual")
+    setLoadingStarters(false)
+  }
+
+  async function handleRegister(e: FormEvent) {
+    e.preventDefault()
+    setError(null)
+    if (password !== passwordConfirm) { setError("Passwörter stimmen nicht überein."); return }
+    if (password.length < 6) { setError("Passwort muss mindestens 6 Zeichen lang sein."); return }
+    if (username.length < 3) { setError("Benutzername muss mindestens 3 Zeichen lang sein."); return }
+    setSubmitting(true)
+    // ingameName wird in Schritt 3 gesetzt — Platzhalter = username
+    const { error: signUpError } = await signUp({
+      username, password,
+      displayName: username,
+      ingameName: username,
+      inviteCode: inviteCode.trim().toUpperCase(),
+    })
+    if (signUpError) { setError(signUpError); setSubmitting(false); return }
+    // Jetzt authentifiziert → starter_members lesbar
     await fetchStarters()
+    setSubmitting(false)
     setStep("name")
   }
 
-  function handleNameNext() {
+  async function updateIngameName(resolvedName: string) {
+    const { data: { user: currentUser } } = await supabase.auth.getUser()
+    if (!currentUser) return
+    await supabase.from("profiles")
+      .update({ ingame_name: resolvedName })
+      .eq("id", currentUser.id)
+  }
+
+  async function handleNameDone() {
     setError(null)
     const resolved = nameMode === "list"
       ? (starterMembers.find(m => m.id === selectedStarterId)?.ingame_name ?? "")
@@ -128,37 +156,16 @@ export default function RegisterPage() {
         : "Bitte gib deinen Ingame-Namen ein.")
       return
     }
-    setIngameName(resolved)
-    setStep("credentials")
-  }
-
-  async function handlePostSignup() {
-    if (nameMode !== "list" || !selectedStarterId) {
-      setSuccessType("manual")
-      setStep("success")
-      return
-    }
-    const { data } = await supabase.rpc("claim_starter_profile", { starter_id: selectedStarterId })
-    setSuccessType((data as { success: boolean })?.success ? "claimed" : "manual")
-    setStep("success")
-  }
-
-  async function handleRegister(e: FormEvent) {
-    e.preventDefault()
-    setError(null)
-    if (password !== passwordConfirm) { setError("Passwörter stimmen nicht überein."); return }
-    if (password.length < 6) { setError("Passwort muss mindestens 6 Zeichen lang sein."); return }
-    if (username.length < 3) { setError("Benutzername muss mindestens 3 Zeichen lang sein."); return }
     setSubmitting(true)
-    const { error: signUpError } = await signUp({
-      username, password,
-      displayName: ingameName,
-      ingameName,
-      inviteCode: inviteCode.trim().toUpperCase(),
-    })
-    if (signUpError) { setError(signUpError); setSubmitting(false); return }
-    await handlePostSignup()
+    await updateIngameName(resolved)
+    if (nameMode === "list" && selectedStarterId) {
+      const { data } = await supabase.rpc("claim_starter_profile", { starter_id: selectedStarterId })
+      setSuccessType((data as { success: boolean })?.success ? "claimed" : "manual")
+    } else {
+      setSuccessType("manual")
+    }
     setSubmitting(false)
+    setStep("success")
   }
 
   const btnPrimary = {
@@ -219,7 +226,39 @@ export default function RegisterPage() {
           </form>
         )}
 
-        {/* ── Step 2: Ingame-Name wählen ── */}
+        {/* ── Step 2: Zugangsdaten ── */}
+        {step === "credentials" && (
+          <form onSubmit={handleRegister} className="space-y-4">
+            <ClanBadge name={clanName} />
+            <h2 className="text-lg font-semibold text-center"
+              style={{ color: G.gold, fontFamily: "Georgia, serif" }}>Zugangsdaten</h2>
+            {error && <ErrorBox msg={error} />}
+            <div className="space-y-1">
+              <InputField id="username" label="Benutzername *"
+                value={username} onChange={setUsername} required placeholder="Für den Login" />
+              <p className="text-xs" style={{ color: G.goldFaint }}>
+                Nur für den Login — kann frei gewählt werden.
+              </p>
+            </div>
+            <InputField id="password" label="Passwort *" type="password"
+              value={password} onChange={setPassword} required />
+            <InputField id="passwordConfirm" label="Passwort wiederholen *" type="password"
+              value={passwordConfirm} onChange={setPasswordConfirm} required />
+            <div className="flex gap-3">
+              <button type="button" onClick={() => { setStep("code"); setError(null) }}
+                className="px-4 py-2 rounded-lg text-sm" style={btnSecondary}>
+                Zurück
+              </button>
+              <button type="submit" disabled={submitting}
+                className="flex-1 py-2 px-4 font-medium rounded-lg text-sm"
+                style={{ ...btnPrimary, cursor: submitting ? "not-allowed" : "pointer" }}>
+                {submitting ? "Registriere..." : "Registrieren"}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* ── Step 3: Ingame-Name wählen (jetzt authentifiziert) ── */}
         {step === "name" && (
           <div className="space-y-5">
             <ClanBadge name={clanName} />
@@ -274,56 +313,12 @@ export default function RegisterPage() {
               </div>
             )}
 
-            <div className="flex gap-3">
-              <button type="button" onClick={() => { setStep("code"); setError(null) }}
-                className="px-4 py-2 rounded-lg text-sm" style={btnSecondary}>
-                Zurück
-              </button>
-              <button type="button" onClick={handleNameNext} disabled={loadingStarters}
-                className="flex-1 py-2 px-4 font-medium rounded-lg text-sm"
-                style={{ ...btnPrimary, cursor: loadingStarters ? "not-allowed" : "pointer" }}>
-                Weiter
-              </button>
-            </div>
+            <button type="button" onClick={handleNameDone} disabled={submitting || loadingStarters}
+              className="w-full py-2 px-4 font-medium rounded-lg text-sm"
+              style={{ ...btnPrimary, cursor: submitting || loadingStarters ? "not-allowed" : "pointer" }}>
+              {submitting ? "Speichere..." : "Weiter"}
+            </button>
           </div>
-        )}
-
-        {/* ── Step 3: Zugangsdaten ── */}
-        {step === "credentials" && (
-          <form onSubmit={handleRegister} className="space-y-4">
-            <ClanBadge name={clanName} />
-            <div className="text-center space-y-1">
-              <h2 className="text-lg font-semibold"
-                style={{ color: G.gold, fontFamily: "Georgia, serif" }}>Zugangsdaten</h2>
-              <p className="text-sm" style={{ color: G.goldFaint }}>
-                {'Registrierung als: '}
-                <span style={{ color: G.gold }}>{ingameName}</span>
-              </p>
-            </div>
-            {error && <ErrorBox msg={error} />}
-            <div className="space-y-1">
-              <InputField id="username" label="Benutzername *"
-                value={username} onChange={setUsername} required placeholder="Für den Login" />
-              <p className="text-xs" style={{ color: G.goldFaint }}>
-                Nur für den Login — kann frei gewählt werden.
-              </p>
-            </div>
-            <InputField id="password" label="Passwort *" type="password"
-              value={password} onChange={setPassword} required />
-            <InputField id="passwordConfirm" label="Passwort wiederholen *" type="password"
-              value={passwordConfirm} onChange={setPasswordConfirm} required />
-            <div className="flex gap-3">
-              <button type="button" onClick={() => { setStep("name"); setError(null) }}
-                className="px-4 py-2 rounded-lg text-sm" style={btnSecondary}>
-                Zurück
-              </button>
-              <button type="submit" disabled={submitting}
-                className="flex-1 py-2 px-4 font-medium rounded-lg text-sm"
-                style={{ ...btnPrimary, cursor: submitting ? "not-allowed" : "pointer" }}>
-                {submitting ? "Registriere..." : "Registrieren"}
-              </button>
-            </div>
-          </form>
         )}
 
         {/* ── Success ── */}
