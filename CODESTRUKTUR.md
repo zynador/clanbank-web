@@ -1,6 +1,6 @@
 # TGM Consigliere — Codestruktur
 
-> **Letzte Aktualisierung:** 13.04.2026 | Fahrplan V41
+> **Letzte Aktualisierung:** 14.04.2026 | Fahrplan V42
 > **Raw-URL für neue Chat-Sessions:**
 > `https://raw.githubusercontent.com/zynador/clanbank-web/main/CODESTRUKTUR.md`
 
@@ -30,7 +30,7 @@ clanbank-web/
 │   ├── login/
 │   │   └── page.tsx                ← TGM Consigliere Banner + Signatur + Demo-Link "App ohne Login erkunden" (V41)
 │   ├── register/
-│   │   └── page.tsx                ← 4-Schritt-Registrierung (Gold Noir Styling, V40)
+│   │   └── page.tsx                ← 4-Schritt-Registrierung: code → credentials → name → success (V42)
 │   ├── globals.css                 ← @import "tailwindcss" (Tailwind v4, keine tailwind.config.ts)
 │   └── layout.tsx                  ← Title: "TGM Consigliere", Body-Background: #0C0A08 (V40)
 ├── components/
@@ -121,6 +121,22 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 
 ---
 
+### `app/register/page.tsx` (V42)
+
+- **Steps:** `"code"` → `"credentials"` → `"name"` → `"success"`
+- **Kein Anzeigename-Feld** — entfernt (kein DB-Gegenstück)
+- **Kein Ingame-Name Freitext** in Step credentials — wird in Step name gesetzt
+- **Step credentials:** nur Username + Passwort + Bestätigung; `signUp()` mit `ingameName: username` als Platzhalter
+- **fetchStarters():** IMMER nach `signUp()` aufrufen — RLS erfordert authentifizierten User!
+- **Step name:** Dropdown aus `starter_members` (status=unclaimed, alphabetisch) + "Mein Name steht nicht in der Liste" → Freitext + Admin-Hinweis
+- **Auto-Switch:** Wenn `starterMembers.length === 0` → automatisch Freitext-Modus
+- **updateIngameName():** `supabase.from("profiles").update({ ingame_name }).eq("id", currentUser.id)` nach Auswahl
+- **claim_starter_profile:** wird bei Listen-Auswahl automatisch aufgerufen (kein separater Schritt sichtbar)
+- **SuccessType:** `"claimed"` (Dropdown + Claim OK) | `"manual"` (Freitext oder Claim fehlgeschlagen)
+- **Farbregeln:** `goldFaint` nur für Borders/Hintergründe — NIEMALS für Text
+
+---
+
 ### `dashboard/page.tsx` (V41)
 
 - **Hintergrund:** `style={{ background: '#0C0A08' }}`
@@ -164,21 +180,6 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 - **isDemo=true:** Rendert `DemoPlaceholder` — Gold Noir Modal mit Hinweis auf clan-spezifische Guides
 - **isDemo=false/undefined:** Normales Modal mit `GAME_GUIDES` + `APP_GUIDES`
 - **GAME_GUIDES:** Formationen, Turmkampf, Waffen, T4, Spiel & Ziele, Leitgedanke #171 (alle 6 erhalten)
-- **DemoPlaceholder-Text:** "Hier können clan-spezifische Guides hochgeladen werden — von Spielstrategien bis zu App-Anleitungen. Im Live-Betrieb steht hier das Wissen eures Clans."
-
----
-
-### `app/register/page.tsx` (V40)
-
-- Gold Noir Styling, `<Logo size={48} />`
-- Success: "Willkommen bei TGM Consigliere!"
-
----
-
-### `app/layout.tsx` (V40)
-
-- Title: `"TGM Consigliere"`
-- Body: `style={{ background: '#0C0A08', color: '#E8C87A' }}`
 
 ---
 
@@ -214,6 +215,15 @@ const G = {
 }
 ```
 
+### Farbverwendung (Faustregel)
+
+| Farbe | Opacity | Verwendung |
+|-------|---------|------------|
+| `gold` | 100% | Überschriften, ausgewählte Werte, primäre Labels |
+| `goldMid` | 55% | Sekundärtexte, Subtitles, Hinweistexte |
+| `goldLow` | 30% | Sehr dezente Hinweise, Platzhalter-ähnliche Texte |
+| `goldFaint` | 15% | **NUR** Borders und Hintergründe — NIEMALS für Text |
+
 ### Header-Struktur Mobile-first
 
 ```
@@ -227,22 +237,32 @@ Z3: [🏠 Home]
 ## 4. Supabase Schema (Auszug)
 
 ```
-profiles       id, username, ingame_name, role, clan_id, is_raidleiter, is_test, is_bank, left_clan_at
-starter_members id, ingame_name, clan_id, status, claimed_by, left_clan_at
+profiles       id, username, ingame_name, display_name, role, clan_id, is_raidleiter, is_test, is_bank, left_clan_at
+starter_members id, ingame_name, display_name, role, status, claimed_by, claimed_at, clan_id, left_clan_at
 deposits       id, user_id, clan_id, resource_type(ENUM), amount, status, created_at, deleted_at
 historical_deposits ingame_name, clan_id, resource_type(text!), amount, transferred
 fcu_events / fcu_results / battle_reports / member_exemptions / tour_progress / clans
+```
+
+### starter_members Status-Werte
+
+```
+unclaimed       → noch nicht beansprucht (sichtbar im Dropdown bei Registrierung)
+claimed_pending → Spieler hat beantragt, Admin muss bestätigen
+confirmed       → Admin hat bestätigt
 ```
 
 ### Wichtige RPCs
 
 ```
 validate_clan_code(input_code)
+register_with_clan_code(input_code, input_username, input_ingame_name)
 get_ranking_data()                              -- kein p_clan_id!
 get_fcu_overall_ranking(p_clan_id uuid)
 get_security_alerts_count()
 get_or_create_tour_progress() / update_tour_progress(p_last_step, p_completed)
 import_historical_deposits / save_fcu_results / claim_starter_profile / link_profile_to_starter
+confirm_starter_claim / reject_starter_claim / import_starter_members
 ```
 
 ---
@@ -275,6 +295,16 @@ const { data: histDeposits } = starterNames.length > 0
 
 // Logo
 // ❌ <Logo variant="large" />   ✅ <Logo size={36} />
+
+// Ingame-Name nach Registrierung setzen
+const { data: { user: currentUser } } = await supabase.auth.getUser()
+if (currentUser) {
+  await supabase.from('profiles').update({ ingame_name: resolvedName }).eq('id', currentUser.id)
+}
+
+// starter_members Fetch — NUR nach signUp() (RLS!)
+// ❌ vor signUp: gibt leere Liste zurück (anon = kein Zugriff)
+// ✅ nach signUp: User authentifiziert, RLS erlaubt SELECT
 ```
 
 ---
@@ -339,6 +369,8 @@ async function loginAs(page: any, user: string, pass: string) {
 | Demo-Banner nicht sichtbar | `is_test`-Flag via isDemo-Pattern prüfen |
 | Modal blockiert Playwright | `div.fixed.inset-0.z-50` |
 | GuidesModal zeigt echte Guides in Demo | `isDemo={isDemo}` prop übergeben (V41) |
+| starter_members Dropdown leer | fetchStarters() NACH signUp() aufrufen — RLS! (V42) |
+| Hinweistexte zu dunkel | goldFaint (15%) nur für Borders — Text min. goldLow (30%) (V42) |
 | GitHub Repo noch öffentlich | Nach Feature-Abschluss auf privat |
 
 ---
