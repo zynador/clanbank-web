@@ -1,4 +1,5 @@
 "use client"
+
 import { useState, FormEvent, useEffect } from "react"
 import { useAuth } from "@/lib/auth-context"
 import { useRouter } from "next/navigation"
@@ -13,13 +14,13 @@ type SuccessType = "claimed" | "manual"
 interface StarterMember { id: string; ingame_name: string }
 
 const G = {
-  bg:        '#0C0A08',
-  bg3:       '#1C1508',
-  border:    'rgba(201,168,76,0.18)',
-  borderHi:  'rgba(201,168,76,0.35)',
-  gold:      '#E8C87A',
-  goldMid:   'rgba(201,168,76,0.55)',
-  goldLow:   'rgba(201,168,76,0.3)',
+  bg: '#0C0A08',
+  bg3: '#1C1508',
+  border: 'rgba(201,168,76,0.18)',
+  borderHi: 'rgba(201,168,76,0.35)',
+  gold: '#E8C87A',
+  goldMid: 'rgba(201,168,76,0.55)',
+  goldLow: 'rgba(201,168,76,0.3)',
   goldFaint: 'rgba(201,168,76,0.15)',
 }
 
@@ -29,10 +30,10 @@ function InputField({ id, label, type = 'text', value, onChange, required = fals
 }) {
   return (
     <div>
-      <label htmlFor={id} className="block text-sm font-medium mb-1"
-        style={{ color: G.goldMid }}>{label}
+      <label htmlFor={id} className="block text-sm font-medium mb-1" style={{ color: G.goldMid }}>{label}
       </label>
-      <input id={id} type={type} value={value} onChange={e => onChange(e.target.value)}
+      <input
+        id={id} type={type} value={value} onChange={e => onChange(e.target.value)}
         required={required} placeholder={placeholder}
         className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
         style={{ background: G.bg3, border: '0.5px solid ' + G.border, color: G.gold }}
@@ -51,8 +52,7 @@ function ErrorBox({ msg }: { msg: string }) {
 
 function ClanBadge({ name }: { name: string }) {
   return (
-    <div className="rounded-lg p-3 text-center"
-      style={{ background: G.goldFaint, border: '0.5px solid ' + G.border }}>
+    <div className="rounded-lg p-3 text-center" style={{ background: G.goldFaint, border: '0.5px solid ' + G.border }}>
       <p className="text-sm" style={{ color: G.goldMid }}>
         {'Clan: '}
         <span className="font-semibold" style={{ color: G.gold }}>{name}</span>
@@ -64,7 +64,6 @@ function ClanBadge({ name }: { name: string }) {
 export default function RegisterPage() {
   const { signUp, session, loading } = useAuth()
   const router = useRouter()
-
   const [step, setStep] = useState<Step>("code")
   const [inviteCode, setInviteCode] = useState("")
   const [clanName, setClanName] = useState("")
@@ -125,8 +124,7 @@ export default function RegisterPage() {
     setSubmitting(true)
     // ingameName wird in Schritt 3 gesetzt — Platzhalter = username
     const { error: signUpError } = await signUp({
-      username, password,
-      displayName: username,
+      username, password, displayName: username,
       ingameName: username,
       inviteCode: inviteCode.trim().toUpperCase(),
     })
@@ -138,11 +136,12 @@ export default function RegisterPage() {
   }
 
   async function updateIngameName(resolvedName: string) {
-    const { data: { user: currentUser } } = await supabase.auth.getUser()
-    if (!currentUser) return
-    await supabase.from("profiles")
-      .update({ ingame_name: resolvedName })
-      .eq("id", currentUser.id)
+    const { error: rpcError } = await supabase.rpc("update_my_ingame_name", {
+      p_ingame_name: resolvedName,
+    })
+    if (rpcError) {
+      console.error("update_my_ingame_name Fehler:", rpcError.message)
+    }
   }
 
   async function handleNameDone() {
@@ -191,7 +190,6 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen flex items-center justify-center px-4" style={{ background: G.bg }}>
       <div className="w-full max-w-sm space-y-8">
-
         <div className="flex justify-center"><Logo size={48} /></div>
 
         {/* ── Step 1: Einladungscode ── */}
@@ -206,7 +204,8 @@ export default function RegisterPage() {
             <div>
               <label htmlFor="inviteCode" className="block text-sm font-medium mb-1"
                 style={{ color: G.goldMid }}>Einladungscode</label>
-              <input id="inviteCode" type="text" value={inviteCode}
+              <input
+                id="inviteCode" type="text" value={inviteCode}
                 onChange={e => setInviteCode(e.target.value.toUpperCase())}
                 required maxLength={10}
                 className="w-full px-3 py-2 rounded-lg text-center tracking-widest text-lg focus:outline-none"
@@ -234,8 +233,8 @@ export default function RegisterPage() {
               style={{ color: G.gold, fontFamily: "Georgia, serif" }}>Zugangsdaten</h2>
             {error && <ErrorBox msg={error} />}
             <div className="space-y-1">
-              <InputField id="username" label="Benutzername *"
-                value={username} onChange={setUsername} required placeholder="Für den Login" />
+              <InputField id="username" label="Benutzername *" value={username}
+                onChange={setUsername} required placeholder="Für den Login" />
               <p className="text-xs" style={{ color: G.goldLow }}>
                 Nur für den Login — kann frei gewählt werden.
               </p>
@@ -270,12 +269,12 @@ export default function RegisterPage() {
               </p>
             </div>
             {error && <ErrorBox msg={error} />}
-
             {loadingStarters ? (
               <p className="text-center text-sm" style={{ color: G.goldMid }}>Lade Clan-Liste...</p>
             ) : nameMode === "list" && starterMembers.length > 0 ? (
               <div className="space-y-3">
-                <select value={selectedStarterId}
+                <select
+                  value={selectedStarterId}
                   onChange={e => { setSelectedStarterId(e.target.value); setError(null) }}
                   className="w-full px-3 py-2 rounded-lg text-sm focus:outline-none"
                   style={{ background: G.bg3, border: '0.5px solid ' + G.border, color: G.gold }}>
@@ -299,9 +298,8 @@ export default function RegisterPage() {
                     ℹ️ Dein Name wurde noch nicht importiert. Gib ihn genau so ein wie im Spiel — ein Admin ordnet dich zu.
                   </p>
                 </div>
-                <InputField id="manualName" label="Dein Ingame-Name"
-                  value={manualName} onChange={setManualName}
-                  required placeholder="Genau so wie im Spiel" />
+                <InputField id="manualName" label="Dein Ingame-Name" value={manualName}
+                  onChange={setManualName} required placeholder="Genau so wie im Spiel" />
                 {starterMembers.length > 0 && (
                   <button type="button"
                     onClick={() => { setNameMode("list"); setManualName(""); setError(null) }}
@@ -312,8 +310,8 @@ export default function RegisterPage() {
                 )}
               </div>
             )}
-
-            <button type="button" onClick={handleNameDone} disabled={submitting || loadingStarters}
+            <button type="button" onClick={handleNameDone}
+              disabled={submitting || loadingStarters}
               className="w-full py-2 px-4 font-medium rounded-lg text-sm"
               style={{ ...btnPrimary, cursor: submitting || loadingStarters ? "not-allowed" : "pointer" }}>
               {submitting ? "Speichere..." : "Weiter"}
@@ -341,7 +339,6 @@ export default function RegisterPage() {
             )}
           </div>
         )}
-
       </div>
     </div>
   )
