@@ -12,7 +12,6 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Caller-Verifizierung: nur Admin darf diese Route nutzen
     const authHeader = req.headers.get('authorization')
     if (!authHeader) {
       return NextResponse.json({ success: false, message: 'Nicht autorisiert.' }, { status: 401 })
@@ -29,7 +28,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Nur Admins erlaubt.' }, { status: 403 })
     }
 
-    // Service Role Client — nur serverseitig
     const adminClient = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -37,6 +35,7 @@ export async function POST(req: NextRequest) {
 
     const { error } = await adminClient.auth.admin.updateUserById(targetUserId, {
       password: newPassword,
+      email_confirm: true, // ← FIX: verhindert dass Supabase den E-Mail-Status zurücksetzt
     })
 
     if (error) {
