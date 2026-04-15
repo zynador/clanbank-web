@@ -1,6 +1,6 @@
 # TGM Consigliere — Codestruktur
 
-> **Letzte Aktualisierung:** 15.04.2026 | Fahrplan V44
+> **Letzte Aktualisierung:** 15.04.2026 | Fahrplan V45
 > **Raw-URL für neue Chat-Sessions:**
 > `https://raw.githubusercontent.com/zynador/clanbank-web/main/CODESTRUKTUR.md`
 
@@ -19,7 +19,7 @@ clanbank-web/
 │   │   │   └── route.ts           ← Claude Haiku Vision OCR (alle Modi)
 │   │   ├── admin/
 │   │   │   └── reset-password/
-│   │   │       └── route.ts       ← Passwort-Reset (Service Role Key, nur Admin)
+│   │   │       └── route.ts       ← Passwort-Reset (Service Role Key, nur Admin) — email_confirm: true (V45)
 │   │   └── demo/
 │   │       └── login/
 │   │           └── route.ts       ← Demo-Gastaccount erstellen + Session setzen (Service Role Key)
@@ -28,13 +28,13 @@ clanbank-web/
 │   ├── demo/
 │   │   └── page.tsx               ← Gold Noir Rollenwahl (Admin/Offizier/Mitglied → /api/demo/login), Banner analog login/page.tsx (V41)
 │   ├── login/
-│   │   └── page.tsx               ← TGM Consigliere Banner + Signatur + Demo-Link "App ohne Login erkunden" (V41)
+│   │   └── page.tsx               ← TGM Consigliere Banner + Signatur + Demo-Link + "Passwort vergessen?"-Hinweis (V45)
 │   ├── register/
 │   │   └── page.tsx               ← 4-Schritt-Registrierung: code → credentials → name → success (V43)
 │   ├── globals.css                ← @import "tailwindcss" (Tailwind v4, keine tailwind.config.ts)
 │   └── layout.tsx                 ← Title: "TGM Consigliere", Body-Background: #0C0A08 (V40)
 ├── components/
-│   ├── AdminPanel.tsx             ← isDemo-Check: Einladungscode ausgeblendet für Demo-User
+│   ├── AdminPanel.tsx             ← isDemo-Check; Dropdowns zeigen "Ingame-Name (username)" (V45)
 │   ├── AnnouncementWidget.tsx     ← Admin-Ankündigungen (erstellen/löschen/anpinnen)
 │   ├── ApprovalQueue.tsx
 │   ├── BacklogWidget.tsx
@@ -149,11 +149,12 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 
 ---
 
-### `app/login/page.tsx` (V41)
+### `app/login/page.tsx` (V45)
 - Banner: Gold-Shield + "The Grand Mafia" + "Consigliere" (Georgia serif) + Divider + Tagline
 - Signatur: "powered by" + "Camorra Elite [1Ca]" + "Eurer Vicar" (kursiv)
 - `<Logo size={54} />` — kein variant prop
 - **Footer (V41):** "Noch kein Konto? Registrieren" + Separator (0.5px gold) + "🎬 App ohne Login erkunden" → `/demo`
+- **Passwort-Hinweis (V45):** `<p>Passwort vergessen? Wende dich an einen R4.</p>` — ganz unten im Footer
 
 ---
 
@@ -177,57 +178,50 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 
 ---
 
-### `AdminPanel.tsx`
-- **isDemo:** `const { user, profile } = useAuth()` + isDemo-Check
-- Einladungscode ausgeblendet für Demo-User
+### `AdminPanel.tsx` (V45)
+- **isDemo-Check:** Einladungscode ausgeblendet für Demo-User
+- **Member Type:** `{ id, username, ingame_name, display_name, is_bank }` — `username` neu (V45)
+- **loadMembers():** `.select('id, username, ingame_name, display_name, is_bank')` — `username` neu (V45)
+- **memberLabel(m):** Hilfsfunktion → `(m.ingame_name || m.display_name) + ' (' + m.username + ')'`
+- **Beide Dropdowns** (Passwort-Reset + Bank-Toggle) nutzen `memberLabel()` (V45)
 
 ---
 
-### `HomeTab.tsx` (V40)
-- **statusOk:** `'TGM Consigliere: Du bist auf dem Laufenden'`
-- **statusBehind:** `'TGM Consigliere: Du bist im Rückstand!'`
-- Wand der Schande Modal: `fixed inset-0 z-50`
-- paidSet: IMMER `.toLowerCase()` auf resource_type
+### `app/api/admin/reset-password/route.ts` (V45)
+- **Caller-Verifizierung:** `get_my_role()` → nur `admin`
+- **Service Role Key:** `adminClient.auth.admin.updateUserById(targetUserId, { password, email_confirm: true })`
+- **`email_confirm: true`** (V45): Verhindert dass Supabase nach dem Passwort-Reset den E-Mail-Status zurücksetzt (war Bug: alter + neuer Login schlug fehl)
 
 ---
 
-## 3. Gold Noir Design-System (V40)
+## 3. Auth & Rollen (auth-context.tsx)
 
 ```typescript
-const G = {
-  bg: '#0C0A08',
-  bg2: '#141008',
-  bg3: '#1C1508',
-  border: 'rgba(201,168,76,0.18)',
-  borderHi: 'rgba(201,168,76,0.35)',
-  gold: '#E8C87A',
-  goldMid: 'rgba(201,168,76,0.55)',
-  goldLow: 'rgba(201,168,76,0.3)',
-  goldFaint: 'rgba(201,168,76,0.15)',
+// usernameToEmail: strips non-alphanumeric!
+// "Bam bamm" → "bambamm@clanbank.local"
+// Login-Username ≠ Ingame-Name
+function usernameToEmail(username: string): string {
+  return username.toLowerCase().replace(/[^a-z0-9]/g, "") + "@clanbank.local"
 }
 ```
 
-### Farbverwendung (Faustregel)
-| Farbe | Opacity | Verwendung |
-|-------|---------|------------|
-| `gold` | 100% | Überschriften, ausgewählte Werte, primäre Labels |
-| `goldMid` | 55% | Sekundärtexte, Subtitles, Hinweistexte |
-| `goldLow` | 30% | Sehr dezente Hinweise, Platzhalter-ähnliche Texte |
-| `goldFaint` | 15% | **NUR** Borders und Hintergründe — NIEMALS für Text |
+|                  | Admin | Offizier | Mitglied |
+|--|-------|----------|---------| 
+| Wand der Schande | ✅ | ✅ | ✅ |
+| Mitgliederliste  | ✅ | ✅ | ❌ |
+| AdminPanel       | ✅ | ❌ | ❌ |
 
-### Header-Struktur Mobile-first
-```
-Z1: [Shield] [TGM · Consigliere / Camorra Elite [1Ca]] [🌐][☰]
-Z2: [VI] [Vicar] [ADMIN] [📚][🎬 Demo][🚪]
-Z3: [🏠 Home]
-```
+- Fake-Email: `username@clanbank.local` · Clan-Code: `MAFIA2026`
+- Camorra Elite UUID: `00000000-0000-0000-0000-000000000001`
+- Demo-Clan UUID: `00000000-0000-0000-0000-000000000002`
 
 ---
 
-## 4. Supabase Schema (Auszug)
+## 4. Datenbank (Supabase)
 
+### Tabellen
 ```
-profiles           id, username, ingame_name, display_name, role, clan_id, is_raidleiter, is_test, is_bank, left_clan_at
+profiles           id, username, display_name, ingame_name, role, clan_id, is_bank, is_test, left_clan_at
 starter_members    id, ingame_name, display_name, role, status, claimed_by, claimed_at, clan_id, left_clan_at
 deposits           id, user_id, clan_id, resource_type(ENUM), amount, status, created_at, deleted_at
 historical_deposits ingame_name, clan_id, resource_type(text!), amount, transferred
@@ -245,7 +239,7 @@ confirmed       → Admin hat bestätigt
 ```
 validate_clan_code(input_code)
 register_with_clan_code(input_code, input_username, input_ingame_name)
-update_my_ingame_name(p_ingame_name text)              ← NEU V43: SECURITY DEFINER, setzt profiles.ingame_name für auth.uid()
+update_my_ingame_name(p_ingame_name text)              ← V43: SECURITY DEFINER, setzt profiles.ingame_name für auth.uid()
 get_ranking_data()                                     -- kein p_clan_id!
 get_fcu_overall_ranking(p_clan_id uuid)
 get_security_alerts_count()
@@ -295,14 +289,23 @@ const { data: histDeposits } = starterNames.length > 0
 // ❌ <Logo variant="large" />   ✅ <Logo size={36} />
 
 // Ingame-Name nach Registrierung setzen (V43)
-// ❌ direktes .update() — kein Fehler-Handling, bricht bei fehlender Policy still
-// ✅ RPC:
 const { error } = await supabase.rpc('update_my_ingame_name', { p_ingame_name: resolvedName })
 if (error) console.error('update_my_ingame_name Fehler:', error.message)
 
 // starter_members Fetch — NUR nach signUp() (RLS!)
 // ❌ vor signUp: gibt leere Liste zurück (anon = kein Zugriff)
 // ✅ nach signUp: User authentifiziert, RLS erlaubt SELECT
+
+// AdminPanel memberLabel (V45)
+function memberLabel(m: Member): string {
+  return (m.ingame_name || m.display_name) + ' (' + m.username + ')'
+}
+
+// Passwort-Reset (V45) — email_confirm: true verhindert Supabase-Bug
+await adminClient.auth.admin.updateUserById(targetUserId, {
+  password: newPassword,
+  email_confirm: true,
+})
 ```
 
 ---
@@ -401,6 +404,9 @@ Benennungskonvention: `[thema]-de.md` / `[thema]-en.md`
 | starter_members Dropdown leer | fetchStarters() NACH signUp() aufrufen — RLS! (V42) |
 | Hinweistexte zu dunkel | goldFaint (15%) nur für Borders — Text min. goldLow (30%) (V42) |
 | ingame_name Update bei Registrierung | RPC `update_my_ingame_name` statt direktem .update() (V43) |
+| Passwort-Reset: Login schlägt fehl | `email_confirm: true` in updateUserById() (V45) |
+| AdminPanel: falscher Username bei Reset | Dropdown zeigt jetzt "Ingame-Name (username)" via memberLabel() (V45) |
+| Login-Username ≠ Ingame-Name | usernameToEmail() stripped non-alphanumeric — "Bam bamm" → "bambamm" |
 | GitHub Repo noch öffentlich | Nach Feature-Abschluss auf privat |
 
 ---
