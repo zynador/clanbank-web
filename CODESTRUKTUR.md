@@ -1,6 +1,6 @@
 # TGM Consigliere — Codestruktur
 
-> **Letzte Aktualisierung:** 14.04.2026 | Fahrplan V43
+> **Letzte Aktualisierung:** 15.04.2026 | Fahrplan V44
 > **Raw-URL für neue Chat-Sessions:**
 > `https://raw.githubusercontent.com/zynador/clanbank-web/main/CODESTRUKTUR.md`
 
@@ -79,7 +79,8 @@ clanbank-web/
 │       │   ├── t4-de.md / t4-en.md
 │       │   ├── spiel-ziele-de.md / spiel-ziele-en.md
 │       │   └── leitgedanke-de.md / leitgedanke-en.md
-│       └── app/                   ← App-Guides (noch leer, vorbereitet)
+│       └── app/                   ← App-Guides (V44)
+│           └── einzahlungen-de.md / einzahlungen-en.md
 ├── tests/
 │   ├── playwright.config.ts
 │   ├── auth.spec.ts
@@ -172,6 +173,7 @@ type UserRole = 'admin' | 'offizier' | 'mitglied'
 - **isDemo=true:** Rendert `DemoPlaceholder` — Gold Noir Modal mit Hinweis auf clan-spezifische Guides
 - **isDemo=false/undefined:** Normales Modal mit `GAME_GUIDES` + `APP_GUIDES`
 - **GAME_GUIDES:** Formationen, Turmkampf, Waffen, T4, Spiel & Ziele, Leitgedanke #171 (alle 6 erhalten)
+- **APP_GUIDES:** einzahlungen (DE+EN) — weitere folgen (V44)
 
 ---
 
@@ -349,7 +351,38 @@ async function loginAs(page: any, user: string, pass: string) {
 
 ---
 
-## 9. Bekannte Fallstricke
+## 9. App-Guides (V44)
+
+Guides liegen unter `public/guides/` als statische Markdown-Dateien (Vercel).
+Benennungskonvention: `[thema]-de.md` / `[thema]-en.md`
+
+### Fertige Guides
+
+| Thema | Dateien | Inhalt |
+|---|---|---|
+| Einzahlungen & Auszahlungen | `app/einzahlungen-de.md` / `einzahlungen-en.md` | 12 Abschnitte: Einzahlsystem, Screenshots, Auszahlung, Raidleiter, FAQ |
+
+### Regelwerk Einzahlungen (festgehalten für künftige Guides)
+- Wöchentliche Mindesteinzahlung: **5 Mio × 5 Ressourcen** (fix, kein steigender Betrag)
+- Formel `(aktuelle KW − Beitritts-KW) × 5 Mio` = interner Einzahlungsstand (Auszahlungsberechtigung)
+- Screenshots max. **4 Tage alt**; ohne Screenshot keine Anerkennung
+- Manuelle Eingaben → immer Offizier-Queue (auch mit Screenshot)
+- Ausnahmen: kein App-Button → Mitglied meldet sich bei R4, der trägt es ein
+- Auszahlung: ≥ 10.000 verletzte T4+ (keine Toten), Einzahlungsstand ok
+- Sätze: 2,4 Mio / 10k (Cash/Arms/Cargo/Metall), 1,2 Mio / 10k (Diamanten) — je nach Truppenart
+- Nur Raidleiter laden Kampfberichte hoch
+- Raidleiter: von Einzahlungspflicht befreit, doppelte Auszahlung, Mindestverlust gilt trotzdem
+- Truppenbezeichnungen EN: Messer = Bruiser, Schützen = Hitmen
+
+### Geplante nächste Guides
+1. FCU Events (`fcu-de.md` / `fcu-en.md`)
+2. Kampfberichte (`kampfberichte-de.md` / `kampfberichte-en.md`)
+3. Profil & Status (`profil-de.md` / `profil-en.md`)
+4. Erste Schritte in der App (`erste-schritte-de.md` / `erste-schritte-en.md`)
+
+---
+
+## 10. Bekannte Fallstricke
 
 | Problem | Lösung |
 |---------|--------|
