@@ -1,5 +1,4 @@
 'use client'
-
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import { useAuth } from '@/lib/auth-context'
@@ -9,7 +8,7 @@ import BankImportPanel from '@/components/BankImportPanel'
 import HistoricalDepositsPanel from '@/components/HistoricalDepositsPanel'
 
 type Lang = 'de' | 'en'
-type Member = { id: string; ingame_name: string; display_name: string; is_bank: boolean }
+type Member = { id: string; username: string; ingame_name: string; display_name: string; is_bank: boolean }
 
 export default function AdminPanel() {
   const { user, profile } = useAuth()
@@ -40,7 +39,9 @@ export default function AdminPanel() {
     }
   }, [feedback])
 
-  useEffect(() => { loadMembers() }, [])
+  useEffect(() => {
+    loadMembers()
+  }, [])
 
   async function loadMembers() {
     const { data: clanData } = await supabase.rpc('get_my_clan_id')
@@ -50,7 +51,7 @@ export default function AdminPanel() {
     const excludeIds = new Set((testProfiles ?? []).map((p: { id: string }) => p.id))
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, ingame_name, display_name, is_bank')
+      .select('id, username, ingame_name, display_name, is_bank')
       .eq('clan_id', clanData)
       .is('left_clan_at', null)
       .order('ingame_name')
@@ -129,34 +130,29 @@ export default function AdminPanel() {
     setTogglingBank(false)
   }
 
+  function memberLabel(m: Member): string {
+    return (m.ingame_name || m.display_name) + ' (' + m.username + ')'
+  }
+
   const bankMembers = members.filter(m => m.is_bank)
   const selectedBankMember = members.find(m => m.id === bankTargetId)
 
   const t = {
     code_title: { de: 'Einladungscode', en: 'Invitation Code' },
     active_code: { de: 'Aktiver Clan-Code:', en: 'Active clan code:' },
-    tip_code: {
-      de: '⚠️ Normalerweise nicht nötig! Der allgemeine Clan-Code MAFIA2026 ist bereits aktiv und gilt für alle neuen Spieler. Einen neuen Code nur generieren wenn MAFIA2026 kompromittiert wurde.',
-      en: '⚠️ Usually not needed! The general clan code MAFIA2026 is already active for all new players. Only generate a new code if MAFIA2026 has been compromised.',
-    },
+    tip_code: { de: '⚠️ Normalerweise nicht nötig! Der allgemeine Clan-Code MAFIA2026 ist bereits aktiv und gilt für alle neuen Spieler. Einen neuen Code nur generieren wenn MAFIA2026 kompromittiert wurde.', en: '⚠️ Usually not needed! The general clan code MAFIA2026 is already active for all new players. Only generate a new code if MAFIA2026 has been compromised.' },
     copy: { de: 'Kopieren', en: 'Copy' },
     copied: { de: 'Code kopiert!', en: 'Code copied!' },
     generate: { de: 'Notfall: Neuen Code generieren', en: 'Emergency: Generate new code' },
     generating: { de: 'Erstelle...', en: 'Generating...' },
-    tip_generate: {
-      de: '⚠️ Nur im Notfall nutzen! Für normale Registrierungen einfach den Code MAFIA2026 weitergeben — der funktioniert immer.',
-      en: '⚠️ Emergency use only! For normal registrations just share the code MAFIA2026 — that always works.',
-    },
+    tip_generate: { de: '⚠️ Nur im Notfall nutzen! Für normale Registrierungen einfach den Code MAFIA2026 weitergeben — der funktioniert immer.', en: '⚠️ Emergency use only! For normal registrations just share the code MAFIA2026 — that always works.' },
     pw_title: { de: 'Passwort zurücksetzen', en: 'Reset Password' },
     pw_select: { de: 'Mitglied wählen…', en: 'Select member…' },
     pw_label: { de: 'Neues Passwort', en: 'New password' },
     pw_button: { de: 'Passwort setzen', en: 'Set password' },
     pw_setting: { de: 'Setze…', en: 'Setting…' },
     pw_copy: { de: 'Passwort kopieren', en: 'Copy password' },
-    pw_tip: {
-      de: 'Setzt das Passwort eines Mitglieds direkt. Das neue Passwort per Discord o.ä. weitergeben. Das Mitglied sollte es danach selbst ändern.',
-      en: "Sets a member's password directly. Share the new password via Discord etc. The member should change it afterwards.",
-    },
+    pw_tip: { de: 'Setzt das Passwort eines Mitglieds direkt. Das neue Passwort per Discord o.ä. weitergeben. Das Mitglied sollte es danach selbst ändern.', en: "Sets a member's password directly. Share the new password via Discord etc. The member should change it afterwards." },
     bank_title: { de: 'Bank-Accounts', en: 'Bank Accounts' },
     bank_select: { de: 'Mitglied wählen…', en: 'Select member…' },
     bank_mark: { de: 'Als Bank markieren', en: 'Mark as bank' },
@@ -164,19 +160,14 @@ export default function AdminPanel() {
     bank_saving: { de: 'Speichere…', en: 'Saving…' },
     bank_current: { de: 'Aktuelle Bank-Accounts:', en: 'Current bank accounts:' },
     bank_none: { de: 'Keine Bank-Accounts definiert.', en: 'No bank accounts defined.' },
-    bank_tip: {
-      de: 'Bank-Accounts (z.B. Bam bamm) erscheinen nicht im Ranking und nicht in der Wand der Schande. Sie können weiterhin Einzahlungen tätigen, werden aber aus allen Auswertungen ausgeblendet.',
-      en: 'Bank accounts (e.g. Bam bamm) do not appear in rankings or the backlog wall. They can still make deposits but are excluded from all evaluations.',
-    },
+    bank_tip: { de: 'Bank-Accounts (z.B. Bam bamm) erscheinen nicht im Ranking und nicht in der Wand der Schande. Sie können weiterhin Einzahlungen tätigen, werden aber aus allen Auswertungen ausgeblendet.', en: 'Bank accounts (e.g. Bam bamm) do not appear in rankings or the backlog wall. They can still make deposits but are excluded from all evaluations.' },
   }
 
   return (
     <div className="space-y-6">
       {/* Feedback */}
       {feedback && (
-        <div className={'px-4 py-3 rounded-lg text-sm ' + (feedback.type === 'success'
-          ? 'bg-green-500/10 text-green-400 border border-green-500/20'
-          : 'bg-red-500/10 text-red-400 border border-red-500/20')}>
+        <div className={'px-4 py-3 rounded-lg text-sm ' + (feedback.type === 'success' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20')}>
           {feedback.text}
         </div>
       )}
@@ -188,9 +179,7 @@ export default function AdminPanel() {
             {t.code_title[lang]}
           </h3>
           <p className="text-xs text-zinc-500 italic">
-            {lang === 'de'
-              ? '🎬 Im Demo-Modus nicht verfügbar.'
-              : '🎬 Not available in demo mode.'}
+            {lang === 'de' ? '🎬 Im Demo-Modus nicht verfügbar.' : '🎬 Not available in demo mode.'}
           </p>
         </div>
       ) : (
@@ -253,7 +242,7 @@ export default function AdminPanel() {
           >
             <option value="">{t.pw_select[lang]}</option>
             {members.map(m => (
-              <option key={m.id} value={m.id}>{m.ingame_name || m.display_name}</option>
+              <option key={m.id} value={m.id}>{memberLabel(m)}</option>
             ))}
           </select>
           <div className="flex gap-2">
@@ -318,21 +307,16 @@ export default function AdminPanel() {
             <option value="">{t.bank_select[lang]}</option>
             {members.map(m => (
               <option key={m.id} value={m.id}>
-                {(m.is_bank ? '🏦 ' : '') + (m.ingame_name || m.display_name)}
+                {(m.is_bank ? '🏦 ' : '') + memberLabel(m)}
               </option>
             ))}
           </select>
           <button
             onClick={handleToggleBank}
             disabled={togglingBank || !bankTargetId}
-            className={'w-full px-4 py-2 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors ' +
-              (selectedBankMember?.is_bank ? 'bg-red-700 hover:bg-red-600' : 'bg-teal-700 hover:bg-teal-600')}
+            className={'w-full px-4 py-2 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors ' + (selectedBankMember?.is_bank ? 'bg-red-700 hover:bg-red-600' : 'bg-teal-700 hover:bg-teal-600')}
           >
-            {togglingBank
-              ? t.bank_saving[lang]
-              : selectedBankMember?.is_bank
-                ? '✖ ' + t.bank_unmark[lang]
-                : '🏦 ' + t.bank_mark[lang]}
+            {togglingBank ? t.bank_saving[lang] : selectedBankMember?.is_bank ? '✖ ' + t.bank_unmark[lang] : '🏦 ' + t.bank_mark[lang]}
           </button>
         </div>
       </div>
