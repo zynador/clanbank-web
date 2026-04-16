@@ -179,6 +179,9 @@ Zahle einfach nach oder melde dich bei einem Admin oder Offizier. Für vergangen
 **Wie sehe ich meinen aktuellen Status?**  
 In der App unter dem Tab **Einzahlungen** siehst du: deinen Fortschritt für die aktuelle Woche, deinen Einzahlungsverlauf, eventuelle Rückstände und ob du eine Ausnahme hast.
 
+**Ich habe mein Passwort vergessen — was tun?**  
+Wende dich im Spiel an einen **R4** (Offizier oder Admin) und nenne ihm deinen **Benutzernamen** (nicht deinen Ingame-Namen — der Benutzername wird beim Registrieren vergeben). Der R4 setzt dein Passwort dann über die App zurück. Du bekommst ein neues Passwort mitgeteilt und kannst dich damit sofort einloggen.
+
 ---
 
 *Fragen? Wende dich an einen Offizier oder direkt an Vicar — wir helfen gerne weiter.*
