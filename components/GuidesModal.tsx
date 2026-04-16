@@ -22,7 +22,9 @@ const GAME_GUIDES: Guide[] = [
   { id: 'leitgedanke', title_de: 'Leitgedanke #171', title_en: 'Vision #171', file: 'leitgedanke' },
 ]
 
-const APP_GUIDES: Guide[] = []
+const APP_GUIDES: Guide[] = [
+  { id: 'einzahlungen', title_de: 'Einzahlungen & Auszahlungen', title_en: 'Deposits & Payouts', file: 'einzahlungen' },
+]
 
 interface Props {
   lang: Lang
@@ -107,11 +109,7 @@ function GuidesList({ guides, selected, onSelect, lang }: {
   )
 }
 
-function GuideContent({ content, loading, lang }: {
-  content: string | null
-  loading: boolean
-  lang: Lang
-}) {
+function GuideContent({ content, loading, lang }: { content: string | null; loading: boolean; lang: Lang }) {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-40 text-gray-500 text-sm">
@@ -191,10 +189,7 @@ function DemoPlaceholder({ lang, onClose }: { lang: Lang; onClose: () => void })
           className="flex items-center justify-between px-5 py-4 flex-shrink-0"
           style={{ borderBottom: '0.5px solid rgba(201,168,76,0.12)' }}
         >
-          <h2
-            className="text-base font-semibold"
-            style={{ color: 'rgba(201,168,76,0.8)' }}
-          >
+          <h2 className="text-base font-semibold" style={{ color: 'rgba(201,168,76,0.8)' }}>
             {'📚 ' + (isDE ? 'Guides' : 'Guides')}
           </h2>
           <button
@@ -206,20 +201,16 @@ function DemoPlaceholder({ lang, onClose }: { lang: Lang; onClose: () => void })
             {'✕'}
           </button>
         </div>
-
         {/* Body */}
         <div className="flex flex-col items-center text-center px-8 py-10 gap-4">
           <div style={{ fontSize: '2.5rem' }}>{'📖'}</div>
-
           <p
             className="font-semibold text-base"
             style={{ fontFamily: 'Georgia, serif', color: '#E8C87A' }}
           >
             {isDE ? 'Clan-Guides' : 'Clan Guides'}
           </p>
-
           <div style={{ width: 32, height: '0.5px', background: 'rgba(201,168,76,0.25)' }} />
-
           <p
             className="text-sm leading-relaxed max-w-xs"
             style={{ color: 'rgba(201,168,76,0.5)' }}
@@ -228,7 +219,6 @@ function DemoPlaceholder({ lang, onClose }: { lang: Lang; onClose: () => void })
               ? 'Hier können clan-spezifische Guides hochgeladen werden — von Spielstrategien bis zu App-Anleitungen. Im Live-Betrieb steht hier das Wissen eures Clans.'
               : 'Clan-specific guides can be uploaded here — from game strategies to app tutorials. In live operation, this is where your clan\'s knowledge lives.'}
           </p>
-
           <div
             className="w-full rounded-lg px-4 py-3 text-xs leading-relaxed"
             style={{
@@ -237,9 +227,7 @@ function DemoPlaceholder({ lang, onClose }: { lang: Lang; onClose: () => void })
               color: 'rgba(201,168,76,0.4)',
             }}
           >
-            {'🎬 ' + (isDE
-              ? 'Demo-Modus — Inhalte sind nicht öffentlich sichtbar.'
-              : 'Demo mode — content is not publicly visible.')}
+            {'🎬 ' + (isDE ? 'Demo-Modus — Inhalte sind nicht öffentlich sichtbar.' : 'Demo mode — content is not publicly visible.')}
           </div>
         </div>
       </div>
