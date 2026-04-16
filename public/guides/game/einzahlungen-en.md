@@ -179,6 +179,9 @@ Simply catch up or contact an Admin or Officer. For past weeks without an exempt
 **How do I see my current status?**  
 In the app under the **Deposits** tab you can see: your progress for the current week, your deposit history, any backlog entries, and whether you have an exemption.
 
+**I forgot my password — what should I do?**  
+Contact an **R4** (Officer or Admin) in the game and tell them your **username** (not your in-game name — the username is the one you chose when registering). The R4 will then reset your password via the app. You will receive a new password and can log in again immediately.
+
 ---
 
 *Questions? Contact an Officer or reach out to Vicar directly — we are happy to help.*
