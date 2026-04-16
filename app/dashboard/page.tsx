@@ -20,7 +20,6 @@ import FCUEventTab from '@/components/FCUEventTab'
 import MembersTab from '@/components/MembersTab'
 import GuidesModal from '@/components/GuidesModal'
 import GuidedTour, { TourStep } from '@/components/GuidedTour'
-import TourButton from '@/components/TourButton'
 
 type Tab = 'home' | 'deposits' | 'battle' | 'ranking' | 'fcu' | 'mitglieder' | 'freigabe' | 'vorschlaege' | 'warnungen' | 'verwaltung'
 type UserRole = 'admin' | 'offizier' | 'mitglied'
@@ -268,7 +267,6 @@ function DashboardContent() {
   }
 
   return (
-    // FIX 1: overflow-x-hidden verhindert horizontales Scrollen durch überlaufende Elemente
     <div className="min-h-screen" style={{ background: G.bg, color: G.gold, overflowX: 'clip' }}>
 
       {/* Demo-Banner */}
@@ -344,6 +342,16 @@ function DashboardContent() {
               <button onClick={() => setShowGuides(true)} style={btnStyle()} title="Guides">
                 {'📚'}
               </button>
+              {!isDemo && (
+                <button
+                  onClick={() => setShowTour(true)}
+                  style={btnStyle()}
+                  title={lang === 'de' ? 'Einführungstour starten' : 'Start guided tour'}
+                  aria-label={lang === 'de' ? 'Tour starten' : 'Start tour'}
+                >
+                  {'?'}
+                </button>
+              )}
               <a
                 href="/demo"
                 target="_blank"
@@ -527,7 +535,6 @@ function DashboardContent() {
           onSkip={handleTourSkip}
         />
       )}
-      {/* FIX 2: TourButton entfernt — Tour ist über ☰ Drawer > 🗺️ Tour starten erreichbar */}
     </div>
   )
 }
