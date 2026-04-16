@@ -32,36 +32,153 @@ interface Props {
   isDemo?: boolean
 }
 
-function flushListBuffer(items: string[], result: ReactNode[], key: { v: number }) {
-  if (items.length === 0) return
-  result.push(
-    <ul key={key.v++} className="list-disc pl-5 space-y-1 text-sm text-gray-300 mb-3">
-      {items.map((item, i) => <li key={i}>{item}</li>)}
-    </ul>
-  )
-  items.length = 0
+// Inline-Parser: **bold**, *italic*, `code`, [text](url) -> plain text
+function parseInline(text: string): ReactNode[] {
+  const parts: ReactNode[] = []
+  // Strip markdown links [text](url) -> just show "text"
+  text = text.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+  const re = /(\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`)/g
+  let last = 0
+  let m: RegExpExecArray | null
+  let k = 0
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) parts.push(<span key={k++}>{text.slice(last, m.index)}</span>)
+    if (m[2]) parts.push(<strong key={k++} className="text-gray-100 font-semibold">{m[2]}</strong>)
+    else if (m[3]) parts.push(<em key={k++}>{m[3]}</em>)
+    else if (m[4]) parts.push(<code key={k++} className="bg-gray-800 text-teal-300 px-1 rounded text-xs">{m[4]}</code>)
+    last = m.index + m[0].length
+  }
+  if (last < text.length) parts.push(<span key={k++}>{text.slice(last)}</span>)
+  return parts
 }
 
-function parseLineToNode(line: string, k: number): ReactNode | null {
-  if (line.startsWith('# ')) return <h1 key={k} className="text-lg font-bold text-teal-400 mb-3 mt-2">{line.slice(2)}</h1>
-  if (line.startsWith('## ')) return <h2 key={k} className="text-base font-semibold text-gray-200 mb-2 mt-5 border-b border-gray-700 pb-1">{line.slice(3)}</h2>
-  if (line.startsWith('### ')) return <h3 key={k} className="text-sm font-semibold text-teal-300 mb-1 mt-3">{line.slice(4)}</h3>
-  if (line.trim() !== '') return <p key={k} className="text-sm text-gray-300 mb-2 leading-relaxed">{line}</p>
-  return null
+function parseTableRow(row: string): string[] {
+  return row.split('|').map(c => c.trim()).filter((_, ci, arr) => ci > 0 && ci < arr.length - 1)
 }
 
 function parseMarkdown(text: string): ReactNode[] {
   const lines = text.split('\n')
   const result: ReactNode[] = []
-  const listBuffer: string[] = []
-  const key = { v: 0 }
-  for (const line of lines) {
-    if (line.startsWith('- ')) { listBuffer.push(line.slice(2)); continue }
-    flushListBuffer(listBuffer, result, key)
-    const node = parseLineToNode(line, key.v++)
-    if (node) result.push(node)
+  let k = 0
+  let i = 0
+
+  while (i < lines.length) {
+    const line = lines[i]
+
+    // Horizontal rules
+    if (/^-{3,}$/.test(line.trim())) {
+      result.push(<hr key={k++} className="border-gray-700 my-3" />)
+      i++; continue
+    }
+
+    // Headings
+    if (line.startsWith('# ')) {
+      result.push(<h1 key={k++} className="text-lg font-bold text-teal-400 mb-3 mt-2">{parseInline(line.slice(2))}</h1>)
+      i++; continue
+    }
+    if (line.startsWith('## ')) {
+      result.push(<h2 key={k++} className="text-base font-semibold text-gray-200 mb-2 mt-5 border-b border-gray-700 pb-1">{parseInline(line.slice(3))}</h2>)
+      i++; continue
+    }
+    if (line.startsWith('### ')) {
+      result.push(<h3 key={k++} className="text-sm font-semibold text-teal-300 mb-1 mt-3">{parseInline(line.slice(4))}</h3>)
+      i++; continue
+    }
+
+    // Blockquotes: collect consecutive > lines
+    if (line.startsWith('> ')) {
+      const quoteLines: string[] = []
+      while (i < lines.length && lines[i].startsWith('> ')) {
+        quoteLines.push(lines[i].slice(2))
+        i++
+      }
+      result.push(
+        <blockquote key={k++} className="border-l-2 border-teal-600 pl-3 my-2 space-y-1">
+          {quoteLines.map((ql, qi) => (
+            <p key={qi} className="text-sm text-gray-400 italic">{parseInline(ql)}</p>
+          ))}
+        </blockquote>
+      )
+      continue
+    }
+
+    // Tables
+    if (line.startsWith('|')) {
+      const tableLines: string[] = []
+      while (i < lines.length && lines[i].startsWith('|')) {
+        tableLines.push(lines[i])
+        i++
+      }
+      const rows = tableLines.filter(l => !/^\|[\s|:-]+\|$/.test(l))
+      const header = rows[0]
+      const body = rows.slice(1)
+      result.push(
+        <div key={k++} className="overflow-x-auto my-3">
+          <table className="w-full text-xs border-collapse">
+            <thead>
+              <tr className="border-b border-gray-600">
+                {parseTableRow(header).map((cell, ci) => (
+                  <th key={ci} className="text-left py-1.5 px-2 text-gray-300 font-semibold whitespace-nowrap">{parseInline(cell)}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {body.map((row, ri) => (
+                <tr key={ri} className="border-b border-gray-800">
+                  {parseTableRow(row).map((cell, ci) => (
+                    <td key={ci} className="py-1.5 px-2 text-gray-400">{parseInline(cell)}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )
+      continue
+    }
+
+    // Unordered lists
+    if (line.startsWith('- ')) {
+      const items: string[] = []
+      while (i < lines.length && lines[i].startsWith('- ')) {
+        items.push(lines[i].slice(2))
+        i++
+      }
+      result.push(
+        <ul key={k++} className="list-disc pl-5 space-y-1 text-sm text-gray-300 mb-3">
+          {items.map((item, ii) => <li key={ii}>{parseInline(item)}</li>)}
+        </ul>
+      )
+      continue
+    }
+
+    // Ordered lists
+    if (/^\d+\. /.test(line)) {
+      const items: string[] = []
+      while (i < lines.length && /^\d+\. /.test(lines[i])) {
+        items.push(lines[i].replace(/^\d+\. /, ''))
+        i++
+      }
+      result.push(
+        <ol key={k++} className="list-decimal pl-5 space-y-1 text-sm text-gray-300 mb-3">
+          {items.map((item, ii) => <li key={ii}>{parseInline(item)}</li>)}
+        </ol>
+      )
+      continue
+    }
+
+    // Empty line
+    if (line.trim() === '') {
+      i++; continue
+    }
+
+    // Normal paragraph
+    result.push(
+      <p key={k++} className="text-sm text-gray-300 mb-2 leading-relaxed">{parseInline(line)}</p>
+    )
+    i++
   }
-  flushListBuffer(listBuffer, result, key)
+
   return result
 }
 
@@ -184,7 +301,6 @@ function DemoPlaceholder({ lang, onClose }: { lang: Lang; onClose: () => void })
         style={{ background: '#111111', border: '0.5px solid rgba(201,168,76,0.2)' }}
         onClick={e => e.stopPropagation()}
       >
-        {/* Header */}
         <div
           className="flex items-center justify-between px-5 py-4 flex-shrink-0"
           style={{ borderBottom: '0.5px solid rgba(201,168,76,0.12)' }}
@@ -201,20 +317,13 @@ function DemoPlaceholder({ lang, onClose }: { lang: Lang; onClose: () => void })
             {'✕'}
           </button>
         </div>
-        {/* Body */}
         <div className="flex flex-col items-center text-center px-8 py-10 gap-4">
           <div style={{ fontSize: '2.5rem' }}>{'📖'}</div>
-          <p
-            className="font-semibold text-base"
-            style={{ fontFamily: 'Georgia, serif', color: '#E8C87A' }}
-          >
+          <p className="font-semibold text-base" style={{ fontFamily: 'Georgia, serif', color: '#E8C87A' }}>
             {isDE ? 'Clan-Guides' : 'Clan Guides'}
           </p>
           <div style={{ width: 32, height: '0.5px', background: 'rgba(201,168,76,0.25)' }} />
-          <p
-            className="text-sm leading-relaxed max-w-xs"
-            style={{ color: 'rgba(201,168,76,0.5)' }}
-          >
+          <p className="text-sm leading-relaxed max-w-xs" style={{ color: 'rgba(201,168,76,0.5)' }}>
             {isDE
               ? 'Hier können clan-spezifische Guides hochgeladen werden — von Spielstrategien bis zu App-Anleitungen. Im Live-Betrieb steht hier das Wissen eures Clans.'
               : 'Clan-specific guides can be uploaded here — from game strategies to app tutorials. In live operation, this is where your clan\'s knowledge lives.'}
