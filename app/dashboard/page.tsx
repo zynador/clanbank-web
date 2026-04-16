@@ -268,7 +268,8 @@ function DashboardContent() {
   }
 
   return (
-    <div className="min-h-screen" style={{ background: G.bg, color: G.gold }}>
+    // FIX 1: overflow-x-hidden verhindert horizontales Scrollen durch überlaufende Elemente
+    <div className="min-h-screen overflow-x-hidden" style={{ background: G.bg, color: G.gold }}>
 
       {/* Demo-Banner */}
       {isDemo && (
@@ -526,7 +527,7 @@ function DashboardContent() {
           onSkip={handleTourSkip}
         />
       )}
-      {!isDemo && !showTour && <TourButton onClick={() => setShowTour(true)} lang={lang} />}
+      {/* FIX 2: TourButton entfernt — Tour ist über ☰ Drawer > 🗺️ Tour starten erreichbar */}
     </div>
   )
 }
