@@ -269,7 +269,7 @@ function DashboardContent() {
 
   return (
     // FIX 1: overflow-x-hidden verhindert horizontales Scrollen durch überlaufende Elemente
-    <div className="min-h-screen overflow-x-hidden" style={{ background: G.bg, color: G.gold }}>
+    <div className="min-h-screen" style={{ background: G.bg, color: G.gold, overflowX: 'clip' }}>
 
       {/* Demo-Banner */}
       {isDemo && (
