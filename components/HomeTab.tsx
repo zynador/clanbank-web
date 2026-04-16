@@ -306,9 +306,9 @@ export default function HomeTab({ lang, onNavigate }: Props) {
     <div className="p-4 space-y-4">
       {/* Begrüßung */}
       <div>
-        <p className="text-base font-semibold text-gray-800">
-          {t.greeting + ', ' + (profile?.ingame_name ?? '') + ' 👋'}
-        </p>
+      <p className="text-base font-semibold" style={{ color: '#E8C87A' }}>
+        {t.greeting + ', ' + (profile?.ingame_name ?? '') + ' 👋'}
+      </p>
       </div>
 
       {/* Persönlicher Status */}
