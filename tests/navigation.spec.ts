@@ -26,7 +26,7 @@ test.describe('Navigation — Hamburger Drawer', () => {
     await expect(page.getByRole('button', { name: '🏠 Home' })).not.toBeVisible()
     await page.locator('button[aria-label="Menü öffnen"]').click()
     await expect(page.getByRole('button', { name: '🏠 Home' })).toBeVisible()
-    await page.locator('.bg-black\\/50').click()
+    await page.locator('.bg-black\\/60').click()
     await expect(page.getByRole('button', { name: '🏠 Home' })).not.toBeVisible()
   })
 
