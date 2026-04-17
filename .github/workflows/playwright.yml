@@ -28,6 +28,7 @@ jobs:
           TEST_MEMBER_USER: ${{ secrets.TEST_MEMBER_USER }}
           TEST_MEMBER_PASS: ${{ secrets.TEST_MEMBER_PASS }}
           VERCEL_BYPASS_SECRET: ${{ secrets.VERCEL_BYPASS_SECRET }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: npx playwright test --config=tests/playwright.config.ts --project=chromium
       - uses: actions/upload-artifact@v4
         if: always()
